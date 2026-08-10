@@ -1,6 +1,3 @@
-# opensource
-오픈소스 개발자 대회
-
 # H2Spec
 
 > **H**WP/docx → **O**pen**API** **Spec** 변환기 (프로젝트명 발음: "에이치투스펙")
