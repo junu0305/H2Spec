@@ -1,7 +1,8 @@
 # H2Spec (HWP to Spring-Client)
 
-> **비표준 공공데이터 API 자동화 도구**
-> 비정형 HWP 명세서를 분석하여 표준 OpenAPI Spec과 '200 OK 위장 에러' 예외 처리가 내장된 Spring 클라이언트 코드를 자동 생성하는 오픈소스 라이브러리입니다.
+> **H**WP/docx → **O**pen**API** **Spec** 변환기
+> 공공기관의 비표준 API 명세서(HWP/DOCX)를 OpenAPI 3.0 스펙으로 변환하고,
+> Spring 통신 코드와 "200 OK 위장 에러" 감지 Interceptor까지 자동 생성하는 오픈소스 도구입니다.
 
 ## 🎯 개발 목적
 비표준 HWP 명세서로 제공되는 국내 공공데이터 API를 활용할 때 발생하는 개발 비효율을 근본적으로 해결하고자 합니다. 
@@ -11,9 +12,6 @@
 * **개발 생산성 극대화 및 리소스 절감**: 수작업 분석 및 보일러플레이트 코드 작성을 자동화하여 초기 연동 시간을 90% 이상 단축합니다.
 * **시스템 안정성 확보**: 성공(200 OK) 코스프레형 에러 응답을 식별하는 인터셉터를 내장하여 장애를 원천 차단합니다.
 * **표준 기술 생태계 기여**: 비표준 문서를 글로벌 표준 포맷(OpenAPI Spec)으로 전환하는 징검다리 역할을 수행합니다.
-> **H**WP/docx → **O**pen**API** **Spec** 변환기 (프로젝트명 발음: "에이치투스펙")
-> 공공기관의 비표준 API 명세서(HWP/DOCX)를 OpenAPI 3.0 스펙으로 변환하고,
-> Spring 통신 코드와 "200 OK 위장 에러" 감지 Interceptor까지 자동 생성하는 오픈소스 도구입니다.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](#)
