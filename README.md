@@ -163,7 +163,7 @@ main              ← 최종 병합 (PR 필수)
 
 1. 이슈를 먼저 등록해 주세요 (`.github/ISSUE_TEMPLATE/issue-template.md` 사용)
 2. 브랜치와 커밋 메시지는 위 [Git 컨벤션](#git-컨벤션)을 따릅니다
-3. PR은 `.github/PULL_REQUEST_TEMPLATE/pr-template.md` 양식을 따릅니다
+3. PR은 `.github/pull_request_template.md` 양식을 따릅니다 (PR 생성 시 자동 적용)
 4. IR 스키마를 변경하는 PR은 parser/generator 양쪽 담당자 승인이 필요합니다
 
 ## 로드맵
