@@ -118,10 +118,51 @@ restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
 
 이 계약이 바뀌는 경우 PR에 `[BREAKING-IR]` 라벨을 붙이고 두 모듈 담당자 모두의 리뷰를 받아야 합니다.
 
+## Git 컨벤션
+
+### 브랜치 구조
+
+모든 작업 브랜치는 `main`에서 분기하고, PR을 통해 다시 `main`으로 머지합니다.
+브랜치 prefix는 **PascalCase**(앞글자 대문자)로 통일합니다.
+
+```
+main              ← 최종 병합 (PR 필수)
+ ├── Feat/*       ← 새 기능
+ ├── Fix/*        ← 버그 수정
+ ├── Hotfix/*     ← 긴급 수정
+ ├── Refactor/*   ← 리팩토링
+ ├── Docs/*       ← 문서
+ └── Chore/*      ← 빌드/설정
+```
+
+| 작업 종류 | 브랜치 이름 예시 |
+|---|---|
+| 새 기능 | `Feat/generator-dto`, `Feat/parser-docx` |
+| 버그 수정 | `Fix/xml-parse-error` |
+| 긴급 수정 | `Hotfix/build-error` |
+| 리팩토링 | `Refactor/interceptor-core` |
+| 문서 | `Docs/readme-update` |
+| 빌드/설정 | `Chore/gradle-setup` |
+
+### 커밋 메시지
+
+커밋은 `타입: 내용` 형식의 소문자 prefix를 사용합니다 (Conventional Commits 스타일).
+
+| 타입 | 용도 |
+|---|---|
+| `feat` | 새로운 기능 추가 |
+| `fix` | 버그 수정 |
+| `hotfix` | 긴급 수정 |
+| `docs` | 문서 수정 |
+| `style` | 코드 포맷팅 (기능 변경 없음) |
+| `refactor` | 코드 리팩토링 |
+| `test` | 테스트 코드 추가 |
+| `chore` | 빌드/설정 변경 |
+
 ## 기여 방법
 
 1. 이슈를 먼저 등록해 주세요 (`.github/ISSUE_TEMPLATE/issue-template.md` 사용)
-2. 브랜치는 `feature/`, `fix/`, `docs/` 접두사를 사용합니다
+2. 브랜치와 커밋 메시지는 위 [Git 컨벤션](#git-컨벤션)을 따릅니다
 3. PR은 `.github/PULL_REQUEST_TEMPLATE/pr-template.md` 양식을 따릅니다
 4. IR 스키마를 변경하는 PR은 parser/generator 양쪽 담당자 승인이 필요합니다
 
