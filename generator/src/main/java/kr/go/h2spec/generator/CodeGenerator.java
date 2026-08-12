@@ -3,6 +3,7 @@ package kr.go.h2spec.generator;
 import kr.go.h2spec.generator.emit.ClientEmitter;
 import kr.go.h2spec.generator.emit.DtoEmitter;
 import kr.go.h2spec.generator.emit.JavaNames;
+import kr.go.h2spec.generator.emit.OpenApiEmitter;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.generator.model.DtoNode;
@@ -25,10 +26,13 @@ public class CodeGenerator {
 
         Path dtoFile = outputDir.resolve(pkgPath).resolve("dto").resolve(apiClass + "Response.java");
         Path clientFile = outputDir.resolve(pkgPath).resolve(apiClass + "Client.java");
+        Path openApiFile = outputDir.resolve("openapi").resolve(ir.api().apiId() + ".json");
 
         Files.createDirectories(dtoFile.getParent());
+        Files.createDirectories(openApiFile.getParent());
         Files.writeString(dtoFile, new DtoEmitter().emit(ir, root));
         Files.writeString(clientFile, new ClientEmitter().emit(ir));
-        return List.of(dtoFile, clientFile);
+        Files.writeString(openApiFile, new OpenApiEmitter().emit(ir, root));
+        return List.of(dtoFile, clientFile, openApiFile);
     }
 }

@@ -1,0 +1,141 @@
+{
+  "openapi" : "3.0.3",
+  "info" : {
+    "title" : "아파트 매매 실거래 상세 자료 조회",
+    "description" : "지역코드와 계약월을 기준으로 아파트 매매 실거래 상세 자료를 제공하는 서비스",
+    "version" : "1.0.0"
+  },
+  "servers" : [
+    {
+      "url" : "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev"
+    }
+  ],
+  "paths" : {
+    "/getRTMSDataSvcAptTradeDev" : {
+      "get" : {
+        "operationId" : "getRTMSDataSvcAptTradeDev",
+        "summary" : "아파트 매매 실거래 상세 자료 조회",
+        "description" : "지역코드와 계약월을 기준으로 아파트 매매 실거래 상세 자료를 제공하는 서비스",
+        "parameters" : [
+          {
+            "name" : "LAWD_CD",
+            "in" : "query",
+            "required" : true,
+            "description" : "지역코드(5자리, 법정동코드 앞 5자리)",
+            "schema" : {
+              "type" : "string",
+              "pattern" : "^[0-9]{5}$"
+            },
+            "example" : "11110"
+          },
+          {
+            "name" : "DEAL_YMD",
+            "in" : "query",
+            "required" : true,
+            "description" : "계약월 (YYYYMM)",
+            "schema" : {
+              "type" : "string",
+              "pattern" : "^[0-9]{6}$"
+            },
+            "example" : "202601"
+          },
+          {
+            "name" : "numOfRows",
+            "in" : "query",
+            "required" : false,
+            "description" : "한 페이지 결과 수",
+            "schema" : {
+              "type" : "integer",
+              "default" : 10
+            }
+          },
+          {
+            "name" : "pageNo",
+            "in" : "query",
+            "required" : false,
+            "description" : "페이지 번호",
+            "schema" : {
+              "type" : "integer",
+              "default" : 1
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "정상 응답 (성공 resultCode: 00)",
+            "content" : {
+              "application/xml" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "header" : {
+                      "type" : "object",
+                      "properties" : {
+                        "resultCode" : {
+                          "type" : "string",
+                          "description" : "결과코드 (00: 정상)"
+                        },
+                        "resultMsg" : {
+                          "type" : "string",
+                          "description" : "결과메시지"
+                        }
+                      }
+                    },
+                    "body" : {
+                      "type" : "object",
+                      "properties" : {
+                        "items" : {
+                          "type" : "object",
+                          "properties" : {
+                            "item" : {
+                              "type" : "array",
+                              "items" : {
+                                "type" : "object",
+                                "properties" : {
+                                  "aptNm" : {
+                                    "type" : "string",
+                                    "description" : "단지명"
+                                  },
+                                  "dealAmount" : {
+                                    "type" : "string",
+                                    "description" : "거래금액 (만원, 콤마 포함 문자열 주의)"
+                                  },
+                                  "excluUseAr" : {
+                                    "type" : "number",
+                                    "description" : "전용면적(㎡)"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "totalCount" : {
+                          "type" : "integer",
+                          "description" : "전체 결과 수"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "securitySchemes" : {
+      "serviceKey" : {
+        "type" : "apiKey",
+        "name" : "serviceKey",
+        "in" : "query"
+      }
+    }
+  },
+  "security" : [
+    {
+      "serviceKey" : [ ]
+    }
+  ]
+}
