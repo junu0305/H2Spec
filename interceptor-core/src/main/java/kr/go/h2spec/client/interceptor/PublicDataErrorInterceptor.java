@@ -1,5 +1,8 @@
 package kr.go.h2spec.client.interceptor;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
@@ -13,8 +16,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 공공데이터포털 계열 API의 고질적인 문제를 해결하는 Interceptor.
@@ -68,8 +69,10 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
             "인증키가 유효하지"
     );
 
-    private static final Pattern JSON_RESULT_CODE_PATTERN = buildJsonPattern(RESULT_CODE_KEYS);
-    private static final Pattern JSON_RESULT_MSG_PATTERN = buildJsonPattern(RESULT_MSG_KEYS);
+    /** JSON에서 결과코드 후보 키를 찾을 때 내려갈 최대 깊이 — 데이터 영역의 유사 필드 오인 방지 */
+    private static final int MAX_SEARCH_DEPTH = 3;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public PublicDataErrorInterceptor() {
         this("00");
@@ -147,9 +150,47 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
     }
 
     private ResultInfo parseJson(String content) {
-        String code = extractFirstGroup(JSON_RESULT_CODE_PATTERN, content);
-        String msg = extractFirstGroup(JSON_RESULT_MSG_PATTERN, content);
-        return new ResultInfo(code, msg);
+        try {
+            JsonNode root = objectMapper.readTree(content);
+            String code = findByKeys(root, RESULT_CODE_KEYS);
+            String msg = findByKeys(root, RESULT_MSG_KEYS);
+            return new ResultInfo(code, msg);
+        } catch (JsonProcessingException e) {
+            // JSON으로 파싱되지 않으면 resultCode를 확정할 수 없으므로 키워드 폴백으로 넘긴다
+            return new ResultInfo(null, null);
+        }
+    }
+
+    /**
+     * 후보 키를 우선순위 순서대로, 객체 트리의 얕은 깊이에서만 탐색한다.
+     * 배열(items 등) 내부는 응답 데이터 영역이므로 내려가지 않는다 —
+     * 데이터에 errorCode 같은 필드가 있어도 결과코드로 오인하지 않기 위함.
+     */
+    private String findByKeys(JsonNode root, List<String> keys) {
+        for (String key : keys) {
+            String value = findKey(root, key, 0);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String findKey(JsonNode node, String key, int depth) {
+        if (depth > MAX_SEARCH_DEPTH || !node.isObject()) {
+            return null;
+        }
+        JsonNode direct = node.get(key);
+        if (direct != null && direct.isValueNode()) {
+            return direct.asText();
+        }
+        for (JsonNode child : node) {
+            String found = findKey(child, key, depth + 1);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private boolean containsErrorKeyword(String content) {
@@ -160,20 +201,6 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
             }
         }
         return false;
-    }
-
-    private static Pattern buildJsonPattern(List<String> keys) {
-        // "resultCode" : "00"  형태를 키 후보별로 탐색 (공백/따옴표 유무 허용)
-        String alternation = String.join("|", keys);
-        return Pattern.compile(
-                "\"(?:" + alternation + ")\"\\s*:\\s*\"?([^\",}\\s]+)\"?",
-                Pattern.CASE_INSENSITIVE
-        );
-    }
-
-    private String extractFirstGroup(Pattern pattern, String content) {
-        Matcher matcher = pattern.matcher(content);
-        return matcher.find() ? matcher.group(1) : null;
     }
 
     private String truncate(String s, int maxLen) {
