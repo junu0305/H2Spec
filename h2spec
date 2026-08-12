@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+"$DIR/gradlew" -q :cli:installDist
+exec "$DIR/cli/build/install/h2spec/bin/h2spec" "$@"

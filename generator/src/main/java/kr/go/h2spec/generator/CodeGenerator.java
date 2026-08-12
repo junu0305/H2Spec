@@ -18,7 +18,10 @@ import java.util.List;
 public class CodeGenerator {
 
     public List<Path> generate(Path irJson, Path outputDir) throws IOException {
-        IrSpec ir = new IrLoader().load(irJson);
+        return generate(new IrLoader().load(irJson), outputDir);
+    }
+
+    public List<Path> generate(IrSpec ir, Path outputDir) throws IOException {
         DtoNode root = new DtoTreeBuilder().build(ir.api().responseFields());
 
         String pkgPath = ir.generatorHints().targetPackage().replace('.', '/');
