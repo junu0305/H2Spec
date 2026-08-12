@@ -1,0 +1,14 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':generator')
+    implementation 'info.picocli:picocli:4.7.6'
+}
+
+application {
+    mainClass = 'kr.go.h2spec.cli.H2SpecCli'
+    // installDist 산출물이 build/install/h2spec/bin/h2spec 이 되도록
+    applicationName = 'h2spec'
+}

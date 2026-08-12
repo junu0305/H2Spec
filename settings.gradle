@@ -1,2 +1,2 @@
 rootProject.name = 'h2spec'
-include 'interceptor-core', 'generator', 'parser'
+include 'interceptor-core', 'generator', 'parser', 'cli'
