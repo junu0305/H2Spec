@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation project(':generator')
+    implementation project(':parser')
     implementation 'info.picocli:picocli:4.7.6'
 }
 

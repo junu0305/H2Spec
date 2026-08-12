@@ -5,6 +5,8 @@ import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.ErrorSpec;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
+import kr.go.h2spec.parser.DocxSpecParser;
+import kr.go.h2spec.parser.ParsedApi;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -24,13 +26,14 @@ import java.util.concurrent.Callable;
         mixinStandardHelpOptions = true)
 public class ConvertCommand implements Callable<Integer> {
 
-    /** parser 모듈(이슈 #1) 구현 후 지원될 명세서 문서 확장자 */
-    private static final List<String> DOCUMENT_EXTENSIONS = List.of(".hwp", ".hwpx", ".docx");
+    /** HWP 파싱은 미지원 (이슈 #1은 DOCX 우선) */
+    private static final List<String> UNSUPPORTED_EXTENSIONS = List.of(".hwp", ".hwpx");
+    private static final String DOCX_EXTENSION = ".docx";
 
     @Spec
     private CommandSpec spec;
 
-    @Option(names = {"-i", "--input"}, required = true, description = "입력 파일 (현재 IR JSON만 지원)")
+    @Option(names = {"-i", "--input"}, required = true, description = "입력 파일 (DOCX 명세서 또는 IR JSON)")
     private Path input;
 
     @Option(names = {"-o", "--output"}, description = "출력 디렉터리 (기본: ./generated)")
@@ -42,8 +45,8 @@ public class ConvertCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         String fileName = input.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (DOCUMENT_EXTENSIONS.stream().anyMatch(fileName::endsWith)) {
-            err("HWP/DOCX 명세서 파싱은 parser 모듈 구현 후 지원됩니다 (이슈 #1). 현재는 IR JSON만 지원합니다.");
+        if (UNSUPPORTED_EXTENSIONS.stream().anyMatch(fileName::endsWith)) {
+            err("HWP 명세서 파싱은 아직 지원되지 않습니다. DOCX로 변환하거나 IR JSON을 사용해 주세요.");
             return 1;
         }
         if (!Files.exists(input)) {
@@ -51,12 +54,11 @@ public class ConvertCommand implements Callable<Integer> {
             return 1;
         }
         try {
-            IrSpec ir = new IrLoader().load(input);
-            if (successCode != null) {
-                ir = withSuccessCode(ir, successCode);
+            if (fileName.endsWith(DOCX_EXTENSION)) {
+                convertDocx();
+            } else {
+                generateFrom(input);
             }
-            List<Path> written = new CodeGenerator().generate(ir, output);
-            written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
             return 0;
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             err(e.getMessage());
@@ -65,6 +67,27 @@ public class ConvertCommand implements Callable<Integer> {
             err("변환 실패: " + e.getMessage());
             return 1;
         }
+    }
+
+    /** DOCX → 오퍼레이션별 IR JSON 추출 후 각각 코드 생성 */
+    private void convertDocx() throws IOException {
+        List<ParsedApi> apis = new DocxSpecParser().parse(input);
+        Path irDir = Files.createDirectories(output.resolve("ir"));
+        for (ParsedApi parsed : apis) {
+            Path irFile = irDir.resolve(parsed.apiId() + ".json");
+            Files.writeString(irFile, parsed.ir().toPrettyString());
+            spec.commandLine().getOut().println("IR 추출: " + irFile);
+            generateFrom(irFile);
+        }
+    }
+
+    private void generateFrom(Path irJson) throws IOException {
+        IrSpec ir = new IrLoader().load(irJson);
+        if (successCode != null) {
+            ir = withSuccessCode(ir, successCode);
+        }
+        List<Path> written = new CodeGenerator().generate(ir, output);
+        written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
     }
 
     private IrSpec withSuccessCode(IrSpec ir, String code) {

@@ -1,1 +1,14 @@
-// parser 모듈 의존성은 이슈 #1 담당자가 추가한다
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    // POI가 log4j2-api를 쓰므로 구현체가 없으면 StatusLogger 에러가 출력됨
+    runtimeOnly 'org.apache.logging.log4j:log4j-core:2.23.1'
+    // ParsedApi가 ObjectNode를 노출하므로 api 스코프
+    api 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
+
+    // 산출한 IR이 generator의 검증(IrLoader)을 통과하는지 라운드트립 테스트용
+    testImplementation project(':generator')
+}
