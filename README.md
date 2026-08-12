@@ -4,9 +4,10 @@
 > 공공기관의 비표준 API 명세서(HWP/DOCX)를 OpenAPI 3.0 스펙으로 변환하고,
 > Spring 통신 코드와 "200 OK 위장 에러" 감지 Interceptor까지 자동 생성하는 오픈소스 도구입니다.
 
+[![build](https://github.com/junu0305/H2Spec/actions/workflows/build.yml/badge.svg)](https://github.com/junu0305/H2Spec/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](#)
-[![Spring](https://img.shields.io/badge/Spring-Boot%203.x-6DB33F.svg)](#)
+[![Spring](https://img.shields.io/badge/Spring-Framework%206.x-6DB33F.svg)](#)
 
 ## 🎯 개발 목적
 비표준 HWP 명세서로 제공되는 국내 공공데이터 API를 활용할 때 발생하는 개발 비효율을 근본적으로 해결하고자 합니다. 
@@ -43,10 +44,11 @@ flowchart LR
 
     subgraph Output
         E1[OpenAPI 3.0 JSON]
-        E2[RestTemplate / WebClient<br/>통신 코드]
-        E3[PublicDataErrorInterceptor]
+        E2[RestTemplate 클라이언트]
         E4[DTO 클래스]
     end
+
+    I[interceptor-core<br/>라이브러리]
 
     A1 --> B
     A2 --> B
@@ -54,7 +56,6 @@ flowchart LR
     C --> D
     D --> E1
     D --> E2
-    D --> E3
     D --> E4
 
     subgraph Runtime
@@ -62,16 +63,17 @@ flowchart LR
     end
 
     E2 --> F
-    E3 -.->|200 OK 위장 에러 차단| F
+    I -.->|자동 장착, 200 OK 위장 에러 차단| E2
 ```
 
 ### 모듈 구성
 
 | 모듈 | 역할 | 팀원 병렬 개발 포인트 |
 |---|---|---|
-| `parser` | HWP/DOCX를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
-| `generator` | IR JSON → OpenAPI 3.0 JSON, Spring 클라이언트 코드 생성 | 동일하게 IR JSON 샘플만으로 개발 시작 가능 |
+| `parser` | 공공데이터포털 표준 기술문서(DOCX)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
+| `generator` | IR JSON → OpenAPI 3.0 JSON, Spring 클라이언트 코드, DTO 생성 | 동일하게 IR JSON 샘플만으로 개발 시작 가능 |
 | `interceptor-core` | `PublicDataErrorInterceptor`, `PublicDataApiException` 등 런타임 라이브러리 | Parser/Generator와 무관하게 독립 배포 가능 (별도 jar) |
+| `cli` | `h2spec convert` 명령 — parser와 generator를 잇는 진입점 | |
 | `web` (선택) | 업로드 → 변환 → 다운로드 웹 UI | REST API 계약만 맞으면 병렬 개발 가능 |
 
 ## 빠른 시작
@@ -80,22 +82,44 @@ flowchart LR
 
 ```bash
 ./h2spec convert \
-  --input ./docs/실거래가_API_명세서.hwp \
-  --output ./generated \
-  --success-code 00
+  --input "docs/sample/한국환경공단_에어코리아_측정소정보_기술문서_v1.2.docx" \
+  --output ./generated
 ```
 
-### 2. 생성 결과물 예시
+```
+IR 추출: generated/ir/MsrstnList.json
+생성: generated/kr/go/h2spec/client/msrstnlist/dto/MsrstnListResponse.java
+생성: generated/kr/go/h2spec/client/msrstnlist/MsrstnListClient.java
+생성: generated/openapi/MsrstnList.json
+...(문서의 상세기능마다 반복)
+```
+
+IR JSON을 직접 입력할 수도 있습니다: `--input docs/schema-example.json`
+
+### 2. 생성 결과물
 
 ```
 generated/
-├── openapi/RTMSDataSvcAptTradeDev.json
-├── client/AptTradeApiClient.java
-├── dto/AptTradeItem.java
-└── interceptor/PublicDataErrorInterceptor.java   # 미리 정의된 공통 라이브러리 사용 가능
+├── ir/MsrstnList.json              # 추출된 중간 표현(IR) — 검수·수정 후 재입력 가능
+├── openapi/MsrstnList.json         # OpenAPI 3.0 문서 — Swagger UI/Postman에서 바로 사용
+└── kr/go/h2spec/client/msrstnlist/
+    ├── MsrstnListClient.java       # RestTemplate 클라이언트
+    └── dto/MsrstnListResponse.java # Jackson XML 매핑 DTO
 ```
 
-### 3. 생성된 클라이언트에 Interceptor 적용
+### 3. 생성된 클라이언트 사용
+
+```java
+MsrstnListClient client = new MsrstnListClient("발급받은 서비스키");
+MsrstnListResponse response = client.getMsrstnList("xml", 10, 1, "서울", null);
+```
+
+생성된 클라이언트에는 `PublicDataErrorInterceptor`가 **자동 장착**되어 있어 별도 설정이 필요 없습니다.
+인증키 오류·호출 한도 초과처럼 HTTP 200 OK로 위장한 에러 응답이 오면 `PublicDataApiException`을 던집니다.
+
+### 인터셉터만 단독으로 사용하기
+
+직접 구성한 RestTemplate에도 붙일 수 있습니다 (`interceptor-core` 모듈):
 
 ```java
 RestTemplate restTemplate = new RestTemplate(
@@ -106,6 +130,13 @@ restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
 
 > `BufferingClientHttpRequestFactory`로 감싸지 않으면 Interceptor가 바디를 먼저 읽은 뒤
 > 후속 메시지 컨버터가 빈 스트림을 읽게 되므로 반드시 함께 사용해야 합니다.
+
+### 빌드와 테스트
+
+```bash
+./gradlew build   # 전 모듈 빌드 + 테스트
+./gradlew test    # 테스트만
+```
 
 ## 중간 규격(IR) 계약
 
