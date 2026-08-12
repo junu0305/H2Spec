@@ -1,0 +1,80 @@
+package kr.go.h2spec.client.landmolit;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
+
+import kr.go.h2spec.client.interceptor.PublicDataErrorInterceptor;
+import kr.go.h2spec.client.landmolit.dto.RTMSDataSvcAptTradeDevResponse;
+
+/**
+ * 아파트 매매 실거래 상세 자료 조회 클라이언트.
+ * H2Spec generator가 자동 생성한 코드입니다. 직접 수정하지 마세요.
+ */
+public class RTMSDataSvcAptTradeDevClient {
+
+    private static final String BASE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev";
+    private static final String SUCCESS_CODE = "00";
+
+    private final RestTemplate restTemplate;
+    private final XmlMapper xmlMapper = new XmlMapper();
+    private final String serviceKey;
+
+    /**
+     * @param serviceKey 공공데이터포털에서 발급받은 인증키 (Decoding 완료된 키 사용)
+     */
+    public RTMSDataSvcAptTradeDevClient(String serviceKey) {
+        this(serviceKey, defaultRestTemplate());
+    }
+
+    public RTMSDataSvcAptTradeDevClient(String serviceKey, RestTemplate restTemplate) {
+        this.serviceKey = serviceKey;
+        this.restTemplate = restTemplate;
+    }
+
+    private static RestTemplate defaultRestTemplate() {
+        RestTemplate restTemplate = new RestTemplate(
+                new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()));
+        restTemplate.getInterceptors().add(new PublicDataErrorInterceptor(SUCCESS_CODE));
+        return restTemplate;
+    }
+
+    /**
+     * 지역코드와 계약월을 기준으로 아파트 매매 실거래 상세 자료를 제공하는 서비스
+     *
+     * @param lawdCd 지역코드(5자리, 법정동코드 앞 5자리)
+     * @param dealYmd 계약월 (YYYYMM)
+     * @param numOfRows 한 페이지 결과 수 (null이면 생략)
+     * @param pageNo 페이지 번호 (null이면 생략)
+     */
+    public RTMSDataSvcAptTradeDevResponse getRTMSDataSvcAptTradeDev(
+            String lawdCd, String dealYmd, Integer numOfRows, Integer pageNo) {
+        StringBuilder url = new StringBuilder(BASE_URL + "/getRTMSDataSvcAptTradeDev");
+        url.append("?serviceKey=").append(encode(serviceKey));
+        url.append("&LAWD_CD=").append(encode(lawdCd));
+        url.append("&DEAL_YMD=").append(encode(dealYmd));
+        if (numOfRows != null) {
+            url.append("&numOfRows=").append(numOfRows);
+        }
+        if (pageNo != null) {
+            url.append("&pageNo=").append(pageNo);
+        }
+        URI uri = URI.create(url.toString());
+        byte[] body = restTemplate.getForObject(uri, byte[].class);
+        try {
+            return xmlMapper.readValue(body, RTMSDataSvcAptTradeDevResponse.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("응답 파싱 실패: " + uri, e);
+        }
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}
