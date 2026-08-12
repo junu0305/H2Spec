@@ -18,14 +18,16 @@ class CodeGeneratorTest {
     Path tempDir;
 
     @Test
-    void 패키지_경로에_DTO와_클라이언트를_생성한다() throws Exception {
+    void 패키지_경로에_DTO와_클라이언트와_OpenAPI를_생성한다() throws Exception {
         List<Path> written = new CodeGenerator().generate(irPath(), tempDir);
 
-        assertEquals(2, written.size());
+        assertEquals(3, written.size());
         assertTrue(Files.exists(tempDir.resolve(
                 "kr/go/h2spec/client/landmolit/dto/RTMSDataSvcAptTradeDevResponse.java")));
         assertTrue(Files.exists(tempDir.resolve(
                 "kr/go/h2spec/client/landmolit/RTMSDataSvcAptTradeDevClient.java")));
+        assertTrue(Files.exists(tempDir.resolve(
+                "openapi/RTMSDataSvcAptTradeDev.json")));
     }
 
     @Test
@@ -37,7 +39,11 @@ class CodeGeneratorTest {
         List<String> args = new ArrayList<>(List.of(
                 "-classpath", System.getProperty("java.class.path"),
                 "-d", classes.toString()));
-        written.forEach(p -> args.add(p.toString()));
+        // 컴파일 대상은 .java만 (OpenAPI JSON은 제외)
+        written.stream()
+                .map(Path::toString)
+                .filter(p -> p.endsWith(".java"))
+                .forEach(args::add);
 
         int result = compiler.run(null, null, null, args.toArray(String[]::new));
 
