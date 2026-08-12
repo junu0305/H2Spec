@@ -1,0 +1,140 @@
+package kr.go.h2spec.client.landmolit.dto;
+
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
+
+/**
+ * 아파트 매매 실거래 상세 자료 조회 응답 DTO.
+ * H2Spec generator가 자동 생성한 코드입니다. 직접 수정하지 마세요.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JacksonXmlRootElement(localName = "response")
+public class RTMSDataSvcAptTradeDevResponse {
+
+    private Header header;
+    private Body body;
+
+    public Header getHeader() {
+        return header;
+    }
+
+    public void setHeader(Header header) {
+        this.header = header;
+    }
+
+    public Body getBody() {
+        return body;
+    }
+
+    public void setBody(Body body) {
+        this.body = body;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Header {
+
+        /** 결과코드 (00: 정상) */
+        private String resultCode;
+
+        /** 결과메시지 */
+        private String resultMsg;
+
+        public String getResultCode() {
+            return resultCode;
+        }
+
+        public void setResultCode(String resultCode) {
+            this.resultCode = resultCode;
+        }
+
+        public String getResultMsg() {
+            return resultMsg;
+        }
+
+        public void setResultMsg(String resultMsg) {
+            this.resultMsg = resultMsg;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Body {
+
+        private Items items;
+
+        /** 전체 결과 수 */
+        private Integer totalCount;
+
+        public Items getItems() {
+            return items;
+        }
+
+        public void setItems(Items items) {
+            this.items = items;
+        }
+
+        public Integer getTotalCount() {
+            return totalCount;
+        }
+
+        public void setTotalCount(Integer totalCount) {
+            this.totalCount = totalCount;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Items {
+
+        @JacksonXmlElementWrapper(useWrapping = false)
+        @JacksonXmlProperty(localName = "item")
+        private List<Item> item;
+
+        public List<Item> getItem() {
+            return item;
+        }
+
+        public void setItem(List<Item> item) {
+            this.item = item;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Item {
+
+        /** 단지명 */
+        private String aptNm;
+
+        /** 거래금액 (만원, 콤마 포함 문자열 주의) */
+        private String dealAmount;
+
+        /** 전용면적(㎡) */
+        private Double excluUseAr;
+
+        public String getAptNm() {
+            return aptNm;
+        }
+
+        public void setAptNm(String aptNm) {
+            this.aptNm = aptNm;
+        }
+
+        public String getDealAmount() {
+            return dealAmount;
+        }
+
+        public void setDealAmount(String dealAmount) {
+            this.dealAmount = dealAmount;
+        }
+
+        public Double getExcluUseAr() {
+            return excluUseAr;
+        }
+
+        public void setExcluUseAr(Double excluUseAr) {
+            this.excluUseAr = excluUseAr;
+        }
+    }
+}
