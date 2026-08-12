@@ -1,0 +1,22 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # gradle 의존성 캐싱 (매 실행마다 다시 다운로드하지 않도록)
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew build
