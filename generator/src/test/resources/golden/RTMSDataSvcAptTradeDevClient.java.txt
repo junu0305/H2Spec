@@ -11,6 +11,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import kr.go.h2spec.client.interceptor.PublicDataErrorInterceptor;
+import kr.go.h2spec.client.interceptor.ServiceKeyMasker;
 import kr.go.h2spec.client.landmolit.dto.RTMSDataSvcAptTradeDevResponse;
 
 /**
@@ -70,7 +71,7 @@ public class RTMSDataSvcAptTradeDevClient {
         try {
             return xmlMapper.readValue(body, RTMSDataSvcAptTradeDevResponse.class);
         } catch (IOException e) {
-            throw new IllegalStateException("응답 파싱 실패: " + uri, e);
+            throw new IllegalStateException("응답 파싱 실패: " + ServiceKeyMasker.mask(uri.toString()), e);
         }
     }
 

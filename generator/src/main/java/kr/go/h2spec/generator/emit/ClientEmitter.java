@@ -82,6 +82,7 @@ public class ClientEmitter {
         sb.append("\n");
 
         sb.append("import kr.go.h2spec.client.interceptor.PublicDataErrorInterceptor;\n");
+        sb.append("import kr.go.h2spec.client.interceptor.ServiceKeyMasker;\n");
         sb.append("import ").append(ir.generatorHints().targetPackage()).append(".dto.")
           .append(responseClassName).append(";\n");
         sb.append("\n");
@@ -185,7 +186,9 @@ public class ClientEmitter {
         sb.append(indent3).append("return ").append(mapperVar).append(".readValue(body, ")
           .append(responseClassName).append(".class);\n");
         sb.append(indent2).append("} catch (IOException e) {\n");
-        sb.append(indent3).append("throw new IllegalStateException(\"응답 파싱 실패: \" + uri, e);\n");
+        // 파싱 실패 예외에도 인증키가 남지 않도록 URI를 마스킹해서 넣는다
+        sb.append(indent3).append(
+                "throw new IllegalStateException(\"응답 파싱 실패: \" + ServiceKeyMasker.mask(uri.toString()), e);\n");
         sb.append(indent2).append("}\n");
         sb.append(INDENT).append("}\n");
     }
