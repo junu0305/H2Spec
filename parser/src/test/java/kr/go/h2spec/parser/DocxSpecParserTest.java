@@ -62,6 +62,16 @@ class DocxSpecParserTest {
     }
 
     @Test
+    void 결과코드_필드는_숫자_샘플이어도_string으로_강제한다() throws Exception {
+        ParsedApi first = new DocxSpecParser().parse(fixture()).get(0);
+        JsonNode fields = first.ir().get("api").get("responseFields");
+
+        // 샘플데이터가 "00"(숫자)이라도 integer로 추론하면 선행 0이 소실된다
+        JsonNode resultCode = findByPath(fields, "response.header.resultCode");
+        assertEquals("string", resultCode.get("type").asText());
+    }
+
+    @Test
     void 산출한_IR이_generator의_검증을_통과한다() throws Exception {
         List<ParsedApi> apis = new DocxSpecParser().parse(fixture());
 
@@ -103,11 +113,15 @@ class DocxSpecParserTest {
     }
 
     private boolean hasPath(JsonNode fields, String path) {
+        return findByPath(fields, path) != null;
+    }
+
+    private JsonNode findByPath(JsonNode fields, String path) {
         for (JsonNode field : fields) {
             if (path.equals(field.get("path").asText())) {
-                return true;
+                return field;
             }
         }
-        return false;
+        return null;
     }
 }
