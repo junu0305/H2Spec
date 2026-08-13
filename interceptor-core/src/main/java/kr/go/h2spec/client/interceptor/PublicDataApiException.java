@@ -14,15 +14,17 @@ public class PublicDataApiException extends RuntimeException {
 
     public PublicDataApiException(String requestUri, int httpStatus, String resultCode,
                                    String resultMsg, String rawBodySnippet) {
+        // 인증키가 로그로 유출되지 않도록 모든 문자열 필드를 마스킹한다
+        // (에러 바디가 요청 URL을 에코하는 경우 resultMsg/바디 스니펫에도 키가 들어올 수 있음)
         super(String.format(
                 "[H2Spec] 공공데이터 API 응답 오류 감지 (HTTP %d 이지만 실제로는 실패) - uri=%s, resultCode=%s, resultMsg=%s",
-                httpStatus, requestUri, resultCode, resultMsg
+                httpStatus, ServiceKeyMasker.mask(requestUri), resultCode, ServiceKeyMasker.mask(resultMsg)
         ));
-        this.requestUri = requestUri;
+        this.requestUri = ServiceKeyMasker.mask(requestUri);
         this.httpStatus = httpStatus;
         this.resultCode = resultCode;
-        this.resultMsg = resultMsg;
-        this.rawBodySnippet = rawBodySnippet;
+        this.resultMsg = ServiceKeyMasker.mask(resultMsg);
+        this.rawBodySnippet = ServiceKeyMasker.mask(rawBodySnippet);
     }
 
     public String getRequestUri() {

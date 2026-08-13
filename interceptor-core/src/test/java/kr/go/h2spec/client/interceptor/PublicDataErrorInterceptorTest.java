@@ -145,6 +145,32 @@ class PublicDataErrorInterceptorTest {
         assertTrue(e.getRequestUri().contains("pageNo=1"), "다른 파라미터는 보존돼야 함");
     }
 
+    @Test
+    void 에러_바디가_요청_URL을_에코해도_모든_예외_필드에서_서비스키를_마스킹한다() {
+        // 일부 게이트웨이 오류 응답은 요청 URL(서비스키 포함)을 바디에 그대로 에코한다
+        URI uri = URI.create("http://api.example/test?serviceKey=SECRET123");
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(uri, """
+                <response><header><resultCode>30</resultCode>\
+                <resultMsg>인증 실패: http://api.example/test?serviceKey=SECRET123</resultMsg>\
+                </header></response>"""));
+
+        assertFalse(e.getResultMsg().contains("SECRET123"), "resultMsg에 서비스키가 노출됨");
+        assertFalse(e.getRawBodySnippet().contains("SECRET123"), "rawBodySnippet에 서비스키가 노출됨");
+        assertFalse(e.getMessage().contains("SECRET123"), "예외 메시지에 서비스키가 노출됨");
+        assertTrue(e.getResultMsg().contains("serviceKey=****"));
+    }
+
+    @Test
+    void 대문자_ServiceKey_파라미터도_마스킹한다() {
+        URI uri = URI.create("http://api.example/test?ServiceKey=SECRET123");
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(uri, """
+                <response><header><resultCode>30</resultCode></header></response>"""));
+
+        assertFalse(e.getRequestUri().contains("SECRET123"));
+    }
+
     private ClientHttpResponse intercept(String body) throws IOException {
         return intercept(URI.create("http://api.example/test"), body);
     }
