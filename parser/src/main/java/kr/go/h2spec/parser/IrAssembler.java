@@ -106,7 +106,10 @@ public class IrAssembler {
 
             ObjectNode field = fields.addObject();
             field.put("path", pathFor(name));
-            field.put("type", inferType(sample, name, reviewNotes));
+            // 결과코드/메시지는 샘플이 숫자("00")여도 선행 0 보존을 위해 항상 문자열
+            field.put("type", HEADER_FIELDS.contains(name)
+                    ? "string"
+                    : inferType(sample, name, reviewNotes));
             field.put("description", description.isBlank() ? korName : description);
             if ("resultCode".equals(name)) {
                 field.put("isResultIndicator", true);

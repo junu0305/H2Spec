@@ -132,9 +132,25 @@ class PublicDataErrorInterceptorTest {
         assertTrue(e.getRawBodySnippet().contains("resultCode"));
     }
 
+    @Test
+    void 예외_메시지의_URI에서_서비스키를_마스킹한다() {
+        URI uri = URI.create("http://api.example/test?serviceKey=SECRET123&pageNo=1");
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(uri, """
+                <response><header><resultCode>30</resultCode></header></response>"""));
+
+        assertFalse(e.getMessage().contains("SECRET123"), "예외 메시지에 서비스키가 노출됨");
+        assertFalse(e.getRequestUri().contains("SECRET123"), "requestUri에 서비스키가 노출됨");
+        assertTrue(e.getRequestUri().contains("serviceKey=****"));
+        assertTrue(e.getRequestUri().contains("pageNo=1"), "다른 파라미터는 보존돼야 함");
+    }
+
     private ClientHttpResponse intercept(String body) throws IOException {
-        MockClientHttpRequest request =
-                new MockClientHttpRequest(HttpMethod.GET, URI.create("http://api.example/test"));
+        return intercept(URI.create("http://api.example/test"), body);
+    }
+
+    private ClientHttpResponse intercept(URI uri, String body) throws IOException {
+        MockClientHttpRequest request = new MockClientHttpRequest(HttpMethod.GET, uri);
         MockClientHttpResponse response =
                 new MockClientHttpResponse(body.getBytes(StandardCharsets.UTF_8), HttpStatus.OK);
         return interceptor.intercept(request, new byte[0], (req, requestBody) -> response);

@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * 공공데이터포털 계열 API의 고질적인 문제를 해결하는 Interceptor.
@@ -72,6 +73,11 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
     /** JSON에서 결과코드 후보 키를 찾을 때 내려갈 최대 깊이 — 데이터 영역의 유사 필드 오인 방지 */
     private static final int MAX_SEARCH_DEPTH = 3;
 
+    /** 예외 메시지의 URI에서 인증키가 로그로 유출되지 않도록 마스킹 */
+    private static final Pattern SERVICE_KEY_PATTERN =
+            Pattern.compile("(serviceKey=)[^&]*", Pattern.CASE_INSENSITIVE);
+    private static final String SERVICE_KEY_MASK = "$1****";
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public PublicDataErrorInterceptor() {
@@ -106,7 +112,7 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
 
         if (isFailure) {
             throw new PublicDataApiException(
-                    request.getURI().toString(),
+                    maskServiceKey(request.getURI().toString()),
                     response.getStatusCode().value(),
                     resultInfo.resultCode,
                     resultInfo.resultMsg,
@@ -205,6 +211,10 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
             }
         }
         return false;
+    }
+
+    private String maskServiceKey(String uri) {
+        return SERVICE_KEY_PATTERN.matcher(uri).replaceAll(SERVICE_KEY_MASK);
     }
 
     private String truncate(String s, int maxLen) {
