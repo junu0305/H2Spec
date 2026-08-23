@@ -42,6 +42,36 @@ class ConvertCommandTest {
     }
 
     @Test
+    void format_옵션이_응답_포맷을_덮어쓴다() throws Exception {
+        // 샘플 문서는 대부분 기본값이 xml이라, 이 옵션이 없으면 JSON 클라이언트를 만들 방법이 없다
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", irPath().toString(), "--output", tempDir.toString(),
+                "--format", "json");
+
+        assertEquals(0, exit);
+        String client = Files.readString(tempDir.resolve(
+                "kr/go/h2spec/client/landmolit/RTMSDataSvcAptTradeDevClient.java"));
+        String dto = Files.readString(tempDir.resolve(
+                "kr/go/h2spec/client/landmolit/dto/RTMSDataSvcAptTradeDevResponse.java"));
+        assertTrue(client.contains("objectMapper.readValue"));
+        assertFalse(client.contains("XmlMapper"));
+        assertFalse(dto.contains("JacksonXml"));
+    }
+
+    @Test
+    void format_옵션에_잘못된_값을_주면_한국어_메시지로_실패한다() throws Exception {
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new H2SpecCli());
+        cli.setErr(new PrintWriter(err));
+
+        int exit = cli.execute("convert", "--input", irPath().toString(),
+                "--output", tempDir.toString(), "--format", "yaml");
+
+        assertEquals(1, exit);
+        assertTrue(err.toString().contains("xml"), err.toString());
+    }
+
+    @Test
     void DOCX_명세서를_오퍼레이션별_산출물로_변환한다() throws Exception {
         Path docx = Path.of(getClass().getResource("/docs/msrstn-info.docx").toURI());
 

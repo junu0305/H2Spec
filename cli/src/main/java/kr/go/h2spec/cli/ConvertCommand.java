@@ -29,6 +29,8 @@ public class ConvertCommand implements Callable<Integer> {
     /** HWP 파싱은 미지원 (이슈 #1은 DOCX 우선) */
     private static final List<String> UNSUPPORTED_EXTENSIONS = List.of(".hwp", ".hwpx");
     private static final String DOCX_EXTENSION = ".docx";
+    private static final String XML_FORMAT = "XML";
+    private static final String JSON_FORMAT = "JSON";
 
     @Spec
     private CommandSpec spec;
@@ -42,6 +44,9 @@ public class ConvertCommand implements Callable<Integer> {
     @Option(names = "--success-code", description = "정상 처리로 간주할 resultCode (IR의 errorSpec 값을 덮어씀)")
     private String successCode;
 
+    @Option(names = "--format", description = "응답 포맷 xml 또는 json (문서에서 판별한 값을 덮어씀)")
+    private String format;
+
     @Override
     public Integer call() {
         String fileName = input.getFileName().toString().toLowerCase(Locale.ROOT);
@@ -51,6 +56,10 @@ public class ConvertCommand implements Callable<Integer> {
         }
         if (!Files.exists(input)) {
             err("입력 파일이 없습니다: " + input);
+            return 1;
+        }
+        if (format != null && !XML_FORMAT.equalsIgnoreCase(format) && !JSON_FORMAT.equalsIgnoreCase(format)) {
+            err("--format 값은 xml 또는 json 이어야 합니다: " + format);
             return 1;
         }
         try {
@@ -86,8 +95,20 @@ public class ConvertCommand implements Callable<Integer> {
         if (successCode != null) {
             ir = withSuccessCode(ir, successCode);
         }
+        if (format != null) {
+            ir = withResponseFormat(ir, format.toUpperCase(Locale.ROOT));
+        }
         List<Path> written = new CodeGenerator().generate(ir, output);
         written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
+    }
+
+    private IrSpec withResponseFormat(IrSpec ir, String responseFormat) {
+        ApiSpec api = ir.api();
+        return new IrSpec(
+                new ApiSpec(api.apiId(), api.apiName(), api.description(), api.baseUrl(),
+                        api.endpoint(), api.httpMethod(), responseFormat,
+                        api.requestParameters(), api.responseFields(), api.errorSpec()),
+                ir.generatorHints());
     }
 
     private IrSpec withSuccessCode(IrSpec ir, String code) {
