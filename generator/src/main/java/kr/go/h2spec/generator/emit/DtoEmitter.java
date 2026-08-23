@@ -15,12 +15,12 @@ public class DtoEmitter {
     private static final String INDENT = "    ";
     private static final Map<String, String> TYPE_MAP = Map.of(
             "string", "String",
-            "integer", "Integer",
+            "integer", "Long",
             "number", "Double",
             "boolean", "Boolean");
     private static final String DEFAULT_TYPE = "String";
     private static final Set<String> RESERVED_TYPE_NAMES =
-            Set.of("List", "String", "Integer", "Double", "Boolean");
+            Set.of("List", "String", "Long", "Double", "Boolean");
 
     public String emit(IrSpec ir, DtoNode root) {
         String className = JavaNames.pascal(ir.api().apiId()) + "Response";

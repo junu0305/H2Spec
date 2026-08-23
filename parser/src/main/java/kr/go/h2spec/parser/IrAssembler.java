@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -18,6 +19,17 @@ public class IrAssembler {
     private static final String OPERATION_PREFIX = "get";
     private static final Pattern INTEGER_SAMPLE = Pattern.compile("^\\d+$");
     private static final Pattern NUMBER_SAMPLE = Pattern.compile("^\\d+\\.\\d+$");
+    /** 선행 0이 붙은 정수 샘플(0311 등)은 숫자로 만들면 값이 바뀐다 */
+    private static final Pattern LEADING_ZERO_SAMPLE = Pattern.compile("^0\\d+$");
+    /**
+     * 산술 대상이 아닌 식별자·코드·일자를 가리키는 이름 접미사 (소문자 비교).
+     * "tm"은 거리(tm)·item처럼 시각이 아닌 이름까지 걸리므로 넣지 않고 설명 키워드에 맡긴다.
+     */
+    private static final List<String> NON_NUMERIC_NAME_SUFFIXES =
+            List.of("cd", "code", "no", "id", "dt", "ymd");
+    /** 산술 대상이 아님을 드러내는 항목설명 키워드 */
+    private static final List<String> NON_NUMERIC_DESCRIPTION_KEYWORDS =
+            List.of("코드", "번호", "일자", "년월일", "시각", "일시");
     /** 공공데이터 표준 응답에서 response.header 바로 아래에 오는 필드 */
     private static final Set<String> HEADER_FIELDS = Set.of("resultCode", "resultMsg");
     /** 공공데이터 표준 응답에서 response.body 바로 아래에 오는 페이징 메타 필드 */
@@ -81,14 +93,14 @@ public class IrAssembler {
             String korName = cells.get(1);
             String gubun = cells.get(3);
             String sample = cells.get(4);
-            String description = cells.get(5);
+            String description = describe(cells.get(5), korName);
 
             ObjectNode param = parameters.addObject();
             param.put("name", name);
             param.put("in", "query");
-            param.put("type", inferType(sample, name, reviewNotes));
+            param.put("type", inferType(sample, name, description, reviewNotes));
             param.put("required", gubun.startsWith("1"));
-            param.put("description", description.isBlank() ? korName : description);
+            param.put("description", description);
             if (!sample.isBlank() && !"-".equals(sample)) {
                 param.put("example", sample);
             }
@@ -102,20 +114,25 @@ public class IrAssembler {
             String name = cells.get(0);
             String korName = cells.get(1);
             String sample = cells.get(4);
-            String description = cells.get(5);
+            String description = describe(cells.get(5), korName);
 
             ObjectNode field = fields.addObject();
             field.put("path", pathFor(name));
             // 결과코드/메시지는 샘플이 숫자("00")여도 선행 0 보존을 위해 항상 문자열
             field.put("type", HEADER_FIELDS.contains(name)
                     ? "string"
-                    : inferType(sample, name, reviewNotes));
-            field.put("description", description.isBlank() ? korName : description);
+                    : inferType(sample, name, description, reviewNotes));
+            field.put("description", description);
             if ("resultCode".equals(name)) {
                 field.put("isResultIndicator", true);
             }
         }
         return fields;
+    }
+
+    /** 항목설명이 비어 있으면 국문 항목명을 설명으로 쓴다. */
+    private String describe(String description, String korName) {
+        return description.isBlank() ? korName : description;
     }
 
     /** 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다. */
@@ -138,15 +155,36 @@ public class IrAssembler {
                 .toList();
     }
 
-    private String inferType(String sample, String name, List<String> reviewNotes) {
+    private String inferType(String sample, String name, String description, List<String> reviewNotes) {
+        if (isNonNumeric(name, description, sample)) {
+            return "string";
+        }
         if (INTEGER_SAMPLE.matcher(sample).matches()) {
-            reviewNotes.add("샘플데이터 기반 integer 추론: " + name + " (코드형 문자열일 수 있음)");
+            // 규칙으로 확정한 필드까지 노트를 남기면 노트가 검토 신호 역할을 못 한다
+            if (!BODY_META_FIELDS.contains(name)) {
+                reviewNotes.add("샘플데이터 기반 integer 추론: " + name + " (코드형 문자열일 수 있음)");
+            }
             return "integer";
         }
         if (NUMBER_SAMPLE.matcher(sample).matches()) {
             return "number";
         }
         return "string";
+    }
+
+    /**
+     * 샘플이 숫자여도 산술 대상이 아닌 필드를 가려낸다. 법인등록번호·발표시각처럼
+     * int 범위를 넘거나 선행 0이 의미를 갖는 값이 정수로 추론되는 것을 막는다.
+     * 페이징 메타 필드는 이름 접미사 규칙(pageNo)에 걸리므로 먼저 제외한다.
+     */
+    private boolean isNonNumeric(String name, String description, String sample) {
+        if (BODY_META_FIELDS.contains(name)) {
+            return false;
+        }
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        return NON_NUMERIC_NAME_SUFFIXES.stream().anyMatch(lowerName::endsWith)
+                || NON_NUMERIC_DESCRIPTION_KEYWORDS.stream().anyMatch(description::contains)
+                || LEADING_ZERO_SAMPLE.matcher(sample).matches();
     }
 
     private ObjectNode errorSpec() {

@@ -107,7 +107,7 @@ public class OpenApiEmitter {
     private void putTypedDefault(ObjectNode schema, RequestParameter param) {
         if ("integer".equals(param.type())) {
             try {
-                schema.put("default", Integer.parseInt(param.defaultValue()));
+                schema.put("default", Long.parseLong(param.defaultValue()));
                 return;
             } catch (NumberFormatException e) {
                 // 숫자가 아니면 문자열로 남긴다

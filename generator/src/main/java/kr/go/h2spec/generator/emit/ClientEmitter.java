@@ -14,7 +14,7 @@ public class ClientEmitter {
     private static final String SERVICE_KEY_PARAM = "serviceKey";
     private static final Map<String, String> TYPE_MAP = Map.of(
             "string", "String",
-            "integer", "Integer",
+            "integer", "Long",
             "number", "Double",
             "boolean", "Boolean");
     private static final String DEFAULT_TYPE = "String";

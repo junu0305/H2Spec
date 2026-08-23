@@ -32,6 +32,18 @@ class DtoEmitterTest {
     }
 
     @Test
+    void integer_필드는_Long으로_방출한다() throws Exception {
+        // 계정과목별 금액(354106373903)처럼 int 범위를 넘는 값이 와도 역직렬화가 깨지지 않아야 한다
+        IrSpec ir = new IrLoader().load(resource("/ir/schema-example.json"));
+        DtoNode root = new DtoTreeBuilder().build(ir.api().responseFields());
+
+        String source = new DtoEmitter().emit(ir, root);
+
+        assertTrue(source.contains("private Long totalCount;"));
+        assertTrue(!source.contains("private Integer totalCount;"));
+    }
+
+    @Test
     void 서로_다른_경로의_클래스명이_겹치면_예외를_던진다() {
         List<ResponseField> fields = List.of(
                 new ResponseField("response.header.items.b", "string", null, null),
