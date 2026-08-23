@@ -5,13 +5,18 @@ import kr.go.h2spec.generator.ir.RequestParameter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /** IR을 RestTemplate 기반 API 클라이언트 단일 .java 소스로 방출한다. */
 public class ClientEmitter {
 
     private static final String INDENT = "    ";
     private static final String SERVICE_KEY_PARAM = "serviceKey";
+    /** 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다 */
+    private static final Set<String> RESPONSE_FORMAT_PARAMS = Set.of("returnType", "dataType", "resultType");
+
     private static final Map<String, String> TYPE_MAP = Map.of(
             "string", "String",
             "integer", "Long",
@@ -24,7 +29,7 @@ public class ClientEmitter {
         String responseClassName = JavaNames.pascal(ir.api().apiId()) + "Response";
         boolean isXml = "XML".equals(ir.api().responseFormat());
         RequestParameter serviceKeyParam = findServiceKeyParam(ir);
-        List<RequestParameter> params = paramsExcludingServiceKey(ir);
+        List<RequestParameter> params = visibleParams(ir);
 
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(ir.generatorHints().targetPackage()).append(";\n\n");
@@ -53,14 +58,32 @@ public class ClientEmitter {
         throw new IllegalArgumentException("requestParameters에 serviceKey 파라미터가 없습니다.");
     }
 
-    private List<RequestParameter> paramsExcludingServiceKey(IrSpec ir) {
+    private List<RequestParameter> visibleParams(IrSpec ir) {
         List<RequestParameter> result = new ArrayList<>();
         for (RequestParameter p : ir.api().requestParameters()) {
-            if (!SERVICE_KEY_PARAM.equals(p.name())) {
+            if (!isHidden(p.name())) {
                 result.add(p);
             }
         }
         return result;
+    }
+
+    /**
+     * 메서드 시그니처에서 감추는 파라미터. serviceKey는 생성자로 받고, 포맷 파라미터는
+     * 생성 시점에 확정한 값으로 박는다 — 호출자가 매퍼와 어긋나는 값을 넣을 수 없게 한다.
+     */
+    private boolean isHidden(String name) {
+        return SERVICE_KEY_PARAM.equals(name) || RESPONSE_FORMAT_PARAMS.contains(name);
+    }
+
+    /** 문서에 포맷 파라미터가 있으면 그 이름을 돌려준다. 없으면 null */
+    private String formatParamName(IrSpec ir) {
+        for (RequestParameter p : ir.api().requestParameters()) {
+            if (RESPONSE_FORMAT_PARAMS.contains(p.name())) {
+                return p.name();
+            }
+        }
+        return null;
     }
 
     // java.* 그룹 → jackson/spring 그룹(XmlMapper 또는 ObjectMapper 선택) → 프로젝트 내부 그룹. 그룹마다 빈 줄.
@@ -74,6 +97,7 @@ public class ClientEmitter {
         if (isXml) {
             sb.append("import com.fasterxml.jackson.dataformat.xml.XmlMapper;\n");
         } else {
+            sb.append("import com.fasterxml.jackson.databind.DeserializationFeature;\n");
             sb.append("import com.fasterxml.jackson.databind.ObjectMapper;\n");
         }
         sb.append("import org.springframework.http.client.BufferingClientHttpRequestFactory;\n");
@@ -105,7 +129,10 @@ public class ClientEmitter {
         if (isXml) {
             sb.append(INDENT).append("private final XmlMapper xmlMapper = new XmlMapper();\n");
         } else {
-            sb.append(INDENT).append("private final ObjectMapper objectMapper = new ObjectMapper();\n");
+                // DTO의 @JsonRootName과 짝. 공공데이터 JSON 응답은 {"response":{...}}처럼 루트를 키로 감싼다
+            sb.append(INDENT).append("private final ObjectMapper objectMapper = new ObjectMapper()\n");
+            sb.append(INDENT.repeat(3))
+              .append(".enable(DeserializationFeature.UNWRAP_ROOT_VALUE);\n");
         }
         sb.append(INDENT).append("private final String serviceKey;\n");
     }
@@ -167,6 +194,12 @@ public class ClientEmitter {
           .append(ir.api().endpoint()).append("\");\n");
         sb.append(indent2).append("url.append(\"?").append(SERVICE_KEY_PARAM).append("=\").append(encode(")
           .append(SERVICE_KEY_PARAM).append("));\n");
+        String formatParam = formatParamName(ir);
+        if (formatParam != null) {
+            String formatValue = ir.api().responseFormat().toLowerCase(Locale.ROOT);
+            sb.append(indent2).append("url.append(\"&").append(formatParam).append("=")
+              .append(formatValue).append("\");\n");
+        }
         for (RequestParameter p : params) {
             String varName = JavaNames.camel(p.name());
             String valueExpr = "string".equals(p.type()) ? "encode(" + varName + ")" : varName;
