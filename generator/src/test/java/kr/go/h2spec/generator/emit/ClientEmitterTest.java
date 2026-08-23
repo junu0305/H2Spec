@@ -39,6 +39,17 @@ class ClientEmitterTest {
     }
 
     @Test
+    void integer_파라미터는_Long으로_방출한다() throws Exception {
+        // 발표시각(201310170600)처럼 int 범위를 넘는 값이 파라미터로 오면 Integer로는 담기지 않는다
+        IrSpec ir = new IrLoader().load(resource("/ir/schema-example.json"));
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertTrue(source.contains("Long numOfRows"));
+        assertFalse(source.contains("Integer numOfRows"));
+    }
+
+    @Test
     void 응답을_바이트배열로_받아_인코딩_손상을_피한다() throws Exception {
         IrSpec ir = new IrLoader().load(resource("/ir/schema-example.json"));
 

@@ -66,7 +66,7 @@ public class RTMSDataSvcAptTradeDevResponse {
         private Items items;
 
         /** 전체 결과 수 */
-        private Integer totalCount;
+        private Long totalCount;
 
         public Items getItems() {
             return items;
@@ -76,11 +76,11 @@ public class RTMSDataSvcAptTradeDevResponse {
             this.items = items;
         }
 
-        public Integer getTotalCount() {
+        public Long getTotalCount() {
             return totalCount;
         }
 
-        public void setTotalCount(Integer totalCount) {
+        public void setTotalCount(Long totalCount) {
             this.totalCount = totalCount;
         }
     }

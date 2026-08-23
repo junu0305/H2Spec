@@ -55,7 +55,7 @@ public class RTMSDataSvcAptTradeDevClient {
      * @param pageNo 페이지 번호 (null이면 생략)
      */
     public RTMSDataSvcAptTradeDevResponse getRTMSDataSvcAptTradeDev(
-            String lawdCd, String dealYmd, Integer numOfRows, Integer pageNo) {
+            String lawdCd, String dealYmd, Long numOfRows, Long pageNo) {
         StringBuilder url = new StringBuilder(BASE_URL + "/getRTMSDataSvcAptTradeDev");
         url.append("?serviceKey=").append(encode(serviceKey));
         url.append("&LAWD_CD=").append(encode(lawdCd));
