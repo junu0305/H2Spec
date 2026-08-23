@@ -76,6 +76,38 @@ class IrAssemblerTest {
         assertEquals(0, notes.size(), "규칙으로 확정한 필드까지 노트를 남기면 노트가 신호 역할을 못 한다");
     }
 
+    @Test
+    void 포맷_파라미터의_샘플값으로_responseFormat을_정한다() {
+        // 기관마다 설명 문구가 제각각이라("xml 또는json" 등) 샘플데이터 칸의 기본값을 근거로 삼는다
+        assertEquals("JSON", responseFormat(requestRow("returnType", "데이터 표출방식", "json", "xml 또는 json")));
+        assertEquals("XML", responseFormat(requestRow("returnType", "데이터 표출방식", "xml", "xml 또는 json")));
+    }
+
+    @Test
+    void dataType과_resultType도_포맷_판정에_쓴다() {
+        // 기상청은 dataType, 기업 재무정보는 resultType을 쓴다
+        assertEquals("JSON", responseFormat(requestRow("dataType", "요청자료형식", "JSON", "요청자료형식(XML/JSON)")));
+        assertEquals("JSON", responseFormat(requestRow("resultType", "결과형식", "json", "결과형식(xml/json)")));
+    }
+
+    @Test
+    void 포맷_파라미터가_없으면_XML이다() {
+        // KCI 문서처럼 포맷 파라미터 자체가 없는 문서
+        assertEquals("XML", responseFormat(requestRow("artiId", "논문물리적식별자", "ART001", "논문 식별자")));
+    }
+
+    @Test
+    void 포맷_파라미터를_요청파라미터에서_지우지_않는다() {
+        // IR은 문서를 그대로 표현한다. 감추는 것은 생성기 몫이다
+        JsonNode param = param(requestRow("returnType", "데이터 표출방식", "json", "xml 또는 json"), "returnType");
+
+        assertEquals("string", param.get("type").asText());
+    }
+
+    private String responseFormat(List<String> requestRow) {
+        return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
+    }
+
     private JsonNode param(List<String> row, String name) {
         JsonNode params = assemble(List.of(row), List.of()).get("api").get("requestParameters");
         return find(params, "name", name);

@@ -34,6 +34,10 @@ public class IrAssembler {
     private static final Set<String> HEADER_FIELDS = Set.of("resultCode", "resultMsg");
     /** 공공데이터 표준 응답에서 response.body 바로 아래에 오는 페이징 메타 필드 */
     private static final Set<String> BODY_META_FIELDS = Set.of("numOfRows", "pageNo", "totalCount");
+    /** 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다 */
+    private static final Set<String> RESPONSE_FORMAT_PARAMS = Set.of("returnType", "dataType", "resultType");
+    private static final String XML_FORMAT = "XML";
+    private static final String JSON_FORMAT = "JSON";
     private static final String SUCCESS_RESULT_CODE = "00";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -57,7 +61,7 @@ public class IrAssembler {
         api.put("httpMethod", "GET");
         api.put("description", info.getOrDefault("상세기능 설명", ""));
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
-        api.put("responseFormat", "XML");
+        api.put("responseFormat", responseFormat(requestRows));
         api.set("requestParameters", requestParameters(requestRows, reviewNotes));
         api.set("responseFields", responseFields(responseRows, reviewNotes));
         api.set("errorSpec", errorSpec());
@@ -128,6 +132,19 @@ public class IrAssembler {
             }
         }
         return fields;
+    }
+
+    /**
+     * 응답 포맷은 포맷 파라미터의 샘플데이터(문서가 적어둔 기본값)로 정한다.
+     * 항목설명 문구는 "xml 또는json", "결과형식(xml/json)"처럼 기관마다 달라 근거로 삼기 어렵다.
+     */
+    private String responseFormat(List<List<String>> requestRows) {
+        for (List<String> cells : dataRows(requestRows)) {
+            if (RESPONSE_FORMAT_PARAMS.contains(cells.get(0)) && JSON_FORMAT.equalsIgnoreCase(cells.get(4))) {
+                return JSON_FORMAT;
+            }
+        }
+        return XML_FORMAT;
     }
 
     /** 항목설명이 비어 있으면 국문 항목명을 설명으로 쓴다. */
