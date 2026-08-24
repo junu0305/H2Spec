@@ -1,7 +1,9 @@
 package kr.go.h2spec.generator.emit;
 
 import kr.go.h2spec.generator.ir.IrLoader;
+import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.IrSpec;
+import kr.go.h2spec.generator.ir.RequestParameter;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -133,7 +135,28 @@ class ClientEmitterTest {
         assertFalse(source.contains("String body = restTemplate.getForObject(uri, String.class);"));
     }
 
+    @Test
+    void path_파라미터는_endpoint에_치환하고_query로_붙이지_않는다() throws Exception {
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        RequestParameter path = new RequestParameter(
+                "LAWD_CD", "path", "string", true, "법정동 코드", null, null, null);
+        ApiSpec api = new ApiSpec(
+                base.api().apiId(), base.api().apiName(), base.api().description(), base.api().baseUrl(),
+                "/v1/apt/{LAWD_CD}", base.api().httpMethod(), base.api().responseFormat(),
+                List.of(base.api().requestParameters().get(0), path), base.api().responseFields(),
+                base.api().errorSpec());
+
+        String source = new ClientEmitter().emit(new IrSpec(api, base.generatorHints()));
+
+        assertTrue(source.contains("replace(\"{LAWD_CD}\", encode(String.valueOf(lawdCd)))"));
+        assertFalse(source.contains("url.append(\"&LAWD_CD=\")"));
+    }
+
     private Path resource(String name) throws Exception {
         return Path.of(getClass().getResource(name).toURI());
+    }
+
+    private String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n");
     }
 }

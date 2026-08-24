@@ -202,6 +202,13 @@ public class ClientEmitter {
               .append(formatValue).append("\");\n");
         }
         for (RequestParameter p : params) {
+            if ("path".equals(p.in())) {
+                String varName = JavaNames.camel(p.name());
+                sb.append(indent2).append("url = new StringBuilder(url.toString().replace(\"{")
+                  .append(p.name()).append("}\", encode(String.valueOf(").append(varName)
+                  .append("))));\n");
+                continue;
+            }
             String varName = JavaNames.camel(p.name());
             String valueExpr = "string".equals(p.type()) ? "encode(" + varName + ")" : varName;
             String appendLine = "url.append(\"&" + p.name() + "=\").append(" + valueExpr + ");";
