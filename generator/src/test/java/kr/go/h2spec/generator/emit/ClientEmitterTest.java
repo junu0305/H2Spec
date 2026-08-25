@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static kr.go.h2spec.generator.GoldenFileAssertions.assertEqualsIgnoringLineEndings;
 
 class ClientEmitterTest {
 
@@ -19,7 +20,7 @@ class ClientEmitterTest {
         String actual = new ClientEmitter().emit(ir);
 
         String expected = Files.readString(resource("/golden/RTMSDataSvcAptTradeDevClient.java.txt"));
-        assertEquals(expected, actual);
+        assertEqualsIgnoringLineEndings(expected, actual);
     }
 
     @Test
