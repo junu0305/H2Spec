@@ -131,6 +131,15 @@ restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
 > `BufferingClientHttpRequestFactory`로 감싸지 않으면 Interceptor가 바디를 먼저 읽은 뒤
 > 후속 메시지 컨버터가 빈 스트림을 읽게 되므로 반드시 함께 사용해야 합니다.
 
+WebClient에는 `ExchangeFilterFunction` 구현체를 붙일 수 있습니다. 필터가 읽은 응답 바디는
+downstream에서 다시 읽을 수 있도록 복원됩니다.
+
+```java
+WebClient webClient = WebClient.builder()
+    .filter(new PublicDataErrorFilter("00"))
+    .build();
+```
+
 ### 빌드와 테스트
 
 ```bash
@@ -200,7 +209,7 @@ main              ← 최종 병합 (PR 필수)
 ## 로드맵
 
 - [ ] HWP 표 파싱 정확도 개선 (병합 셀 대응)
-- [ ] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
+- [x] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
 - [ ] 다건 API 배치 변환 CLI 옵션
 - [ ] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
 
