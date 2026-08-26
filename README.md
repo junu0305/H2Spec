@@ -1,7 +1,7 @@
 # H2Spec (HWP to Spring-Client)
 
 > **H**WP/docx → **O**pen**API** **Spec** 변환기
-> 공공기관의 비표준 API 명세서(HWP/DOCX)를 OpenAPI 3.0 스펙으로 변환하고,
+> 공공기관의 비표준 API 명세서(HWP/HWPX/DOCX)를 OpenAPI 3.0 스펙으로 변환하고,
 > Spring 통신 코드와 "200 OK 위장 에러" 감지 Interceptor까지 자동 생성하는 오픈소스 도구입니다.
 
 [![build](https://github.com/junu0305/H2Spec/actions/workflows/build.yml/badge.svg)](https://github.com/junu0305/H2Spec/actions/workflows/build.yml)
@@ -70,7 +70,7 @@ flowchart LR
 
 | 모듈 | 역할 | 팀원 병렬 개발 포인트 |
 |---|---|---|
-| `parser` | 공공데이터포털 표준 기술문서(DOCX/HWP)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
+| `parser` | 공공데이터포털 표준 기술문서(DOCX/HWP/HWPX)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
 | `generator` | IR JSON → OpenAPI 3.0 JSON, Spring 클라이언트 코드, DTO 생성 | 동일하게 IR JSON 샘플만으로 개발 시작 가능 |
 | `interceptor-core` | `PublicDataErrorInterceptor`(RestTemplate), `PublicDataErrorFilter`(WebClient), `PublicDataApiException` 등 런타임 라이브러리 | Parser/Generator와 무관하게 독립 배포 가능 (별도 jar) |
 | `cli` | `h2spec convert` 명령 — parser와 generator를 잇는 진입점 | |
@@ -94,7 +94,7 @@ IR 추출: generated/ir/MsrstnList.json
 ...(문서의 상세기능마다 반복)
 ```
 
-HWP 명세서(`.hwp`)와 IR JSON도 같은 방식으로 넣을 수 있습니다. HWPX(신형식)는 아직 지원하지 않습니다.
+HWP 명세서(`.hwp`), HWPX 명세서(`.hwpx`), IR JSON도 같은 방식으로 넣을 수 있습니다.
 
 ```bash
 ./h2spec convert --input "명세서.hwp" --output ./generated
@@ -113,7 +113,7 @@ HWP 명세서(`.hwp`)와 IR JSON도 같은 방식으로 넣을 수 있습니다.
 
 | 옵션 | 설명 |
 |---|---|
-| `-i`, `--input` | 명세 파일(DOCX/HWP/IR JSON) 또는 명세 파일들이 담긴 디렉터리 |
+| `-i`, `--input` | 명세 파일(DOCX/HWP/HWPX/IR JSON) 또는 명세 파일들이 담긴 디렉터리 |
 | `-o`, `--output` | 출력 디렉터리 (기본: `./generated`) |
 | `--package` | 생성 코드의 기준 패키지. 오퍼레이션별 하위 패키지가 자동으로 붙습니다 |
 | `--format` | 응답 포맷 `xml` 또는 `json`. 문서에서 판별한 값을 덮어씁니다 |
@@ -246,8 +246,8 @@ main              ← 최종 병합 (PR 필수)
 - [x] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
 - [x] 다건 API 배치 변환 CLI 옵션
 - [x] 생성 코드 패키지 지정 옵션(`--package`), 응답 포맷 지정(`--format`)
-- [ ] HWP 표 파싱 정확도 개선 (병합 셀 대응)
-- [ ] HWPX(신형식) 파싱 지원
+- [x] HWP 표 파싱 정확도 개선 (머리행 기준 열 매핑, 병합 셀 대응)
+- [x] HWPX(신형식, OWPML) 파싱 지원 (`hwpxlib` 기반)
 - [ ] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
 
 ## 라이선스

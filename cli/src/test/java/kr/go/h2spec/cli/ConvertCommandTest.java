@@ -220,23 +220,22 @@ class ConvertCommandTest {
     }
 
     @Test
-    void HWP만_있는_디렉터리는_HWP_미지원을_안내한다() throws Exception {
-        // 단일 파일 입력과 달리 디렉터리에서는 .hwp가 조용히 걸러져 이유를 알 수 없었다
-        Path inputDir = Files.createDirectories(tempDir.resolve("hwp-input"));
-        Files.writeString(inputDir.resolve("명세서.hwp"), "dummy");
-        StringWriter err = new StringWriter();
-        CommandLine cli = new CommandLine(new H2SpecCli());
-        cli.setErr(new PrintWriter(err));
+    void HWPX_명세서를_변환한다() throws Exception {
+        Path hwpx = Path.of(getClass().getResource("/docs/msrstn-info.hwpx").toURI());
+        Path output = tempDir.resolve("hwpx-output");
+        CommandLine cmd = new CommandLine(new H2SpecCli());
 
-        int exit = cli.execute("convert", "--input", inputDir.toString(),
-                "--output", tempDir.resolve("hwp-output").toString());
+        int exit = cmd.execute("convert", "--input", hwpx.toString(), "--output", output.toString());
 
-        assertEquals(1, exit);
-        assertTrue(err.toString().contains("HWP"), err.toString());
+        assertEquals(0, exit);
+        assertTrue(Files.exists(output.resolve("openapi/MsrstnList.json")));
+        String client = Files.readString(
+                output.resolve("kr/go/h2spec/client/msrstnlist/MsrstnListClient.java"));
+        assertTrue(client.contains("getMsrstnList"), client);
     }
 
     @Test
-    void HWP_입력은_아직_지원하지_않는다고_안내한다() throws Exception {
+    void 열리지_않는_문서는_실패_이유를_알린다() throws Exception {
         Path hwp = tempDir.resolve("명세서.hwp");
         Files.writeString(hwp, "dummy");
         StringWriter err = new StringWriter();
@@ -246,7 +245,7 @@ class ConvertCommandTest {
         int exit = cmd.execute("convert", "--input", hwp.toString(), "--output", tempDir.toString());
 
         assertEquals(1, exit);
-        assertTrue(err.toString().contains("HWP"));
+        assertTrue(err.toString().contains("명세서.hwp"), err.toString());
     }
 
     @Test
