@@ -75,10 +75,19 @@ public class HwpSpecReader {
             List<String> cells = new ArrayList<>();
             for (Cell cell : row.getCellList()) {
                 cells.add(cellText(cell));
+                // 가로 병합된 칸은 하나로만 나오므로 나머지 폭을 빈 칸으로 채워
+                // 다른 행과 열 위치를 맞춘다. 채우지 않으면 그 행만 열이 밀린다.
+                for (int i = 1; i < colSpan(cell); i++) {
+                    cells.add("");
+                }
             }
             rows.add(cells);
         }
         return rows;
+    }
+
+    private int colSpan(Cell cell) {
+        return cell.getListHeader() == null ? 1 : Math.max(1, cell.getListHeader().getColSpan());
     }
 
     private String cellText(Cell cell) throws IOException {

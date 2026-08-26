@@ -201,6 +201,32 @@ class IrAssemblerTest {
         assertEquals("string", field.get("type").asText());
     }
 
+    @Test
+    void 머리행이_알려주는_열_위치로_읽는다() {
+        // 항목명(국문)과 항목크기 사이에 열이 하나 더 있는 표
+        List<String> header = List.of("항목명(영문)", "항목명(국문)", "비고", "항목크기", "항목구분", "샘플데이터", "항목설명");
+        List<String> row = List.of("stationName", "측정소명", "", "20", "1", "종로구", "측정소 이름");
+
+        JsonNode fields = assemble(List.of(), List.of(header, row)).get("api").get("responseFields");
+
+        assertEquals(1, fields.size(), fields.toString());
+        assertEquals("response.body.items.item[].stationName", fields.get(0).get("path").asText());
+        assertEquals("측정소 이름", fields.get(0).get("description").asText());
+        assertEquals("string", fields.get(0).get("type").asText());
+    }
+
+    @Test
+    void 열_순서가_바뀌어도_머리행대로_읽는다() {
+        List<String> header = List.of("항목명(영문)", "샘플데이터", "항목명(국문)", "항목크기", "항목구분", "항목설명");
+        List<String> row = List.of("crno", "1101111848914", "법인등록번호", "13", "1", "법인등록번호");
+
+        JsonNode param = assemble(List.of(header, row), List.of()).get("api").get("requestParameters").get(0);
+
+        assertEquals("crno", param.get("name").asText());
+        assertEquals("string", param.get("type").asText(), "샘플을 제 위치에서 읽어야 타입 추론이 맞는다");
+        assertTrue(param.get("required").asBoolean(), "항목구분을 제 위치에서 읽어야 한다");
+    }
+
     private String responseFormat(List<String> requestRow) {
         return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
     }
