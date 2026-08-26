@@ -13,6 +13,7 @@ import java.util.Set;
 public class ClientEmitter {
 
     private static final String INDENT = "    ";
+    /** 인증키 파라미터 이름. 문서마다 대소문자가 달라(serviceKey / ServiceKey) 무시하고 비교한다 */
     private static final String SERVICE_KEY_PARAM = "serviceKey";
     /** 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다 */
     private static final Set<String> RESPONSE_FORMAT_PARAMS = Set.of("returnType", "dataType", "resultType");
@@ -51,7 +52,7 @@ public class ClientEmitter {
 
     private RequestParameter findServiceKeyParam(IrSpec ir) {
         for (RequestParameter p : ir.api().requestParameters()) {
-            if (SERVICE_KEY_PARAM.equals(p.name())) {
+            if (SERVICE_KEY_PARAM.equalsIgnoreCase(p.name())) {
                 return p;
             }
         }
@@ -73,7 +74,7 @@ public class ClientEmitter {
      * 생성 시점에 확정한 값으로 박는다 — 호출자가 매퍼와 어긋나는 값을 넣을 수 없게 한다.
      */
     private boolean isHidden(String name) {
-        return SERVICE_KEY_PARAM.equals(name) || RESPONSE_FORMAT_PARAMS.contains(name);
+        return SERVICE_KEY_PARAM.equalsIgnoreCase(name) || RESPONSE_FORMAT_PARAMS.contains(name);
     }
 
     /** 문서에 포맷 파라미터가 있으면 그 이름을 돌려준다. 없으면 null */
@@ -192,8 +193,8 @@ public class ClientEmitter {
 
         sb.append(indent2).append("StringBuilder url = new StringBuilder(BASE_URL + \"")
           .append(ir.api().endpoint()).append("\");\n");
-        sb.append(indent2).append("url.append(\"?").append(SERVICE_KEY_PARAM).append("=\").append(encode(")
-          .append(SERVICE_KEY_PARAM).append("));\n");
+        sb.append(indent2).append("url.append(\"?").append(findServiceKeyParam(ir).name())
+          .append("=\").append(encode(").append(SERVICE_KEY_PARAM).append("));\n");
         String formatParam = formatParamName(ir);
         if (formatParam != null) {
             String formatValue = ir.api().responseFormat().toLowerCase(Locale.ROOT);

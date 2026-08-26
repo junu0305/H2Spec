@@ -53,6 +53,8 @@ public class IrAssembler {
     private static final String XML_FORMAT = "XML";
     private static final String JSON_FORMAT = "JSON";
     private static final String SUCCESS_RESULT_CODE = "00";
+    /** Call Back URL 칸을 비워두는 대신 적어두는 값 */
+    private static final String NOT_AVAILABLE = "N/A";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -87,20 +89,46 @@ public class IrAssembler {
         return new ParsedApi(apiId, ir);
     }
 
+    /**
+     * Call Back URL을 우선 쓰고, 없거나 N/A인 문서는 서비스 개요 표의 주소와
+     * 오퍼레이션명(영문)으로 조립한다. 천문연구원 특일정보처럼 Call Back URL 칸을
+     * N/A로 비워두고 주소를 별도 표에 적는 문서가 있다.
+     */
     private String callBackUrl(Map<String, String> info) {
-        return info.entrySet().stream()
+        String callBack = info.entrySet().stream()
                 .filter(entry -> entry.getKey().contains("Call Back"))
                 .map(entry -> entry.getValue().replaceAll("\\s+", ""))
+                .filter(value -> !value.isBlank() && !NOT_AVAILABLE.equalsIgnoreCase(value))
+                .findFirst()
+                .orElse(null);
+        if (callBack != null) {
+            return callBack;
+        }
+        String serviceUrl = info.get(SpecBlockAssembler.SERVICE_URL_KEY);
+        String operation = info.entrySet().stream()
+                .filter(entry -> entry.getKey().contains("오퍼레이션명(영문)"))
+                .map(entry -> entry.getValue().trim())
                 .filter(value -> !value.isBlank())
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("상세기능정보 표에 Call Back URL이 없습니다"));
+                .orElse(null);
+        if (serviceUrl != null && operation != null) {
+            return serviceUrl.replaceAll("/+$", "") + "/" + operation;
+        }
+        throw new IllegalArgumentException("상세기능정보 표에 Call Back URL이 없습니다");
     }
 
-    /** getMsrstnList → MsrstnList (get 접두사 제거, 첫 글자 대문자) */
+    /**
+     * getMsrstnList → MsrstnList (get 접두사 제거, 첫 글자 대문자).
+     * 떼고 나면 숫자로 시작하는 이름(get24DivisionsInfo)은 자바 클래스명으로 쓸 수 없어
+     * 접두사를 남긴다 → Get24DivisionsInfo.
+     */
     private String toApiId(String segment) {
         String name = segment.startsWith(OPERATION_PREFIX)
                 ? segment.substring(OPERATION_PREFIX.length())
                 : segment;
+        if (name.isEmpty() || Character.isDigit(name.charAt(0))) {
+            name = segment;
+        }
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
@@ -204,11 +232,20 @@ public class IrAssembler {
      */
     private List<List<String>> dataRows(List<List<String>> rows) {
         return rows.stream()
+                .map(this::unindent)
                 .filter(cells -> cells.size() >= 6)
                 .filter(cells -> !cells.get(0).isBlank())
                 .filter(cells -> !cells.get(0).contains("항목명"))
                 .filter(cells -> !isContainerRow(cells))
                 .toList();
+    }
+
+    /**
+     * 컨테이너 아래 자식 행을 앞 칸을 비워 들여쓴 문서가 있다. 한 칸 밀린 행은
+     * 앞의 빈 칸을 떼어 다른 행과 같은 열 구성으로 맞춘다.
+     */
+    private List<String> unindent(List<String> cells) {
+        return cells.size() > 6 && cells.get(0).isBlank() ? cells.subList(1, cells.size()) : cells;
     }
 
     /** 항목구분(예: "0..n")이 카디널리티 표기이면 실제 필드가 아닌 컨테이너 행이다. */

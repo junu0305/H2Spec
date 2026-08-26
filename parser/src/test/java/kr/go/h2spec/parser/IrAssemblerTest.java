@@ -170,6 +170,16 @@ class IrAssemblerTest {
         return null;
     }
 
+    @Test
+    void 숫자로_시작하는_오퍼레이션명은_get을_떼지_않는다() {
+        // get24DivisionsInfo에서 get을 떼면 24DivisionsInfo가 되어 자바 클래스명으로 쓸 수 없다
+        JsonNode ir = new IrAssembler().assemble("test.docx", "DOCX",
+                Map.of("Call Back URL", "http://apis.data.go.kr/B090041/svc/get24DivisionsInfo"),
+                List.of(), List.of()).ir();
+
+        assertEquals("Get24DivisionsInfo", ir.get("api").get("apiId").asText());
+    }
+
     private String responseFormat(List<String> requestRow) {
         return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
     }
