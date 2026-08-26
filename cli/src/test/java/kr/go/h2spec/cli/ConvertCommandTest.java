@@ -187,6 +187,40 @@ class ConvertCommandTest {
     }
 
     @Test
+    void 같은_apiId를_만드는_문서가_겹치면_경고한다() throws Exception {
+        // 배치는 모든 문서를 한 출력 디렉터리에 쏟으므로 apiId가 겹치면 앞선 산출물이 사라진다
+        Path inputDir = Files.createDirectories(tempDir.resolve("dup-input"));
+        Files.copy(irPath(), inputDir.resolve("a.json"));
+        Files.copy(irPath(), inputDir.resolve("b.json"));
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new H2SpecCli());
+        cli.setErr(new PrintWriter(err));
+
+        int exit = cli.execute("convert", "--input", inputDir.toString(),
+                "--output", tempDir.resolve("dup-output").toString());
+
+        assertEquals(0, exit);
+        assertTrue(err.toString().contains("RTMSDataSvcAptTradeDev"),
+                "덮어쓴 apiId를 알려야 한다: " + err);
+    }
+
+    @Test
+    void HWP만_있는_디렉터리는_HWP_미지원을_안내한다() throws Exception {
+        // 단일 파일 입력과 달리 디렉터리에서는 .hwp가 조용히 걸러져 이유를 알 수 없었다
+        Path inputDir = Files.createDirectories(tempDir.resolve("hwp-input"));
+        Files.writeString(inputDir.resolve("명세서.hwp"), "dummy");
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new H2SpecCli());
+        cli.setErr(new PrintWriter(err));
+
+        int exit = cli.execute("convert", "--input", inputDir.toString(),
+                "--output", tempDir.resolve("hwp-output").toString());
+
+        assertEquals(1, exit);
+        assertTrue(err.toString().contains("HWP"), err.toString());
+    }
+
+    @Test
     void HWP_입력은_아직_지원하지_않는다고_안내한다() throws Exception {
         Path hwp = tempDir.resolve("명세서.hwp");
         Files.writeString(hwp, "dummy");
