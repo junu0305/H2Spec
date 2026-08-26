@@ -96,6 +96,14 @@ IR 추출: generated/ir/MsrstnList.json
 
 IR JSON을 직접 입력할 수도 있습니다: `--input docs/schema-example.json`
 
+`--input`에 디렉터리를 주면 그 안의 모든 명세 파일(`.docx`, IR `.json`)을 한 번에 변환합니다.
+디렉터리를 재귀적으로 탐색하지는 않고, 명세 파일이 아닌 다른 파일(예: pdf, xlsx)은 무시합니다.
+일부 파일이 변환에 실패해도 나머지 파일은 계속 변환되며, 실패가 하나라도 있으면 종료 코드는 1입니다.
+
+```bash
+./h2spec convert --input ./docs/sample --output ./generated
+```
+
 ### 2. 생성 결과물
 
 ```
@@ -130,6 +138,18 @@ restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
 
 > `BufferingClientHttpRequestFactory`로 감싸지 않으면 Interceptor가 바디를 먼저 읽은 뒤
 > 후속 메시지 컨버터가 빈 스트림을 읽게 되므로 반드시 함께 사용해야 합니다.
+
+WebClient에는 `ExchangeFilterFunction` 구현체를 붙일 수 있습니다. 필터가 읽은 응답 바디는
+downstream에서 다시 읽을 수 있도록 복원됩니다. 필터 자체는 기본 256KB 코덱 제한을
+사용하지 않지만, 이후 `bodyToMono(String.class)` 또는 DTO 디코딩을 할 때는 WebFlux
+코덱의 기본 메모리 제한이 적용되므로 큰 응답에는 제한을 늘려야 합니다.
+
+```java
+WebClient webClient = WebClient.builder()
+    .filter(new PublicDataErrorFilter("00"))
+    .codecs(c -> c.defaultCodecs().maxInMemorySize(5 * 1024 * 1024))
+    .build();
+```
 
 ### 빌드와 테스트
 
@@ -200,8 +220,8 @@ main              ← 최종 병합 (PR 필수)
 ## 로드맵
 
 - [ ] HWP 표 파싱 정확도 개선 (병합 셀 대응)
-- [ ] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
-- [ ] 다건 API 배치 변환 CLI 옵션
+- [x] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
+- [x] 다건 API 배치 변환 CLI 옵션
 - [ ] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
 
 ## 라이선스

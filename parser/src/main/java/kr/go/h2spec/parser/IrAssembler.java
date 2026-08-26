@@ -23,6 +23,11 @@ public class IrAssembler {
     /** 선행 0이 붙은 정수 샘플(0311 등)은 숫자로 만들면 값이 바뀐다 */
     private static final Pattern LEADING_ZERO_SAMPLE = Pattern.compile("^0\\d+$");
     /**
+     * 항목구분 칸에 카디널리티(예: 0..n, 1..1)가 적힌 행은 실제 필드가 아니라
+     * items처럼 하위 표를 감싸는 컨테이너 행이다.
+     */
+    private static final Pattern CONTAINER_CARDINALITY = Pattern.compile("^\\d+\\.\\.(\\d+|n|N)$");
+    /**
      * 산술 대상이 아닌 식별자·코드·일자를 가리키는 이름 접미사 (소문자 비교).
      * "tm"은 거리(tm)·item처럼 시각이 아닌 이름까지 걸리므로 넣지 않고 설명 키워드에 맡긴다.
      */
@@ -193,13 +198,22 @@ public class IrAssembler {
         return PAGING_NAME.matcher(name).find() && requestParamNames.contains(name);
     }
 
-    /** 헤더 행과 셀 수가 모자란 행(각주 등)을 걸러낸 데이터 행만 반환 */
+    /**
+     * 헤더 행, 셀 수가 모자란 행(각주 등), items처럼 하위 표를 감싸기만 하는
+     * 컨테이너 행을 걸러낸 실제 데이터 행만 반환한다.
+     */
     private List<List<String>> dataRows(List<List<String>> rows) {
         return rows.stream()
                 .filter(cells -> cells.size() >= 6)
                 .filter(cells -> !cells.get(0).isBlank())
                 .filter(cells -> !cells.get(0).contains("항목명"))
+                .filter(cells -> !isContainerRow(cells))
                 .toList();
+    }
+
+    /** 항목구분(예: "0..n")이 카디널리티 표기이면 실제 필드가 아닌 컨테이너 행이다. */
+    private boolean isContainerRow(List<String> cells) {
+        return CONTAINER_CARDINALITY.matcher(cells.get(3).trim()).matches();
     }
 
     private String inferType(String sample, String name, String description, List<String> reviewNotes) {

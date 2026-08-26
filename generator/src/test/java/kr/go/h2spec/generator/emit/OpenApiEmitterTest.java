@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static kr.go.h2spec.generator.GoldenFileAssertions.assertEqualsIgnoringLineEndings;
 
 class OpenApiEmitterTest {
 
@@ -24,7 +25,7 @@ class OpenApiEmitterTest {
         Files.writeString(Path.of("build/openapi-actual.json"), actual);
 
         String expected = Files.readString(resource("/golden/RTMSDataSvcAptTradeDevOpenApi.json"));
-        assertEquals(expected, actual);
+        assertEqualsIgnoringLineEndings(expected, actual);
     }
 
     private Path resource(String name) throws Exception {
