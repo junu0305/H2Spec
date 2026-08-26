@@ -1,2 +1,7 @@
+plugins {
+    // 로컬에 요구 버전(17) JDK가 없을 때 Gradle이 자동으로 받아오게 함
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
 rootProject.name = 'h2spec'
 include 'interceptor-core', 'generator', 'parser', 'cli'

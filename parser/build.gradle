@@ -6,6 +6,8 @@ dependencies {
     implementation 'org.apache.poi:poi-ooxml:5.2.5'
     // POI가 log4j2-api를 쓰므로 구현체가 없으면 StatusLogger 에러가 출력됨
     runtimeOnly 'org.apache.logging.log4j:log4j-core:2.23.1'
+    // HWP(바이너리) 문서 파싱. 외부 의존성 없이 자체 OLE 리더를 내장하고 있음
+    implementation 'kr.dogfoot:hwplib:1.1.10'
     // ParsedApi가 ObjectNode를 노출하므로 api 스코프
     api 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
 
