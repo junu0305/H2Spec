@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,6 +35,14 @@ public class IrAssembler {
     private static final Set<String> HEADER_FIELDS = Set.of("resultCode", "resultMsg");
     /** 공공데이터 표준 응답에서 response.body 바로 아래에 오는 페이징 메타 필드 */
     private static final Set<String> BODY_META_FIELDS = Set.of("numOfRows", "pageNo", "totalCount");
+    /**
+     * 요청에 대응 파라미터가 없어도 body 메타로 보는 응답 전용 필드.
+     * 전체 건수는 서버가 계산해 내려주므로 요청 파라미터에 나타나지 않는다.
+     */
+    private static final Set<String> RESPONSE_ONLY_META_FIELDS = Set.of("totalCount");
+    /** 페이징 메타로 볼 만한 이름꼴. 이름만으로는 부족해 요청 파라미터 존재 여부와 함께 본다 */
+    private static final Pattern PAGING_NAME = Pattern.compile("(cnt|count|rows)$|^page(No|Index)$|^currentPage$",
+            Pattern.CASE_INSENSITIVE);
     /** 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다 */
     private static final Set<String> RESPONSE_FORMAT_PARAMS = Set.of("returnType", "dataType", "resultType");
     private static final String XML_FORMAT = "XML";
@@ -63,7 +72,7 @@ public class IrAssembler {
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
         api.put("responseFormat", responseFormat(requestRows));
         api.set("requestParameters", requestParameters(requestRows, reviewNotes));
-        api.set("responseFields", responseFields(responseRows, reviewNotes));
+        api.set("responseFields", responseFields(responseRows, requestParamNames(requestRows), reviewNotes));
         api.set("errorSpec", errorSpec());
 
         ObjectNode ir = objectMapper.createObjectNode();
@@ -112,7 +121,16 @@ public class IrAssembler {
         return parameters;
     }
 
-    private ArrayNode responseFields(List<List<String>> rows, List<String> reviewNotes) {
+    private Set<String> requestParamNames(List<List<String>> rows) {
+        Set<String> names = new LinkedHashSet<>();
+        for (List<String> cells : dataRows(rows)) {
+            names.add(cells.get(0));
+        }
+        return names;
+    }
+
+    private ArrayNode responseFields(List<List<String>> rows, Set<String> requestParamNames,
+                                     List<String> reviewNotes) {
         ArrayNode fields = objectMapper.createArrayNode();
         for (List<String> cells : dataRows(rows)) {
             String name = cells.get(0);
@@ -121,7 +139,7 @@ public class IrAssembler {
             String description = describe(cells.get(5), korName);
 
             ObjectNode field = fields.addObject();
-            field.put("path", pathFor(name));
+            field.put("path", pathFor(name, requestParamNames));
             // 결과코드/메시지는 샘플이 숫자("00")여도 선행 0 보존을 위해 항상 문자열
             field.put("type", HEADER_FIELDS.contains(name)
                     ? "string"
@@ -153,14 +171,26 @@ public class IrAssembler {
     }
 
     /** 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다. */
-    private String pathFor(String name) {
+    private String pathFor(String name, Set<String> requestParamNames) {
         if (HEADER_FIELDS.contains(name)) {
             return "response.header." + name;
         }
-        if (BODY_META_FIELDS.contains(name)) {
+        if (isBodyMeta(name, requestParamNames)) {
             return "response.body." + name;
         }
         return "response.body.items.item[]." + name;
+    }
+
+    /**
+     * 페이징 메타 필드는 기관마다 이름이 다르다(numOfRows, recordCnt 등). 이름꼴만 보면
+     * "황사 발생 회차"(tmCnt)처럼 진짜 데이터까지 걸리므로, 같은 이름이 요청 파라미터에도
+     * 있을 때만 메타로 본다. 조회 조건으로 넘긴 값을 응답이 되돌려주는 것이 페이징 필드다.
+     */
+    private boolean isBodyMeta(String name, Set<String> requestParamNames) {
+        if (BODY_META_FIELDS.contains(name) || RESPONSE_ONLY_META_FIELDS.contains(name)) {
+            return true;
+        }
+        return PAGING_NAME.matcher(name).find() && requestParamNames.contains(name);
     }
 
     /** 헤더 행과 셀 수가 모자란 행(각주 등)을 걸러낸 데이터 행만 반환 */
