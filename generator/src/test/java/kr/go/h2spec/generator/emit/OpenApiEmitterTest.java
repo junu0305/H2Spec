@@ -31,4 +31,8 @@ class OpenApiEmitterTest {
     private Path resource(String name) throws Exception {
         return Path.of(getClass().getResource(name).toURI());
     }
+
+    private String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n");
+    }
 }

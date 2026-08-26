@@ -80,7 +80,8 @@ public class OpenApiEmitter {
             ObjectNode node = parameters.addObject();
             node.put("name", param.name());
             node.put("in", param.in());
-            node.put("required", param.required());
+            // OpenAPI는 path 파라미터를 항상 필수로 정의한다.
+            node.put("required", "path".equals(param.in()) || param.required());
             if (param.description() != null) {
                 node.put("description", param.description());
             }

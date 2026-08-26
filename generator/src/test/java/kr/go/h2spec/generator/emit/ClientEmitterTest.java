@@ -1,7 +1,9 @@
 package kr.go.h2spec.generator.emit;
 
 import kr.go.h2spec.generator.ir.IrLoader;
+import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.IrSpec;
+import kr.go.h2spec.generator.ir.RequestParameter;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -91,6 +93,28 @@ class ClientEmitterTest {
         assertTrue(source.contains("url.append(\"?ServiceKey=\")"), "문서에 적힌 이름 그대로 보내야 한다");
     }
 
+    @Test
+    void 여러_세그먼트_엔드포인트도_유효한_메서드명을_만든다() throws Exception {
+        // "/items/{itemId}/detail" 을 그대로 쓰면 메서드명에 슬래시와 중괄호가 들어가 컴파일되지 않는다
+        IrSpec ir = withEndpoint("/items/{itemId}/detail");
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertFalse(source.contains("items/{itemId}/detail("), "메서드명에 경로 구분자가 남으면 안 된다: " + source);
+        assertTrue(source.contains("public RTMSDataSvcAptTradeDevResponse itemsItemidDetail("),
+                "경로 세그먼트를 낱말로 이어붙인 이름이어야 한다");
+    }
+
+    private IrSpec withEndpoint(String endpoint) throws Exception {
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        kr.go.h2spec.generator.ir.ApiSpec a = base.api();
+        return new IrSpec(
+                new kr.go.h2spec.generator.ir.ApiSpec(a.apiId(), a.apiName(), a.description(), a.baseUrl(),
+                        endpoint, a.httpMethod(), a.responseFormat(), a.requestParameters(),
+                        a.responseFields(), a.errorSpec()),
+                base.generatorHints());
+    }
+
     /** schema-example 기반 IR에서 serviceKey 파라미터 이름만 바꾼 IR */
     private IrSpec withServiceKeyNamed(String name) throws Exception {
         IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
@@ -133,7 +157,28 @@ class ClientEmitterTest {
         assertFalse(source.contains("String body = restTemplate.getForObject(uri, String.class);"));
     }
 
+    @Test
+    void path_파라미터는_endpoint에_치환하고_query로_붙이지_않는다() throws Exception {
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        RequestParameter path = new RequestParameter(
+                "LAWD_CD", "path", "string", true, "법정동 코드", null, null, null);
+        ApiSpec api = new ApiSpec(
+                base.api().apiId(), base.api().apiName(), base.api().description(), base.api().baseUrl(),
+                "/v1/apt/{LAWD_CD}", base.api().httpMethod(), base.api().responseFormat(),
+                List.of(base.api().requestParameters().get(0), path), base.api().responseFields(),
+                base.api().errorSpec());
+
+        String source = new ClientEmitter().emit(new IrSpec(api, base.generatorHints()));
+
+        assertTrue(source.contains("replace(\"{LAWD_CD}\", encode(String.valueOf(lawdCd)))"));
+        assertFalse(source.contains("url.append(\"&LAWD_CD=\")"));
+    }
+
     private Path resource(String name) throws Exception {
         return Path.of(getClass().getResource(name).toURI());
+    }
+
+    private String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n");
     }
 }

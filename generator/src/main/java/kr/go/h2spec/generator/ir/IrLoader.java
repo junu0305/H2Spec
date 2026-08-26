@@ -45,25 +45,26 @@ public class IrLoader {
             throw new IllegalArgumentException("IR 필수 필드 누락: " + String.join(", ", missing));
         }
 
-        validateEndpointFormat(ir.api().endpoint());
+        validateEndpointFormat(ir.api());
         validateV1Scope(ir.api());
     }
 
-    // v1은 '/'로 시작하고 세그먼트가 하나뿐인 엔드포인트만 지원한다.
-    // 예: "/getFoo"는 OK, "/v1/getFoo"(세그먼트 2개)나 "getFoo"(선행 '/' 없음)는 거부한다.
-    private void validateEndpointFormat(String endpoint) {
+    // 엔드포인트는 OpenAPI path 형식의 '/'로 시작해야 한다.
+    private void validateEndpointFormat(ApiSpec api) {
+        String endpoint = api.endpoint();
         if (!endpoint.startsWith("/")) {
             throw new IllegalArgumentException(
                     "api.endpoint 형식이 잘못되었습니다: '" + endpoint + "' — '/'로 시작해야 합니다.");
         }
-        if (endpoint.indexOf('/', 1) != -1) {
-            throw new IllegalArgumentException(
-                    "api.endpoint 형식이 잘못되었습니다: '" + endpoint
-                    + "' — 세그먼트가 하나여야 합니다 (추가 '/'를 포함할 수 없습니다).");
+        for (RequestParameter param : api.requestParameters()) {
+            if ("path".equals(param.in()) && !endpoint.contains("{" + param.name() + "}")) {
+                throw new IllegalArgumentException(
+                        "path 파라미터가 endpoint에 없습니다: " + param.name());
+            }
         }
     }
 
-    // v1 스코프 가드: GET/query 파라미터/XML|JSON 응답만 지원한다.
+    // v1 스코프 가드: GET/path·query 파라미터/XML|JSON 응답만 지원한다.
     // ClientEmitter가 실제로 처리하지 못하는 조합이 조용히 잘못된 요청/파싱으로 이어지지 않도록 로드 시점에 막는다.
     private void validateV1Scope(ApiSpec api) {
         if (!"GET".equals(api.httpMethod())) {
@@ -71,9 +72,13 @@ public class IrLoader {
                     "v1은 GET만 지원합니다 (api.httpMethod=" + api.httpMethod() + ")");
         }
         for (RequestParameter param : api.requestParameters()) {
-            if (!"query".equals(param.in())) {
+            if (!"query".equals(param.in()) && !"path".equals(param.in())) {
                 throw new IllegalArgumentException(
                         "미지원 파라미터 위치: in=" + param.in() + " (name=" + param.name() + ")");
+            }
+            if ("path".equals(param.in()) && !param.required()) {
+                throw new IllegalArgumentException(
+                        "path 파라미터는 required=true여야 합니다 (name=" + param.name() + ")");
             }
         }
         if (!"XML".equals(api.responseFormat()) && !"JSON".equals(api.responseFormat())) {

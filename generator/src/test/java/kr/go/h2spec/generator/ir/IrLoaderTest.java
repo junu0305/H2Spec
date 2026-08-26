@@ -69,16 +69,12 @@ class IrLoaderTest {
     }
 
     @Test
-    void 엔드포인트에_세그먼트가_여러개면_실패한다() throws Exception {
+    void 엔드포인트에_세그먼트가_여러개여도_허용한다() throws Exception {
         ObjectNode tree = schemaExampleTree();
         ((ObjectNode) tree.path("api")).put("endpoint", "/v1/getRTMSDataSvcAptTradeDev");
         Path file = writeVariant(tree, "bad-endpoint-multi-segment.json");
 
-        IllegalArgumentException e =
-                assertThrows(IllegalArgumentException.class, () -> new IrLoader().load(file));
-
-        assertTrue(e.getMessage().contains("api.endpoint"));
-        assertTrue(e.getMessage().contains("/v1/getRTMSDataSvcAptTradeDev"));
+        assertEquals("/v1/getRTMSDataSvcAptTradeDev", new IrLoader().load(file).api().endpoint());
     }
 
     @Test
@@ -95,12 +91,12 @@ class IrLoaderTest {
     }
 
     @Test
-    void 파라미터_in이_query가_아니면_실패한다() throws Exception {
+    void 파라미터_in이_query나_path가_아니면_실패한다() throws Exception {
         ObjectNode tree = schemaExampleTree();
         ArrayNode params = (ArrayNode) tree.path("api").path("requestParameters");
         for (JsonNode param : params) {
             if ("LAWD_CD".equals(param.path("name").asText())) {
-                ((ObjectNode) param).put("in", "path");
+                ((ObjectNode) param).put("in", "header");
             }
         }
         Path file = writeVariant(tree, "bad-param-in.json");
@@ -108,8 +104,23 @@ class IrLoaderTest {
         IllegalArgumentException e =
                 assertThrows(IllegalArgumentException.class, () -> new IrLoader().load(file));
 
-        assertTrue(e.getMessage().contains("in=path"));
+        assertTrue(e.getMessage().contains("in=header"));
         assertTrue(e.getMessage().contains("LAWD_CD"));
+    }
+
+    @Test
+    void path_파라미터는_endpoint의_템플릿과_required를_검증한다() throws Exception {
+        ObjectNode tree = schemaExampleTree();
+        ((ObjectNode) tree.path("api")).put("endpoint", "/v1/apt/{LAWD_CD}");
+        for (JsonNode param : (ArrayNode) tree.path("api").path("requestParameters")) {
+            if ("LAWD_CD".equals(param.path("name").asText())) {
+                ((ObjectNode) param).put("in", "path").put("required", true);
+            }
+        }
+
+        IrSpec ir = new IrLoader().load(writeVariant(tree, "path-param.json"));
+        assertEquals("path", ir.api().requestParameters().stream()
+                .filter(p -> "LAWD_CD".equals(p.name())).findFirst().orElseThrow().in());
     }
 
     @Test
