@@ -80,6 +80,34 @@ class ClientEmitterTest {
         assertTrue(source.contains("import com.fasterxml.jackson.databind.DeserializationFeature;"));
     }
 
+    @Test
+    void 인증키_파라미터_이름의_대소문자가_달라도_인식한다() throws Exception {
+        // 천문연구원 특일정보 문서는 serviceKey가 아니라 ServiceKey로 적혀 있다
+        IrSpec ir = withServiceKeyNamed("ServiceKey");
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertFalse(source.contains("@param ServiceKey"), "인증키는 생성자로 받으므로 API 메서드 인자에 남으면 안 된다");
+        assertTrue(source.contains("url.append(\"?ServiceKey=\")"), "문서에 적힌 이름 그대로 보내야 한다");
+    }
+
+    /** schema-example 기반 IR에서 serviceKey 파라미터 이름만 바꾼 IR */
+    private IrSpec withServiceKeyNamed(String name) throws Exception {
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        List<kr.go.h2spec.generator.ir.RequestParameter> params = new java.util.ArrayList<>();
+        for (kr.go.h2spec.generator.ir.RequestParameter p : base.api().requestParameters()) {
+            params.add("serviceKey".equals(p.name())
+                    ? new kr.go.h2spec.generator.ir.RequestParameter(name, p.in(), p.type(),
+                            p.required(), p.description(), p.defaultValue(), p.example(), p.pattern())
+                    : p);
+        }
+        kr.go.h2spec.generator.ir.ApiSpec a = base.api();
+        return new IrSpec(
+                new kr.go.h2spec.generator.ir.ApiSpec(a.apiId(), a.apiName(), a.description(), a.baseUrl(),
+                        a.endpoint(), a.httpMethod(), a.responseFormat(), params, a.responseFields(), a.errorSpec()),
+                base.generatorHints());
+    }
+
     /** schema-example 기반 IR에 returnType 파라미터를 붙이고 responseFormat을 바꾼 IR */
     private IrSpec withFormatParam(String format) throws Exception {
         IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));

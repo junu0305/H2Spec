@@ -74,7 +74,7 @@ public class OpenApiEmitter {
         ArrayNode parameters = objectMapper.createArrayNode();
         for (RequestParameter param : ir.api().requestParameters()) {
             // serviceKey는 파라미터가 아니라 securityScheme(apiKey)으로 문서화한다
-            if (SERVICE_KEY_PARAM.equals(param.name())) {
+            if (SERVICE_KEY_PARAM.equalsIgnoreCase(param.name())) {
                 continue;
             }
             ObjectNode node = parameters.addObject();
