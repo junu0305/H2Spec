@@ -115,6 +115,78 @@ class ConvertCommandTest {
     }
 
     @Test
+    void 디렉터리를_입력하면_안의_명세_파일을_전부_변환한다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        Files.copy(irPath(), inputDir.resolve("schema-example.json"));
+        Files.copy(Path.of(getClass().getResource("/docs/msrstn-info.docx").toURI()),
+                inputDir.resolve("msrstn-info.docx"));
+        // 명세 파일이 아닌 파일은 무시되어야 한다
+        Files.writeString(inputDir.resolve("README.md"), "관련 없는 파일");
+        Path outputDir = tempDir.resolve("output");
+
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", inputDir.toString(), "--output", outputDir.toString());
+
+        assertEquals(0, exit);
+        // JSON IR 한 건
+        assertTrue(Files.exists(outputDir.resolve(
+                "kr/go/h2spec/client/landmolit/RTMSDataSvcAptTradeDevClient.java")));
+        // DOCX(오퍼레이션 여러 개 포함) 한 건
+        assertTrue(Files.exists(outputDir.resolve(
+                "kr/go/h2spec/client/msrstnlist/MsrstnListClient.java")));
+    }
+
+    @Test
+    void 디렉터리_입력에도_package_옵션이_모든_파일에_적용된다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        Files.copy(irPath(), inputDir.resolve("schema-example.json"));
+        Files.copy(Path.of(getClass().getResource("/docs/msrstn-info.docx").toURI()),
+                inputDir.resolve("msrstn-info.docx"));
+        Path outputDir = tempDir.resolve("output");
+
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", inputDir.toString(), "--output", outputDir.toString(),
+                "--package", "com.example.publicdata");
+
+        assertEquals(0, exit);
+        assertTrue(Files.exists(outputDir.resolve(
+                "com/example/publicdata/rtmsdatasvcapttradedev/RTMSDataSvcAptTradeDevClient.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "com/example/publicdata/msrstnlist/MsrstnListClient.java")));
+    }
+
+    @Test
+    void 변환할_명세_파일이_없는_디렉터리는_한국어_메시지로_실패한다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("empty-input"));
+        Files.writeString(inputDir.resolve("readme.txt"), "명세 파일 아님");
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new H2SpecCli());
+        cli.setErr(new PrintWriter(err));
+
+        int exit = cli.execute("convert", "--input", inputDir.toString(),
+                "--output", tempDir.resolve("output").toString());
+
+        assertEquals(1, exit);
+        assertTrue(err.toString().contains("찾지 못했습니다"), err.toString());
+    }
+
+    @Test
+    void 디렉터리_안에_손상된_파일이_있어도_나머지_파일은_변환되고_결과는_실패로_보고된다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        Files.copy(irPath(), inputDir.resolve("schema-example.json"));
+        Files.writeString(inputDir.resolve("broken.json"), "{ not valid json");
+        Path outputDir = tempDir.resolve("output");
+
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", inputDir.toString(), "--output", outputDir.toString());
+
+        assertEquals(1, exit, "일부 파일이 실패하면 디렉터리 변환 전체 종료 코드는 1이어야 한다");
+        assertTrue(Files.exists(outputDir.resolve(
+                "kr/go/h2spec/client/landmolit/RTMSDataSvcAptTradeDevClient.java")),
+                "실패한 파일이 있어도 나머지 파일은 계속 변환되어야 한다");
+    }
+
+    @Test
     void HWP_입력은_아직_지원하지_않는다고_안내한다() throws Exception {
         Path hwp = tempDir.resolve("명세서.hwp");
         Files.writeString(hwp, "dummy");

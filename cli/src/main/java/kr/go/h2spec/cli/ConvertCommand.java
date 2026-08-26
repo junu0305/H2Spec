@@ -30,13 +30,15 @@ public class ConvertCommand implements Callable<Integer> {
     /** HWP 파싱은 미지원 (이슈 #1은 DOCX 우선) */
     private static final List<String> UNSUPPORTED_EXTENSIONS = List.of(".hwp", ".hwpx");
     private static final String DOCX_EXTENSION = ".docx";
+    private static final String JSON_EXTENSION = ".json";
     private static final String XML_FORMAT = "XML";
     private static final String JSON_FORMAT = "JSON";
 
     @Spec
     private CommandSpec spec;
 
-    @Option(names = {"-i", "--input"}, required = true, description = "입력 파일 (DOCX 명세서 또는 IR JSON)")
+    @Option(names = {"-i", "--input"}, required = true,
+            description = "입력 파일(DOCX 명세서 또는 IR JSON) 또는 명세 파일들이 담긴 디렉터리")
     private Path input;
 
     @Option(names = {"-o", "--output"}, description = "출력 디렉터리 (기본: ./generated)")
@@ -54,11 +56,6 @@ public class ConvertCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        String fileName = input.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (UNSUPPORTED_EXTENSIONS.stream().anyMatch(fileName::endsWith)) {
-            err("HWP 명세서 파싱은 아직 지원되지 않습니다. DOCX로 변환하거나 IR JSON을 사용해 주세요.");
-            return 1;
-        }
         if (!Files.exists(input)) {
             err("입력 파일이 없습니다: " + input);
             return 1;
@@ -67,25 +64,70 @@ public class ConvertCommand implements Callable<Integer> {
             err("--format 값은 xml 또는 json 이어야 합니다: " + format);
             return 1;
         }
+        return Files.isDirectory(input) ? convertDirectory() : (convertFile(input) ? 0 : 1);
+    }
+
+    /** 디렉터리 안의 모든 명세 파일(DOCX, IR JSON)을 찾아 각각 변환한다. */
+    private int convertDirectory() {
+        List<Path> targets;
+        try (var files = Files.list(input)) {
+            targets = files
+                    .filter(Files::isRegularFile)
+                    .filter(this::isSupportedSpecFile)
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            err("디렉터리를 읽을 수 없습니다: " + e.getMessage());
+            return 1;
+        }
+        if (targets.isEmpty()) {
+            err("디렉터리에서 변환할 명세 파일(.docx, .json)을 찾지 못했습니다: " + input);
+            return 1;
+        }
+
+        int failureCount = 0;
+        for (Path target : targets) {
+            spec.commandLine().getOut().println("=== " + input.relativize(target) + " ===");
+            if (!convertFile(target)) {
+                failureCount++;
+            }
+        }
+        spec.commandLine().getOut().println(
+                String.format("%d개 중 %d개 변환 성공, %d개 실패", targets.size(), targets.size() - failureCount, failureCount));
+        return failureCount == 0 ? 0 : 1;
+    }
+
+    private boolean isSupportedSpecFile(Path path) {
+        String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return fileName.endsWith(DOCX_EXTENSION) || fileName.endsWith(JSON_EXTENSION);
+    }
+
+    /** 파일 하나(DOCX 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다. */
+    private boolean convertFile(Path file) {
+        String fileName = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (UNSUPPORTED_EXTENSIONS.stream().anyMatch(fileName::endsWith)) {
+            err("HWP 명세서 파싱은 아직 지원되지 않습니다. DOCX로 변환하거나 IR JSON을 사용해 주세요. (" + file + ")");
+            return false;
+        }
         try {
             if (fileName.endsWith(DOCX_EXTENSION)) {
-                convertDocx();
+                convertDocx(file);
             } else {
-                generateFrom(input);
+                generateFrom(file);
             }
-            return 0;
+            return true;
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             err(e.getMessage());
-            return 1;
+            return false;
         } catch (IOException e) {
-            err("변환 실패: " + e.getMessage());
-            return 1;
+            err("변환 실패 (" + file + "): " + e.getMessage());
+            return false;
         }
     }
 
     /** DOCX → 오퍼레이션별 IR JSON 추출 후 각각 코드 생성 */
-    private void convertDocx() throws IOException {
-        List<ParsedApi> apis = new DocxSpecParser().parse(input);
+    private void convertDocx(Path docxFile) throws IOException {
+        List<ParsedApi> apis = new DocxSpecParser().parse(docxFile);
         Path irDir = Files.createDirectories(output.resolve("ir"));
         for (ParsedApi parsed : apis) {
             Path irFile = irDir.resolve(parsed.apiId() + ".json");

@@ -96,6 +96,14 @@ IR 추출: generated/ir/MsrstnList.json
 
 IR JSON을 직접 입력할 수도 있습니다: `--input docs/schema-example.json`
 
+`--input`에 디렉터리를 주면 그 안의 모든 명세 파일(`.docx`, IR `.json`)을 한 번에 변환합니다.
+디렉터리를 재귀적으로 탐색하지는 않고, 명세 파일이 아닌 다른 파일(예: pdf, xlsx)은 무시합니다.
+일부 파일이 변환에 실패해도 나머지 파일은 계속 변환되며, 실패가 하나라도 있으면 종료 코드는 1입니다.
+
+```bash
+./h2spec convert --input ./docs/sample --output ./generated
+```
+
 ### 2. 생성 결과물
 
 ```
@@ -213,7 +221,7 @@ main              ← 최종 병합 (PR 필수)
 
 - [ ] HWP 표 파싱 정확도 개선 (병합 셀 대응)
 - [x] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
-- [ ] 다건 API 배치 변환 CLI 옵션
+- [x] 다건 API 배치 변환 CLI 옵션
 - [ ] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
 
 ## 라이선스
