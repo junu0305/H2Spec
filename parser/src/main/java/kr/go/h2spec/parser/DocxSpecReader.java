@@ -35,12 +35,26 @@ public class DocxSpecReader {
         }
     }
 
+    private int gridSpan(XWPFTableCell cell) {
+        var properties = cell.getCTTc().getTcPr();
+        if (properties == null || properties.getGridSpan() == null
+                || properties.getGridSpan().getVal() == null) {
+            return 1;
+        }
+        return Math.max(1, properties.getGridSpan().getVal().intValue());
+    }
+
     private List<List<String>> readRows(XWPFTable table) {
         List<List<String>> rows = new ArrayList<>();
         for (XWPFTableRow row : table.getRows()) {
             List<String> cells = new ArrayList<>();
             for (XWPFTableCell cell : row.getTableCells()) {
                 cells.add(cell.getText().trim());
+                // 가로 병합된 칸은 하나로만 나오므로 나머지 폭을 빈 칸으로 채워
+                // 다른 행과 열 위치를 맞춘다. 채우지 않으면 그 행만 열이 밀린다.
+                for (int i = 1; i < gridSpan(cell); i++) {
+                    cells.add("");
+                }
             }
             rows.add(cells);
         }

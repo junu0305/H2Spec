@@ -29,6 +29,11 @@ public class IrAssembler {
     private static final Pattern CONTAINER_CARDINALITY = Pattern.compile("^\\d+\\.\\.(\\d+|n|N)$");
     /** 값이 없음을 나타내는 표기. 컨테이너 행은 항목크기·샘플데이터를 이렇게 비운다 */
     private static final String EMPTY_CELL = "-";
+    /** 명세 표의 표준 열 순서. 머리행에서 이 이름들을 찾아 실제 인덱스를 얻는다 */
+    private static final List<String> COLUMN_LABELS = List.of(
+            "항목명(영문)", "항목명(국문)", "항목크기", "항목구분", "샘플데이터", "항목설명");
+    /** 머리행을 알아보는 표식 */
+    private static final String NAME_LABEL_MARKER = "항목명";
     /**
      * 산술 대상이 아닌 식별자·코드·일자를 가리키는 이름 접미사 (소문자 비교).
      * "tm"은 거리(tm)·item처럼 시각이 아닌 이름까지 걸리므로 넣지 않고 설명 키워드에 맡긴다.
@@ -233,13 +238,76 @@ public class IrAssembler {
      * 컨테이너 행을 걸러낸 실제 데이터 행만 반환한다.
      */
     private List<List<String>> dataRows(List<List<String>> rows) {
-        return rows.stream()
-                .map(this::unindent)
-                .filter(cells -> cells.size() >= 6)
-                .filter(cells -> !cells.get(0).isBlank())
-                .filter(cells -> !cells.get(0).contains("항목명"))
-                .filter(cells -> !isContainerRow(cells))
-                .toList();
+        int[] columns = columnIndexes(rows);
+        List<List<String>> result = new ArrayList<>();
+        for (List<String> raw : rows) {
+            List<String> cells = columns == null ? unindent(raw) : raw;
+            if (cells.size() < COLUMN_LABELS.size()) {
+                continue;
+            }
+            List<String> row = columns == null ? cells : reorder(cells, columns);
+            if (row.get(0).isBlank() || row.get(0).contains(NAME_LABEL_MARKER)) {
+                continue;
+            }
+            if (!isContainerRow(row)) {
+                result.add(row);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 머리행이 알려주는 각 열의 실제 인덱스를 찾는다. 표마다 열 수와 순서가 달라
+     * 고정 위치로 읽으면 값이 어긋난다. 머리행을 못 찾으면 null을 돌려 기존 위치를 쓴다.
+     */
+    private int[] columnIndexes(List<List<String>> rows) {
+        for (List<String> cells : rows) {
+            if (cells.stream().noneMatch(cell -> cell.contains(NAME_LABEL_MARKER))) {
+                continue;
+            }
+            int[] columns = new int[COLUMN_LABELS.size()];
+            for (int i = 0; i < COLUMN_LABELS.size(); i++) {
+                columns[i] = indexOfLabel(cells, COLUMN_LABELS.get(i));
+            }
+            // 이름과 항목구분을 못 찾으면 머리행으로 신뢰할 수 없다
+            return columns[0] < 0 || columns[3] < 0 ? null : columns;
+        }
+        return null;
+    }
+
+    private int indexOfLabel(List<String> cells, String label) {
+        for (int i = 0; i < cells.size(); i++) {
+            if (cells.get(i).replaceAll("\\s+", "").equals(label)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** 머리행에서 찾은 인덱스대로 값을 뽑아 표준 열 순서로 맞춘다. */
+    private List<String> reorder(List<String> cells, int[] columns) {
+        List<String> row = new ArrayList<>(columns.length);
+        for (int column : columns) {
+            row.add(column >= 0 && column < cells.size() ? cells.get(column) : "");
+        }
+        if (row.get(0).isBlank()) {
+            row.set(0, indentedName(cells, columns));
+        }
+        return row;
+    }
+
+    /**
+     * 컨테이너 아래 자식 행을 이름 칸부터 한 칸 밀어 들여쓴 문서가 있다.
+     * 이름 칸이 비면 국문 항목명 칸 직전까지 훑어 실제 이름을 찾는다.
+     */
+    private String indentedName(List<String> cells, int[] columns) {
+        int limit = columns[1] < 0 ? columns[0] + 1 : Math.min(columns[1], cells.size());
+        for (int i = columns[0] + 1; i < limit; i++) {
+            if (!cells.get(i).isBlank()) {
+                return cells.get(i);
+            }
+        }
+        return "";
     }
 
     /**

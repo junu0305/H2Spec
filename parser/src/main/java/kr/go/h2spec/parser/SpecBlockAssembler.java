@@ -126,12 +126,25 @@ class SpecBlockAssembler {
      * 병합된 문서가 있어, 행 안의 인접한 두 칸을 모두 후보로 본다.
      * 같은 키가 여러 번 나오면 먼저 나온 값을 쓴다.
      */
+    /**
+     * 키 다음의 첫 비어 있지 않은 칸을 값으로 본다. 가로 병합을 펼치며 채운 빈 칸이
+     * 키와 값 사이에 끼기 때문에 바로 다음 칸만 보면 값을 놓친다.
+     */
+    private String valueAfter(List<String> cells, int keyIndex) {
+        for (int i = keyIndex + 1; i < cells.size(); i++) {
+            if (!cells.get(i).isBlank()) {
+                return cells.get(i);
+            }
+        }
+        return "";
+    }
+
     private Map<String, String> toKeyValue(List<List<String>> rows) {
         Map<String, String> info = new LinkedHashMap<>();
         for (List<String> cells : rows) {
             for (int i = 0; i + 1 < cells.size(); i++) {
                 if (!cells.get(i).isBlank()) {
-                    info.putIfAbsent(cells.get(i), cells.get(i + 1));
+                    info.putIfAbsent(cells.get(i), valueAfter(cells, i));
                 }
             }
         }

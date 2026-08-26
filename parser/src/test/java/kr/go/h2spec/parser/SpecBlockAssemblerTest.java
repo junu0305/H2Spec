@@ -14,8 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class SpecBlockAssemblerTest {
 
+    /** 이름 칸이 가로 병합돼 리더가 빈 칸을 채운 머리행. 자식 행은 그 자리에 이름을 적는다 */
     private static final List<String> HEADER =
-            List.of("항목명(영문)", "항목명(국문)", "항목크기", "항목구분", "샘플데이터", "항목설명");
+            List.of("항목명(영문)", "", "항목명(국문)", "항목크기", "항목구분", "샘플데이터", "항목설명");
 
     @Test
     void 서비스_URL_표와_오퍼레이션명으로_엔드포인트를_조립한다() {
@@ -86,13 +87,13 @@ class SpecBlockAssemblerTest {
                 new Block.Heading("요청 메시지 명세"),
                 new Block.Table(List.of(
                         HEADER,
-                        List.of("solYear", "연", "4", "1", "2019", "연"),
-                        List.of("ServiceKey", "서비스키", "", "1", "", "발급받은 서비스키"))),
+                        List.of("solYear", "", "연", "4", "1", "2019", "연"),
+                        List.of("ServiceKey", "", "서비스키", "", "1", "", "발급받은 서비스키"))),
                 new Block.Heading("응답 메시지 명세"),
                 new Block.Table(List.of(
                         HEADER,
-                        List.of("resultCode", "결과코드", "", "1", "00", "00:성공"),
-                        List.of("Item", "", "", "0..n", "", ""),
+                        List.of("resultCode", "", "결과코드", "", "1", "00", "00:성공"),
+                        List.of("Item", "", "", "", "0..n", "", ""),
                         List.of("", "locdate", "날짜", "8", "1", "20190301", "날짜"),
                         List.of("", "dateName", "명칭", "50", "1", "삼일절", "명칭"))));
     }
