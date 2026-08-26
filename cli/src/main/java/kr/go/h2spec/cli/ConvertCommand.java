@@ -26,7 +26,7 @@ import java.util.concurrent.Callable;
 /** 명세 파일을 OpenAPI/클라이언트/DTO 산출물로 변환하는 서브커맨드. */
 @Command(
         name = "convert",
-        description = "명세 파일을 OpenAPI 스펙과 Spring 클라이언트 코드로 변환",
+        description = "명세 파일(DOCX/HWP/IR JSON)을 OpenAPI 스펙과 Spring 클라이언트 코드로 변환",
         mixinStandardHelpOptions = true)
 public class ConvertCommand implements Callable<Integer> {
 
@@ -43,7 +43,7 @@ public class ConvertCommand implements Callable<Integer> {
     private CommandSpec spec;
 
     @Option(names = {"-i", "--input"}, required = true,
-            description = "입력 파일(DOCX 명세서 또는 IR JSON) 또는 명세 파일들이 담긴 디렉터리")
+            description = "입력 파일(DOCX/HWP 명세서 또는 IR JSON) 또는 명세 파일들이 담긴 디렉터리")
     private Path input;
 
     @Option(names = {"-o", "--output"}, description = "출력 디렉터리 (기본: ./generated)")
