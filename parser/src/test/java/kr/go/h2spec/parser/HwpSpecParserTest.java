@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 픽스처 msrstn-info.hwp는 실제 기관 배포본이 아니라 파싱 경로를 확인하려고 만든 축소본이다.
  * 같은 문서의 DOCX 픽스처가 응답필드 14개를 담는 반면 이 파일은 4개만 담는다.
- * 실제 기관 HWP 문서로 검증하는 것은 별도 과제로 남아 있다.
+ * 실제 기관 배포본으로 하는 검증은 {@link HwpRealDocumentTest}가 맡는다.
  */
 class HwpSpecParserTest {
 

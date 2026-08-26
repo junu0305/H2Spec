@@ -23,16 +23,18 @@ public class IrAssembler {
     /** 선행 0이 붙은 정수 샘플(0311 등)은 숫자로 만들면 값이 바뀐다 */
     private static final Pattern LEADING_ZERO_SAMPLE = Pattern.compile("^0\\d+$");
     /**
-     * 항목구분 칸에 카디널리티(예: 0..n, 1..1)가 적힌 행은 실제 필드가 아니라
-     * items처럼 하위 표를 감싸는 컨테이너 행이다.
+     * 항목구분 칸의 카디널리티 표기(0..n, 1..1). 컨테이너 행 판정의 필요조건이지만
+     * 충분조건은 아니다 — 반복 데이터 필드마다 이 표기를 붙이는 기관이 있다.
      */
     private static final Pattern CONTAINER_CARDINALITY = Pattern.compile("^\\d+\\.\\.(\\d+|n|N)$");
+    /** 값이 없음을 나타내는 표기. 컨테이너 행은 항목크기·샘플데이터를 이렇게 비운다 */
+    private static final String EMPTY_CELL = "-";
     /**
      * 산술 대상이 아닌 식별자·코드·일자를 가리키는 이름 접미사 (소문자 비교).
      * "tm"은 거리(tm)·item처럼 시각이 아닌 이름까지 걸리므로 넣지 않고 설명 키워드에 맡긴다.
      */
     private static final List<String> NON_NUMERIC_NAME_SUFFIXES =
-            List.of("cd", "code", "no", "id", "dt", "ymd");
+            List.of("cd", "code", "no", "id", "dt", "ym", "ymd");
     /** 산술 대상이 아님을 드러내는 항목설명 키워드 */
     private static final List<String> NON_NUMERIC_DESCRIPTION_KEYWORDS =
             List.of("코드", "번호", "일자", "년월일", "시각", "일시");
@@ -248,9 +250,19 @@ public class IrAssembler {
         return cells.size() > 6 && cells.get(0).isBlank() ? cells.subList(1, cells.size()) : cells;
     }
 
-    /** 항목구분(예: "0..n")이 카디널리티 표기이면 실제 필드가 아닌 컨테이너 행이다. */
+    /**
+     * 하위 표를 감싸기만 하는 컨테이너 행인지 본다. 항목구분이 카디널리티 표기이면서
+     * 항목크기와 샘플데이터가 모두 비어 있어야 한다. 카디널리티만으로 판정하면
+     * 반복 데이터 필드마다 0..n을 붙이는 문서에서 실제 필드까지 사라진다.
+     */
     private boolean isContainerRow(List<String> cells) {
-        return CONTAINER_CARDINALITY.matcher(cells.get(3).trim()).matches();
+        return CONTAINER_CARDINALITY.matcher(cells.get(3).trim()).matches()
+                && isEmptyCell(cells.get(2)) && isEmptyCell(cells.get(4));
+    }
+
+    private boolean isEmptyCell(String value) {
+        String trimmed = value.trim();
+        return trimmed.isEmpty() || EMPTY_CELL.equals(trimmed);
     }
 
     private String inferType(String sample, String name, String description, List<String> reviewNotes) {
