@@ -116,6 +116,60 @@ class IrAssemblerTest {
         assertEquals("string", param.get("type").asText());
     }
 
+    @Test
+    void 요청_파라미터에_있는_페이징_필드는_body_메타로_올린다() {
+        // KCI는 numOfRows 대신 recordCnt를 쓴다. 실제 응답에서 body 직계 자식이다
+        String path = pathOf("recordCnt",
+                List.of(requestRow("recordCnt", "레코드 건수", "10", "한 페이지 결과 수")),
+                List.of(responseRow("recordCnt", "레코드 건수", "10", "한 페이지 결과 수")));
+
+        assertEquals("response.body.recordCnt", path);
+    }
+
+    @Test
+    void 요청_파라미터에_없는_카운트_필드는_item에_남긴다() {
+        // 오존황사의 tmCnt("황사 발생 회차")는 이름꼴만 페이징을 닮았을 뿐 실제 데이터다
+        String path = pathOf("tmCnt", List.of(),
+                List.of(responseRow("tmCnt", "황사발생회차", "1", "황사 발생 회차")));
+
+        assertEquals("response.body.items.item[].tmCnt", path);
+    }
+
+    @Test
+    void totalCount는_요청_파라미터에_없어도_body_메타다() {
+        String path = pathOf("totalCount", List.of(),
+                List.of(responseRow("totalCount", "전체 결과 수", "40", "전체 결과 수")));
+
+        assertEquals("response.body.totalCount", path);
+    }
+
+    @Test
+    void numOfRows와_pageNo는_기존대로_body_메타다() {
+        List<List<String>> reqs = List.of(
+                requestRow("numOfRows", "한 페이지 결과 수", "10", "한 페이지 결과 수"),
+                requestRow("pageNo", "페이지 번호", "1", "페이지 번호"));
+        List<List<String>> resps = List.of(
+                responseRow("numOfRows", "한 페이지 결과 수", "10", "한 페이지 결과 수"),
+                responseRow("pageNo", "페이지 번호", "1", "페이지 번호"));
+
+        JsonNode fields = assemble(reqs, resps).get("api").get("responseFields");
+
+        assertEquals("response.body.numOfRows", fields.get(0).get("path").asText());
+        assertEquals("response.body.pageNo", fields.get(1).get("path").asText());
+    }
+
+    /** 응답 필드 name이 배정받은 경로를 돌려준다 */
+    private String pathOf(String name, List<List<String>> requestRows, List<List<String>> responseRows) {
+        JsonNode fields = assemble(requestRows, responseRows).get("api").get("responseFields");
+        for (JsonNode f : fields) {
+            if (f.get("path").asText().endsWith("." + name)) {
+                return f.get("path").asText();
+            }
+        }
+        fail("응답 필드 없음: " + name);
+        return null;
+    }
+
     private String responseFormat(List<String> requestRow) {
         return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
     }
