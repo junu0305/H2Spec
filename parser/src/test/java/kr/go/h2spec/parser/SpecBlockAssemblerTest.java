@@ -41,6 +41,22 @@ class SpecBlockAssemblerTest {
         assertTrue(hasPath(fields, "response.header.resultCode"));
     }
 
+    @Test
+    void 서비스URL_표기에_공백이_없어도_찾는다() {
+        // 국민연금공단 문서는 "서비스URL", 천문연구원 문서는 "서비스 URL"로 적는다
+        List<Block> blocks = new java.util.ArrayList<>(astronomyBlocks());
+        blocks.set(1, new Block.Table(List.of(
+                List.of("서비스정보", "서비스명(영문)", "NpsService"),
+                List.of("서비스URL", "개발환경", "http://apis.data.go.kr/B552015/NpsService"),
+                List.of("운영환경", "http://apis.data.go.kr/B552015/NpsService"))));
+
+        List<ParsedApi> apis = parse(blocks);
+
+        assertEquals(1, apis.size());
+        assertEquals("http://apis.data.go.kr/B552015/NpsService",
+                apis.get(0).ir().get("api").get("baseUrl").asText());
+    }
+
     private List<ParsedApi> parse(List<Block> blocks) {
         return new SpecBlockAssembler().parse(blocks, "특일정보.docx", "DOCX");
     }

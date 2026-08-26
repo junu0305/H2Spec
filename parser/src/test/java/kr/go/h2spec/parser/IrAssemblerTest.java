@@ -180,6 +180,27 @@ class IrAssemblerTest {
         assertEquals("Get24DivisionsInfo", ir.get("api").get("apiId").asText());
     }
 
+    @Test
+    void 카디널리티가_붙어도_값이_있으면_데이터_필드로_읽는다() {
+        // 국민연금공단 문서는 반복 데이터 필드마다 항목구분에 0..n을 적는다.
+        // 컨테이너 행과 달리 항목크기·샘플데이터에 값이 있다.
+        List<String> dataRow = List.of("lsnDg1Cnt", "1급인원수", "10", "0..n", "3", "1급인원수");
+        List<String> containerRow = List.of("items", "목록", "-", "0..n", "-", "목록");
+
+        JsonNode fields = assemble(List.of(), List.of(containerRow, dataRow)).get("api").get("responseFields");
+
+        assertEquals(1, fields.size(), "컨테이너 행만 걸러야 한다: " + fields);
+        assertEquals("response.body.items.item[].lsnDg1Cnt", fields.get(0).get("path").asText());
+    }
+
+    @Test
+    void 년월_필드는_숫자_샘플이어도_string으로_추론한다() {
+        // dataCrtYm(자료생성년월) 201710은 선행 0이 없어도 산술 대상이 아니다
+        JsonNode field = field(responseRow("dataCrtYm", "자료생성년월", "201710", "자료생성년월"), "dataCrtYm");
+
+        assertEquals("string", field.get("type").asText());
+    }
+
     private String responseFormat(List<String> requestRow) {
         return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
     }

@@ -14,6 +14,8 @@ class SpecBlockAssembler {
 
     /** 서비스 개요 표에서 찾은 기본 주소를 IrAssembler로 넘기는 키 */
     static final String SERVICE_URL_KEY = "__serviceUrl";
+    /** 공백을 뺀 형태로 비교하는 서비스 URL 행 이름 */
+    private static final String SERVICE_URL_LABEL = "서비스URL";
 
     private enum Pending {
         INFO, REQUEST, RESPONSE
@@ -73,7 +75,10 @@ class SpecBlockAssembler {
         return result;
     }
 
-    /** 서비스 개요 표의 "서비스 URL" 행에서 기본 주소를 찾는다. 운영환경 값을 우선한다. */
+    /**
+     * 서비스 개요 표의 "서비스 URL" 행에서 기본 주소를 찾는다. 운영환경 값을 우선한다.
+     * 기관마다 "서비스 URL"과 "서비스URL"을 섞어 쓰므로 공백을 빼고 맞춘다.
+     */
     private String serviceUrl(List<List<String>> rows) {
         String found = null;
         boolean inUrlSection = false;
@@ -81,7 +86,7 @@ class SpecBlockAssembler {
             if (cells.isEmpty()) {
                 continue;
             }
-            if (cells.get(0).contains("서비스 URL")) {
+            if (cells.get(0).replaceAll("\\s+", "").contains(SERVICE_URL_LABEL)) {
                 inUrlSection = true;
             } else if (!cells.get(0).isBlank()) {
                 inUrlSection = false;
