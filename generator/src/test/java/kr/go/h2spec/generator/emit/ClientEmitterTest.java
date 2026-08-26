@@ -93,6 +93,28 @@ class ClientEmitterTest {
         assertTrue(source.contains("url.append(\"?ServiceKey=\")"), "문서에 적힌 이름 그대로 보내야 한다");
     }
 
+    @Test
+    void 여러_세그먼트_엔드포인트도_유효한_메서드명을_만든다() throws Exception {
+        // "/items/{itemId}/detail" 을 그대로 쓰면 메서드명에 슬래시와 중괄호가 들어가 컴파일되지 않는다
+        IrSpec ir = withEndpoint("/items/{itemId}/detail");
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertFalse(source.contains("items/{itemId}/detail("), "메서드명에 경로 구분자가 남으면 안 된다: " + source);
+        assertTrue(source.contains("public RTMSDataSvcAptTradeDevResponse itemsItemidDetail("),
+                "경로 세그먼트를 낱말로 이어붙인 이름이어야 한다");
+    }
+
+    private IrSpec withEndpoint(String endpoint) throws Exception {
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        kr.go.h2spec.generator.ir.ApiSpec a = base.api();
+        return new IrSpec(
+                new kr.go.h2spec.generator.ir.ApiSpec(a.apiId(), a.apiName(), a.description(), a.baseUrl(),
+                        endpoint, a.httpMethod(), a.responseFormat(), a.requestParameters(),
+                        a.responseFields(), a.errorSpec()),
+                base.generatorHints());
+    }
+
     /** schema-example 기반 IR에서 serviceKey 파라미터 이름만 바꾼 IR */
     private IrSpec withServiceKeyNamed(String name) throws Exception {
         IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));

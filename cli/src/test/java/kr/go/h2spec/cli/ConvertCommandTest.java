@@ -205,6 +205,21 @@ class ConvertCommandTest {
     }
 
     @Test
+    void path_파라미터가_있는_IR도_산출물로_변환한다() throws Exception {
+        // 문서 파서는 아직 in:path를 만들지 않지만 IR을 직접 입력하는 경로는 지원한다
+        Path ir = Path.of(getClass().getResource("/ir/path-parameter-example.json").toURI());
+
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", ir.toString(), "--output", tempDir.toString());
+
+        assertEquals(0, exit);
+        String client = Files.readString(tempDir.resolve(
+                "kr/go/h2spec/client/itemdetail/ItemDetailClient.java"));
+        assertTrue(client.contains("{itemId}"), "URL 템플릿을 치환해야 한다: " + client);
+        assertFalse(client.contains("&itemId="), "path 파라미터를 쿼리로 붙이면 안 된다");
+    }
+
+    @Test
     void HWP만_있는_디렉터리는_HWP_미지원을_안내한다() throws Exception {
         // 단일 파일 입력과 달리 디렉터리에서는 .hwp가 조용히 걸러져 이유를 알 수 없었다
         Path inputDir = Files.createDirectories(tempDir.resolve("hwp-input"));

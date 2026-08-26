@@ -164,11 +164,20 @@ public class ClientEmitter {
         sb.append(INDENT).append("}\n");
     }
 
+    /**
+     * 엔드포인트를 메서드명으로 바꾼다. "/items/{itemId}/detail"처럼 세그먼트가 여럿이거나
+     * path 파라미터 중괄호가 있으면 그대로는 자바 식별자가 되지 않아 낱말 경계로 다룬다.
+     */
+    private String methodNameOf(String endpoint) {
+        String words = endpoint.replaceAll("[/{}]+", "_").replaceAll("^_+|_+$", "");
+        return JavaNames.camel(words);
+    }
+
     private void appendApiMethod(StringBuilder sb, IrSpec ir, List<RequestParameter> params,
                                   String responseClassName, boolean isXml) {
         String indent2 = INDENT.repeat(2);
         String indent3 = INDENT.repeat(3);
-        String methodName = JavaNames.camel(ir.api().endpoint().substring(1));
+        String methodName = methodNameOf(ir.api().endpoint());
 
         sb.append(INDENT).append("/**\n");
         sb.append(INDENT).append(" * ").append(ir.api().description()).append("\n");
