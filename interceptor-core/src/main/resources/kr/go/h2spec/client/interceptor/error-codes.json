@@ -33,10 +33,10 @@
     {
       "code": "05",
       "name": "SERVICETIME_OUT",
-      "nameAliases": ["SERVICE TIME OUT"],
+      "nameAliases": ["SERVICETIMEOUT_ERROR", "SERVICE TIME OUT"],
       "meaning": "서비스 연결실패 에러",
       "action": "제공기관 응답 지연이다. 타임아웃을 늘리거나 간격을 두고 재시도한다.",
-      "source": "한국환경공단_에어코리아_대기오염정보_기술문서_v1.4.docx"
+      "source": "한국환경공단_에어코리아_대기오염정보_기술문서_v1.4.docx (SERVICETIMEOUT_ERROR 표기는 에어코리아 getMsrstnList 실제 응답 HTTP 504에서 관측)"
     },
     {
       "code": "10",
