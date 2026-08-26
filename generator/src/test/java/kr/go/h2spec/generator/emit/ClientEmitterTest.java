@@ -116,6 +116,32 @@ class ClientEmitterTest {
     }
 
     /** schema-example 기반 IR에서 serviceKey 파라미터 이름만 바꾼 IR */
+    @Test
+    void path_파라미터는_경로용_인코더로_치환한다() throws Exception {
+        // URLEncoder는 공백을 +로 바꾸는데 경로 세그먼트에서 +는 공백이 아니라 글자 그대로다
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        RequestParameter path = new RequestParameter(
+                "LAWD_CD", "path", "string", true, "법정동 코드", null, null, null);
+        ApiSpec api = new ApiSpec(
+                base.api().apiId(), base.api().apiName(), base.api().description(), base.api().baseUrl(),
+                "/v1/apt/{LAWD_CD}", base.api().httpMethod(), base.api().responseFormat(),
+                List.of(base.api().requestParameters().get(0), path), base.api().responseFields(),
+                base.api().errorSpec());
+
+        String source = new ClientEmitter().emit(new IrSpec(api, base.generatorHints()));
+
+        assertTrue(source.contains("private static String encodePath(String value)"), source);
+        assertTrue(source.contains("encode(value).replace(\"+\", \"%20\")"),
+                "공백이 %20으로 나가야 한다");
+    }
+
+    @Test
+    void path_파라미터가_없으면_경로용_인코더를_만들지_않는다() throws Exception {
+        String source = new ClientEmitter().emit(new IrLoader().load(resource("/ir/schema-example.json")));
+
+        assertFalse(source.contains("encodePath"), "쓰이지 않는 헬퍼를 넣지 않는다");
+    }
+
     private IrSpec withServiceKeyNamed(String name) throws Exception {
         IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
         List<kr.go.h2spec.generator.ir.RequestParameter> params = new java.util.ArrayList<>();
@@ -170,7 +196,7 @@ class ClientEmitterTest {
 
         String source = new ClientEmitter().emit(new IrSpec(api, base.generatorHints()));
 
-        assertTrue(source.contains("replace(\"{LAWD_CD}\", encode(String.valueOf(lawdCd)))"));
+        assertTrue(source.contains("replace(\"{LAWD_CD}\", encodePath(String.valueOf(lawdCd)))"));
         assertFalse(source.contains("url.append(\"&LAWD_CD=\")"));
     }
 

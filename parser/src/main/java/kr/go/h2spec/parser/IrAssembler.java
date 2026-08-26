@@ -69,11 +69,18 @@ public class IrAssembler {
                               List<List<String>> requestRows, List<List<String>> responseRows) {
         String url = callBackUrl(info);
         int lastSlash = url.lastIndexOf('/');
+        if (lastSlash < 0 || lastSlash == url.length() - 1) {
+            throw new IllegalArgumentException(
+                    "Call Back URL에서 오퍼레이션 경로를 찾을 수 없습니다: " + url);
+        }
         String segment = url.substring(lastSlash + 1);
         String baseUrl = url.substring(0, lastSlash);
         String apiId = toApiId(segment);
 
         List<String> reviewNotes = new ArrayList<>();
+        List<List<String>> requests = dataRows(requestRows);
+        List<List<String>> responses = dataRows(responseRows);
+        Set<String> requestParamNames = namesOf(requests);
 
         ObjectNode api = objectMapper.createObjectNode();
         api.put("apiId", apiId);
@@ -84,9 +91,9 @@ public class IrAssembler {
         api.put("httpMethod", "GET");
         api.put("description", info.getOrDefault("상세기능 설명", ""));
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
-        api.put("responseFormat", responseFormat(requestRows));
-        api.set("requestParameters", requestParameters(requestRows, reviewNotes));
-        api.set("responseFields", responseFields(responseRows, requestParamNames(requestRows), reviewNotes));
+        api.put("responseFormat", responseFormat(requests));
+        api.set("requestParameters", requestParameters(requests, requestParamNames, reviewNotes));
+        api.set("responseFields", responseFields(responses, requestParamNames, reviewNotes));
         api.set("errorSpec", errorSpec());
 
         ObjectNode ir = objectMapper.createObjectNode();
@@ -139,9 +146,10 @@ public class IrAssembler {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
-    private ArrayNode requestParameters(List<List<String>> rows, List<String> reviewNotes) {
+    private ArrayNode requestParameters(List<List<String>> rows, Set<String> requestParamNames,
+                                        List<String> reviewNotes) {
         ArrayNode parameters = objectMapper.createArrayNode();
-        for (List<String> cells : dataRows(rows)) {
+        for (List<String> cells : rows) {
             String name = cells.get(0);
             String korName = cells.get(1);
             String gubun = cells.get(3);
@@ -149,9 +157,10 @@ public class IrAssembler {
             String description = describe(cells.get(5), korName);
 
             ObjectNode param = parameters.addObject();
+            boolean settled = isBodyMeta(name, requestParamNames);
             param.put("name", name);
             param.put("in", "query");
-            param.put("type", inferType(sample, name, description, reviewNotes));
+            param.put("type", inferType(sample, name, description, settled ? null : reviewNotes));
             param.put("required", gubun.startsWith("1"));
             param.put("description", description);
             if (!sample.isBlank() && !"-".equals(sample)) {
@@ -161,9 +170,9 @@ public class IrAssembler {
         return parameters;
     }
 
-    private Set<String> requestParamNames(List<List<String>> rows) {
+    private Set<String> namesOf(List<List<String>> rows) {
         Set<String> names = new LinkedHashSet<>();
-        for (List<String> cells : dataRows(rows)) {
+        for (List<String> cells : rows) {
             names.add(cells.get(0));
         }
         return names;
@@ -172,7 +181,7 @@ public class IrAssembler {
     private ArrayNode responseFields(List<List<String>> rows, Set<String> requestParamNames,
                                      List<String> reviewNotes) {
         ArrayNode fields = objectMapper.createArrayNode();
-        for (List<String> cells : dataRows(rows)) {
+        for (List<String> cells : rows) {
             String name = cells.get(0);
             String korName = cells.get(1);
             String sample = cells.get(4);
@@ -181,9 +190,10 @@ public class IrAssembler {
             ObjectNode field = fields.addObject();
             field.put("path", pathFor(name, requestParamNames));
             // 결과코드/메시지는 샘플이 숫자("00")여도 선행 0 보존을 위해 항상 문자열
+            boolean settled = isBodyMeta(name, requestParamNames);
             field.put("type", HEADER_FIELDS.contains(name)
                     ? "string"
-                    : inferType(sample, name, description, reviewNotes));
+                    : inferType(sample, name, description, settled ? null : reviewNotes));
             field.put("description", description);
             if ("resultCode".equals(name)) {
                 field.put("isResultIndicator", true);
@@ -197,7 +207,7 @@ public class IrAssembler {
      * 항목설명 문구는 "xml 또는json", "결과형식(xml/json)"처럼 기관마다 달라 근거로 삼기 어렵다.
      */
     private String responseFormat(List<List<String>> requestRows) {
-        for (List<String> cells : dataRows(requestRows)) {
+        for (List<String> cells : requestRows) {
             if (RESPONSE_FORMAT_PARAMS.contains(cells.get(0)) && JSON_FORMAT.equalsIgnoreCase(cells.get(4))) {
                 return JSON_FORMAT;
             }
@@ -241,11 +251,10 @@ public class IrAssembler {
         int[] columns = columnIndexes(rows);
         List<List<String>> result = new ArrayList<>();
         for (List<String> raw : rows) {
-            List<String> cells = columns == null ? unindent(raw) : raw;
-            if (cells.size() < COLUMN_LABELS.size()) {
+            if (raw.size() < COLUMN_LABELS.size()) {
                 continue;
             }
-            List<String> row = columns == null ? cells : reorder(cells, columns);
+            List<String> row = columns == null ? raw : reorder(raw, columns);
             if (row.get(0).isBlank() || row.get(0).contains(NAME_LABEL_MARKER)) {
                 continue;
             }
@@ -311,14 +320,6 @@ public class IrAssembler {
     }
 
     /**
-     * 컨테이너 아래 자식 행을 앞 칸을 비워 들여쓴 문서가 있다. 한 칸 밀린 행은
-     * 앞의 빈 칸을 떼어 다른 행과 같은 열 구성으로 맞춘다.
-     */
-    private List<String> unindent(List<String> cells) {
-        return cells.size() > 6 && cells.get(0).isBlank() ? cells.subList(1, cells.size()) : cells;
-    }
-
-    /**
      * 하위 표를 감싸기만 하는 컨테이너 행인지 본다. 항목구분이 카디널리티 표기이면서
      * 항목크기와 샘플데이터가 모두 비어 있어야 한다. 카디널리티만으로 판정하면
      * 반복 데이터 필드마다 0..n을 붙이는 문서에서 실제 필드까지 사라진다.
@@ -333,13 +334,14 @@ public class IrAssembler {
         return trimmed.isEmpty() || EMPTY_CELL.equals(trimmed);
     }
 
+    /** reviewNotes가 null이면 이미 규칙으로 확정된 필드라 노트를 남기지 않는다. */
     private String inferType(String sample, String name, String description, List<String> reviewNotes) {
         if (isNonNumeric(name, description, sample)) {
             return "string";
         }
         if (INTEGER_SAMPLE.matcher(sample).matches()) {
             // 규칙으로 확정한 필드까지 노트를 남기면 노트가 검토 신호 역할을 못 한다
-            if (!BODY_META_FIELDS.contains(name)) {
+            if (reviewNotes != null && !BODY_META_FIELDS.contains(name)) {
                 reviewNotes.add("샘플데이터 기반 integer 추론: " + name + " (코드형 문자열일 수 있음)");
             }
             return "integer";

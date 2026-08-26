@@ -227,6 +227,29 @@ class IrAssemblerTest {
         assertTrue(param.get("required").asBoolean(), "항목구분을 제 위치에서 읽어야 한다");
     }
 
+    @Test
+    void 잘못된_Call_Back_URL은_안내_메시지로_거부한다() {
+        // 스택트레이스 대신 사용자가 고칠 수 있는 메시지를 줘야 배치 변환에서 한 파일 실패로 잡힌다
+        for (String url : List.of("getFoo", "http://apis.data.go.kr/1234/Svc/", "http://")) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> new IrAssembler().assemble("t.docx", "DOCX",
+                            Map.of("Call Back URL", url), List.of(), List.of()),
+                    "URL: " + url);
+            assertTrue(e.getMessage().contains(url), e.getMessage());
+        }
+    }
+
+    @Test
+    void 페이징으로_확정한_필드는_검토노트를_남기지_않는다() {
+        // recordCnt는 요청 파라미터에도 있어 body 메타로 확정된다
+        JsonNode ir = assemble(
+                List.of(requestRow("recordCnt", "레코드 건수", "10", "한 페이지 결과 수")),
+                List.of(responseRow("recordCnt", "레코드 건수", "10", "한 페이지 결과 수")));
+
+        JsonNode notes = ir.get("metadata").get("reviewNotes");
+        assertEquals(0, notes.size(), "확정한 필드에 노트가 남으면 검토 신호가 희석된다: " + notes);
+    }
+
     private String responseFormat(List<String> requestRow) {
         return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
     }
