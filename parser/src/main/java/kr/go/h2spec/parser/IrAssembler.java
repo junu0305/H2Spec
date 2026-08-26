@@ -56,7 +56,7 @@ public class IrAssembler {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ParsedApi assemble(String sourceFile, Map<String, String> info,
+    public ParsedApi assemble(String sourceFile, String sourceFormat, Map<String, String> info,
                               List<List<String>> requestRows, List<List<String>> responseRows) {
         String url = callBackUrl(info);
         int lastSlash = url.lastIndexOf('/');
@@ -81,7 +81,7 @@ public class IrAssembler {
         api.set("errorSpec", errorSpec());
 
         ObjectNode ir = objectMapper.createObjectNode();
-        ir.set("metadata", metadata(sourceFile, reviewNotes));
+        ir.set("metadata", metadata(sourceFile, sourceFormat, reviewNotes));
         ir.set("api", api);
         ir.set("generatorHints", generatorHints(apiId));
         return new ParsedApi(apiId, ir);
@@ -269,10 +269,10 @@ public class IrAssembler {
         return hints;
     }
 
-    private ObjectNode metadata(String sourceFile, List<String> reviewNotes) {
+    private ObjectNode metadata(String sourceFile, String sourceFormat, List<String> reviewNotes) {
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("sourceFile", sourceFile);
-        metadata.put("sourceFormat", "DOCX");
+        metadata.put("sourceFormat", sourceFormat);
         metadata.put("parsedAt", OffsetDateTime.now().toString());
         metadata.put("parserVersion", PARSER_VERSION);
         metadata.put("manualReviewRequired", !reviewNotes.isEmpty());

@@ -185,7 +185,7 @@ class IrAssemblerTest {
     }
 
     private JsonNode assemble(List<List<String>> requestRows, List<List<String>> responseRows) {
-        return new IrAssembler().assemble("test.docx", INFO, requestRows, responseRows).ir();
+        return new IrAssembler().assemble("test.docx", "DOCX", INFO, requestRows, responseRows).ir();
     }
 
     /** 요청 표 열: 항목명(영문) / 항목명(국문) / 항목크기 / 항목구분 / 샘플데이터 / 항목설명 */
