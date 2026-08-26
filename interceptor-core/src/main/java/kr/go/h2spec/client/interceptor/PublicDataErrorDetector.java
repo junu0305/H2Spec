@@ -26,6 +26,15 @@ final class PublicDataErrorDetector {
      */
     private static final List<String> ERROR_KEYWORDS = errorKeywords();
 
+    /** 결과코드 후보는 응답 메타데이터 영역까지만 탐색하고, 데이터 배열 내부는 내려가지 않는다. */
+    private static final int MAX_SEARCH_DEPTH = 3;
+
+    /**
+     * XXE 방어 설정을 마친 팩토리. 설정 후에는 스레드 안전하므로 공유하고,
+     * 스레드 안전하지 않은 DocumentBuilder만 호출마다 새로 만든다.
+     */
+    private static final DocumentBuilderFactory XML_FACTORY = secureXmlFactory();
+
     private static List<String> errorKeywords() {
         List<String> keywords = new ArrayList<>();
         for (PublicDataErrorCatalog.ErrorCode entry : PublicDataErrorCatalog.entries()) {
@@ -37,14 +46,6 @@ final class PublicDataErrorDetector {
         keywords.sort((a, b) -> Integer.compare(b.length(), a.length()));
         return List.copyOf(keywords);
     }
-    /** 결과코드 후보는 응답 메타데이터 영역까지만 탐색하고, 데이터 배열 내부는 내려가지 않는다. */
-    private static final int MAX_SEARCH_DEPTH = 3;
-
-    /**
-     * XXE 방어 설정을 마친 팩토리. 설정 후에는 스레드 안전하므로 공유하고,
-     * 스레드 안전하지 않은 DocumentBuilder만 호출마다 새로 만든다.
-     */
-    private static final DocumentBuilderFactory XML_FACTORY = secureXmlFactory();
 
     private static DocumentBuilderFactory secureXmlFactory() {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
