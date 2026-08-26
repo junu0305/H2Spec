@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +22,27 @@ final class PublicDataErrorDetector {
     /** 결과코드 후보는 응답 메타데이터 영역까지만 탐색하고, 데이터 배열 내부는 내려가지 않는다. */
     private static final int MAX_SEARCH_DEPTH = 3;
 
+    /**
+     * XXE 방어 설정을 마친 팩토리. 설정 후에는 스레드 안전하므로 공유하고,
+     * 스레드 안전하지 않은 DocumentBuilder만 호출마다 새로 만든다.
+     */
+    private static final DocumentBuilderFactory XML_FACTORY = secureXmlFactory();
+
+    private static DocumentBuilderFactory secureXmlFactory() {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        try {
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        } catch (ParserConfigurationException e) {
+            throw new IllegalStateException("XML 파서의 XXE 방어 설정에 실패했습니다", e);
+        }
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        return factory;
+    }
+
     private final String successCode;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -34,14 +56,7 @@ final class PublicDataErrorDetector {
 
     private ResultInfo parseXml(String content) {
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-            factory.setXIncludeAware(false);
-            factory.setExpandEntityReferences(false);
-            var builder = factory.newDocumentBuilder();
+            var builder = XML_FACTORY.newDocumentBuilder();
             try (InputStream input = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
                 var document = builder.parse(input);
                 return new ResultInfo(firstTagText(document, RESULT_CODE_KEYS), firstTagText(document, RESULT_MSG_KEYS));
