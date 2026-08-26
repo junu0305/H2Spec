@@ -8,6 +8,7 @@ import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.parser.DocxSpecParser;
 import kr.go.h2spec.parser.HwpSpecParser;
+import kr.go.h2spec.parser.HwpxSpecParser;
 import kr.go.h2spec.parser.ParsedApi;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -26,15 +27,13 @@ import java.util.concurrent.Callable;
 /** 명세 파일을 OpenAPI/클라이언트/DTO 산출물로 변환하는 서브커맨드. */
 @Command(
         name = "convert",
-        description = "명세 파일(DOCX/HWP/IR JSON)을 OpenAPI 스펙과 Spring 클라이언트 코드로 변환",
+        description = "명세 파일(DOCX/HWP/HWPX/IR JSON)을 OpenAPI 스펙과 Spring 클라이언트 코드로 변환",
         mixinStandardHelpOptions = true)
 public class ConvertCommand implements Callable<Integer> {
 
-    /** HWP 파싱은 미지원 (이슈 #1은 DOCX 우선) */
-    /** HWPX(신형식)는 미지원 — hwplib은 구형 바이너리(.hwp)만 다룬다 */
-    private static final List<String> UNSUPPORTED_EXTENSIONS = List.of(".hwpx");
     private static final String DOCX_EXTENSION = ".docx";
     private static final String HWP_EXTENSION = ".hwp";
+    private static final String HWPX_EXTENSION = ".hwpx";
     private static final String JSON_EXTENSION = ".json";
     private static final String XML_FORMAT = "XML";
     private static final String JSON_FORMAT = "JSON";
@@ -43,7 +42,7 @@ public class ConvertCommand implements Callable<Integer> {
     private CommandSpec spec;
 
     @Option(names = {"-i", "--input"}, required = true,
-            description = "입력 파일(DOCX/HWP 명세서 또는 IR JSON) 또는 명세 파일들이 담긴 디렉터리")
+            description = "입력 파일(DOCX/HWP/HWPX 명세서 또는 IR JSON) 또는 명세 파일들이 담긴 디렉터리")
     private Path input;
 
     @Option(names = {"-o", "--output"}, description = "출력 디렉터리 (기본: ./generated)")
@@ -89,9 +88,7 @@ public class ConvertCommand implements Callable<Integer> {
             return 1;
         }
         if (targets.isEmpty()) {
-            err(hasUnsupportedSpecFile()
-                    ? "HWP 명세서 파싱은 아직 지원되지 않습니다. DOCX로 변환하거나 IR JSON을 사용해 주세요: " + input
-                    : "디렉터리에서 변환할 명세 파일(.docx, .json)을 찾지 못했습니다: " + input);
+            err("디렉터리에서 변환할 명세 파일(.docx, .hwp, .hwpx, .json)을 찾지 못했습니다: " + input);
             return 1;
         }
 
@@ -107,34 +104,20 @@ public class ConvertCommand implements Callable<Integer> {
         return failureCount == 0 ? 0 : 1;
     }
 
-    /** 지원 파일이 하나도 없을 때, 원인이 HWP뿐인지 알려 안내 문구를 고르기 위해 확인한다. */
-    private boolean hasUnsupportedSpecFile() {
-        try (var files = Files.list(input)) {
-            return files.filter(Files::isRegularFile).anyMatch(path -> {
-                String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
-                return UNSUPPORTED_EXTENSIONS.stream().anyMatch(name::endsWith);
-            });
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
     private boolean isSupportedSpecFile(Path path) {
         String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
         return fileName.endsWith(DOCX_EXTENSION) || fileName.endsWith(HWP_EXTENSION)
-                || fileName.endsWith(JSON_EXTENSION);
+                || fileName.endsWith(HWPX_EXTENSION) || fileName.endsWith(JSON_EXTENSION);
     }
 
-    /** 파일 하나(DOCX 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다. */
+    /** 파일 하나(명세 문서 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다. */
     private boolean convertFile(Path file) {
         String fileName = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (UNSUPPORTED_EXTENSIONS.stream().anyMatch(fileName::endsWith)) {
-            err("HWP 명세서 파싱은 아직 지원되지 않습니다. DOCX로 변환하거나 IR JSON을 사용해 주세요. (" + file + ")");
-            return false;
-        }
         try {
             if (fileName.endsWith(DOCX_EXTENSION)) {
                 convertDocument(new DocxSpecParser().parse(file), file);
+            } else if (fileName.endsWith(HWPX_EXTENSION)) {
+                convertDocument(new HwpxSpecParser().parse(file), file);
             } else if (fileName.endsWith(HWP_EXTENSION)) {
                 convertDocument(new HwpSpecParser().parse(file), file);
             } else {

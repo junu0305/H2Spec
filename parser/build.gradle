@@ -8,9 +8,28 @@ dependencies {
     runtimeOnly 'org.apache.logging.log4j:log4j-core:2.23.1'
     // HWP(바이너리) 문서 파싱. 외부 의존성 없이 자체 OLE 리더를 내장하고 있음
     implementation 'kr.dogfoot:hwplib:1.1.10'
+    // HWPX(신형식, OWPML) 문서 파싱
+    implementation 'kr.dogfoot:hwpxlib:1.0.9'
     // ParsedApi가 ObjectNode를 노출하므로 api 스코프
     api 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
 
     // 산출한 IR이 generator의 검증(IrLoader)을 통과하는지 라운드트립 테스트용
     testImplementation project(':generator')
+}
+
+// 커밋된 HWPX 픽스처를 다시 만들 때만 쓰는 일회성 태스크.
+// 포털이 HWPX 기술문서를 배포하지 않아 hwpxlib으로 표준 문서 구조를 합성한다.
+// 문단 id와 zip 타임스탬프가 매번 달라 산출물이 바이트 단위로 재현되지는 않는다.
+// 문서 구조를 바꿀 때만 돌리고, 그 외에는 커밋된 파일을 그대로 쓴다.
+tasks.named('test') {
+    // 픽스처 생성 전용이라 일반 테스트 실행에서는 제외한다
+    exclude '**/HwpxFixtureWriter.class'
+}
+
+tasks.register('writeHwpxFixture', Test) {
+    useJUnitPlatform()
+    filter { includeTestsMatching 'kr.go.h2spec.parser.HwpxFixtureWriter' }
+    systemProperty 'h2spec.fixture.out',
+            project.findProperty('out') ?: "$rootDir/cli/src/test/resources/docs/msrstn-info.hwpx"
+    outputs.upToDateWhen { false }
 }
