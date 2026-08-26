@@ -70,9 +70,9 @@ flowchart LR
 
 | 모듈 | 역할 | 팀원 병렬 개발 포인트 |
 |---|---|---|
-| `parser` | 공공데이터포털 표준 기술문서(DOCX)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
+| `parser` | 공공데이터포털 표준 기술문서(DOCX/HWP)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
 | `generator` | IR JSON → OpenAPI 3.0 JSON, Spring 클라이언트 코드, DTO 생성 | 동일하게 IR JSON 샘플만으로 개발 시작 가능 |
-| `interceptor-core` | `PublicDataErrorInterceptor`, `PublicDataApiException` 등 런타임 라이브러리 | Parser/Generator와 무관하게 독립 배포 가능 (별도 jar) |
+| `interceptor-core` | `PublicDataErrorInterceptor`(RestTemplate), `PublicDataErrorFilter`(WebClient), `PublicDataApiException` 등 런타임 라이브러리 | Parser/Generator와 무관하게 독립 배포 가능 (별도 jar) |
 | `cli` | `h2spec convert` 명령 — parser와 generator를 잇는 진입점 | |
 | `web` (선택) | 업로드 → 변환 → 다운로드 웹 UI | REST API 계약만 맞으면 병렬 개발 가능 |
 
@@ -94,14 +94,34 @@ IR 추출: generated/ir/MsrstnList.json
 ...(문서의 상세기능마다 반복)
 ```
 
-IR JSON을 직접 입력할 수도 있습니다: `--input docs/schema-example.json`
+HWP 명세서(`.hwp`)와 IR JSON도 같은 방식으로 넣을 수 있습니다. HWPX(신형식)는 아직 지원하지 않습니다.
 
-`--input`에 디렉터리를 주면 그 안의 모든 명세 파일(`.docx`, IR `.json`)을 한 번에 변환합니다.
+```bash
+./h2spec convert --input "명세서.hwp" --output ./generated
+./h2spec convert --input docs/schema-example.json --output ./generated
+```
+
+`--input`에 디렉터리를 주면 그 안의 모든 명세 파일(`.docx`, `.hwp`, IR `.json`)을 한 번에 변환합니다.
 디렉터리를 재귀적으로 탐색하지는 않고, 명세 파일이 아닌 다른 파일(예: pdf, xlsx)은 무시합니다.
 일부 파일이 변환에 실패해도 나머지 파일은 계속 변환되며, 실패가 하나라도 있으면 종료 코드는 1입니다.
 
 ```bash
 ./h2spec convert --input ./docs/sample --output ./generated
+```
+
+### 옵션
+
+| 옵션 | 설명 |
+|---|---|
+| `-i`, `--input` | 명세 파일(DOCX/HWP/IR JSON) 또는 명세 파일들이 담긴 디렉터리 |
+| `-o`, `--output` | 출력 디렉터리 (기본: `./generated`) |
+| `--package` | 생성 코드의 기준 패키지. 오퍼레이션별 하위 패키지가 자동으로 붙습니다 |
+| `--format` | 응답 포맷 `xml` 또는 `json`. 문서에서 판별한 값을 덮어씁니다 |
+| `--success-code` | 정상 처리로 간주할 `resultCode` (기본: 문서의 값 또는 `00`) |
+
+```bash
+./h2spec convert --input ./docs/sample --output ./generated \
+  --package com.example.publicdata --format json
 ```
 
 ### 2. 생성 결과물
@@ -152,6 +172,9 @@ WebClient webClient = WebClient.builder()
 ```
 
 ### 빌드와 테스트
+
+빌드에는 JDK 17 이상이 필요합니다. Gradle 실행에 쓰는 JDK와 무관하게 컴파일은 toolchain 설정에 따라
+항상 Java 17로 수행되며, 로컬에 JDK 17이 없으면 Gradle이 자동으로 내려받습니다.
 
 ```bash
 ./gradlew build   # 전 모듈 빌드 + 테스트
@@ -219,9 +242,12 @@ main              ← 최종 병합 (PR 필수)
 
 ## 로드맵
 
-- [ ] HWP 표 파싱 정확도 개선 (병합 셀 대응)
+- [x] HWP 명세서 파싱 (`hwplib` 기반, 구형 바이너리 `.hwp`)
 - [x] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
 - [x] 다건 API 배치 변환 CLI 옵션
+- [x] 생성 코드 패키지 지정 옵션(`--package`), 응답 포맷 지정(`--format`)
+- [ ] HWP 표 파싱 정확도 개선 (병합 셀 대응)
+- [ ] HWPX(신형식) 파싱 지원
 - [ ] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
 
 ## 라이선스
