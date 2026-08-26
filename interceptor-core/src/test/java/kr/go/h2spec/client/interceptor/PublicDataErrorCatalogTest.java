@@ -48,6 +48,13 @@ class PublicDataErrorCatalogTest {
     }
 
     @Test
+    void 같은_코드의_다른_에러명_표기도_찾는다() {
+        // 문서는 SERVICETIME_OUT, 실제 응답은 SERVICETIMEOUT_ERROR로 적는다
+        assertEquals("05", PublicDataErrorCatalog.findByMessage("SERVICETIMEOUT_ERROR").orElseThrow().code());
+        assertEquals("05", PublicDataErrorCatalog.findByMessage("SERVICETIME_OUT").orElseThrow().code());
+    }
+
+    @Test
     void 모르는_코드는_비어있다() {
         assertTrue(PublicDataErrorCatalog.find("7777").isEmpty());
         assertTrue(PublicDataErrorCatalog.find(null).isEmpty());
