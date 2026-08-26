@@ -97,6 +97,18 @@ class IrAssemblerTest {
     }
 
     @Test
+    void 카디널리티_구분의_컨테이너_행은_응답필드에서_제외한다() {
+        // items 행(항목구분 "0..n")은 하위 표를 감싸는 컨테이너일 뿐 실제 필드가 아니다
+        List<String> containerRow = List.of("items", "목록", "-", "0..n", "-", "목록");
+        List<String> dataRow = responseRow("stationName", "측정소명", "종로", "측정소 이름");
+
+        JsonNode fields = assemble(List.of(), List.of(containerRow, dataRow)).get("api").get("responseFields");
+
+        assertEquals(1, fields.size(), "컨테이너 행은 데이터 행이 아니므로 응답필드에 포함되면 안 된다");
+        assertEquals("response.body.items.item[].stationName", fields.get(0).get("path").asText());
+    }
+
+    @Test
     void 포맷_파라미터를_요청파라미터에서_지우지_않는다() {
         // IR은 문서를 그대로 표현한다. 감추는 것은 생성기 몫이다
         JsonNode param = param(requestRow("returnType", "데이터 표출방식", "json", "xml 또는 json"), "returnType");

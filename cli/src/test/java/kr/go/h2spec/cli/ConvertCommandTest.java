@@ -59,6 +59,35 @@ class ConvertCommandTest {
     }
 
     @Test
+    void package_옵션이_생성_패키지를_덮어쓴다() throws Exception {
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", irPath().toString(), "--output", tempDir.toString(),
+                "--package", "com.example.publicdata");
+
+        assertEquals(0, exit);
+        // apiId(RTMSDataSvcAptTradeDev)를 소문자화한 하위 패키지가 자동으로 붙는다
+        assertTrue(Files.exists(tempDir.resolve(
+                "com/example/publicdata/rtmsdatasvcapttradedev/dto/RTMSDataSvcAptTradeDevResponse.java")));
+        assertTrue(Files.exists(tempDir.resolve(
+                "com/example/publicdata/rtmsdatasvcapttradedev/RTMSDataSvcAptTradeDevClient.java")));
+        assertFalse(Files.exists(tempDir.resolve("kr/go/h2spec/client/landmolit")));
+    }
+
+    @Test
+    void package_옵션이_DOCX_변환에도_적용되고_오퍼레이션별로_하위_패키지가_나뉜다() throws Exception {
+        Path docx = Path.of(getClass().getResource("/docs/msrstn-info.docx").toURI());
+
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", docx.toString(), "--output", tempDir.toString(),
+                "--package", "com.example.publicdata");
+
+        assertEquals(0, exit);
+        // 측정소정보 문서의 오퍼레이션(측정소 목록 / TM 기준좌표 / 근접측정소 목록)이 각자 하위 패키지로 분리된다
+        assertTrue(Files.exists(tempDir.resolve(
+                "com/example/publicdata/msrstnlist/MsrstnListClient.java")));
+    }
+
+    @Test
     void format_옵션에_잘못된_값을_주면_한국어_메시지로_실패한다() throws Exception {
         StringWriter err = new StringWriter();
         CommandLine cli = new CommandLine(new H2SpecCli());

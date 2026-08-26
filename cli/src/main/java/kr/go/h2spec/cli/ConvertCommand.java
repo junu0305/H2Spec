@@ -3,6 +3,7 @@ package kr.go.h2spec.cli;
 import kr.go.h2spec.generator.CodeGenerator;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.ErrorSpec;
+import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.parser.DocxSpecParser;
@@ -46,6 +47,10 @@ public class ConvertCommand implements Callable<Integer> {
 
     @Option(names = "--format", description = "응답 포맷 xml 또는 json (문서에서 판별한 값을 덮어씀)")
     private String format;
+
+    @Option(names = "--package", description = "생성 코드의 기준 패키지 (IR의 generatorHints.targetPackage를 덮어씀). "
+            + "오퍼레이션별로 apiId를 소문자화한 하위 패키지가 자동으로 붙는다 (예: com.example.publicdata → com.example.publicdata.msrstnlist)")
+    private String targetPackage;
 
     @Override
     public Integer call() {
@@ -98,6 +103,9 @@ public class ConvertCommand implements Callable<Integer> {
         if (format != null) {
             ir = withResponseFormat(ir, format.toUpperCase(Locale.ROOT));
         }
+        if (targetPackage != null) {
+            ir = withTargetPackage(ir, targetPackage);
+        }
         List<Path> written = new CodeGenerator().generate(ir, output);
         written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
     }
@@ -118,6 +126,11 @@ public class ConvertCommand implements Callable<Integer> {
                         api.endpoint(), api.httpMethod(), api.responseFormat(),
                         api.requestParameters(), api.responseFields(), new ErrorSpec(code)),
                 ir.generatorHints());
+    }
+
+    private IrSpec withTargetPackage(IrSpec ir, String basePackage) {
+        String subPackage = ir.api().apiId().toLowerCase(Locale.ROOT);
+        return new IrSpec(ir.api(), new GeneratorHints(basePackage + "." + subPackage));
     }
 
     private void err(String message) {
