@@ -1,6 +1,8 @@
 package kr.go.h2spec.client.interceptor;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.reactive.function.client.ClientRequest;
@@ -21,6 +23,27 @@ class PublicDataErrorFilterTest {
         ClientResponse response = apply("{\"resultCode\":\"00\",\"resultMsg\":\"OK\"}");
 
         assertEquals("{\"resultCode\":\"00\",\"resultMsg\":\"OK\"}", response.bodyToMono(String.class).block());
+    }
+
+    @Test
+    void 큰_응답도_코덱_메모리_한도와_무관하게_처리한다() {
+        String body = "x".repeat(400 * 1024);
+
+        ClientResponse response = apply(body);
+
+        byte[] actual = DataBufferUtils.join(response.bodyToFlux(DataBuffer.class), Integer.MAX_VALUE)
+                .map(buffer -> {
+                    try {
+                        byte[] bytes = new byte[buffer.readableByteCount()];
+                        buffer.read(bytes);
+                        return bytes;
+                    } finally {
+                        DataBufferUtils.release(buffer);
+                    }
+                })
+                .block();
+
+        assertArrayEquals(body.getBytes(java.nio.charset.StandardCharsets.UTF_8), actual);
     }
 
     @Test

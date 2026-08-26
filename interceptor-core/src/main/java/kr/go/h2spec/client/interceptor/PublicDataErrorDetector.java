@@ -18,6 +18,7 @@ final class PublicDataErrorDetector {
             "SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "INVALID_REQUEST_PARAMETER_ERROR", "NO_OPENAPI_SERVICE_ERROR",
             "SERVICE_ACCESS_DENIED_ERROR", "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "DEADLINE_HAS_EXPIRED_ERROR",
             "UNKNOWN_ERROR", "HTTP ROUTING ERROR", "SERVICE ERROR", "잘못된 요청", "인증키가 유효하지");
+    /** 결과코드 후보는 응답 메타데이터 영역까지만 탐색하고, 데이터 배열 내부는 내려가지 않는다. */
     private static final int MAX_SEARCH_DEPTH = 3;
 
     private final String successCode;

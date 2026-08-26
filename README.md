@@ -132,11 +132,14 @@ restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
 > 후속 메시지 컨버터가 빈 스트림을 읽게 되므로 반드시 함께 사용해야 합니다.
 
 WebClient에는 `ExchangeFilterFunction` 구현체를 붙일 수 있습니다. 필터가 읽은 응답 바디는
-downstream에서 다시 읽을 수 있도록 복원됩니다.
+downstream에서 다시 읽을 수 있도록 복원됩니다. 필터 자체는 기본 256KB 코덱 제한을
+사용하지 않지만, 이후 `bodyToMono(String.class)` 또는 DTO 디코딩을 할 때는 WebFlux
+코덱의 기본 메모리 제한이 적용되므로 큰 응답에는 제한을 늘려야 합니다.
 
 ```java
 WebClient webClient = WebClient.builder()
     .filter(new PublicDataErrorFilter("00"))
+    .codecs(c -> c.defaultCodecs().maxInMemorySize(5 * 1024 * 1024))
     .build();
 ```
 
