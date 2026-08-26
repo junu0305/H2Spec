@@ -45,7 +45,7 @@ public class ClientEmitter {
         sb.append("\n");
         appendApiMethod(sb, ir, params, responseClassName, isXml);
         sb.append("\n");
-        appendEncodeHelper(sb);
+        appendEncodeHelper(sb, hasPathParameter(ir));
         sb.append("}\n");
         return sb.toString();
     }
@@ -214,7 +214,7 @@ public class ClientEmitter {
             if ("path".equals(p.in())) {
                 String varName = JavaNames.camel(p.name());
                 sb.append(indent2).append("url = new StringBuilder(url.toString().replace(\"{")
-                  .append(p.name()).append("}\", encode(String.valueOf(").append(varName)
+                  .append(p.name()).append("}\", encodePath(String.valueOf(").append(varName)
                   .append("))));\n");
                 continue;
             }
@@ -243,11 +243,23 @@ public class ClientEmitter {
         sb.append(INDENT).append("}\n");
     }
 
-    private void appendEncodeHelper(StringBuilder sb) {
+    private boolean hasPathParameter(IrSpec ir) {
+        return ir.api().requestParameters().stream().anyMatch(p -> "path".equals(p.in()));
+    }
+
+    private void appendEncodeHelper(StringBuilder sb, boolean hasPathParameter) {
         String indent2 = INDENT.repeat(2);
         sb.append(INDENT).append("private static String encode(String value) {\n");
         sb.append(indent2).append("return URLEncoder.encode(value, StandardCharsets.UTF_8);\n");
         sb.append(INDENT).append("}\n");
+        if (hasPathParameter) {
+            sb.append("\n");
+            sb.append(INDENT)
+              .append("/** 경로 세그먼트용. URLEncoder는 공백을 +로 바꾸지만 경로에서 +는 글자 그대로다 */\n");
+            sb.append(INDENT).append("private static String encodePath(String value) {\n");
+            sb.append(indent2).append("return encode(value).replace(\"+\", \"%20\");\n");
+            sb.append(INDENT).append("}\n");
+        }
     }
 
     private String javaType(String type) {
