@@ -171,6 +171,18 @@ WebClient webClient = WebClient.builder()
     .build();
 ```
 
+### 에러코드 사전
+
+예외 메시지에는 결과코드의 뜻과 조치 안내가 함께 붙습니다.
+
+```
+[H2Spec] 공공데이터 API 응답 오류 감지 (HTTP 403 이지만 실제로는 실패) - uri=...&serviceKey=****,
+resultCode=30, resultMsg=SERVICE_KEY_IS_NOT_REGISTERED_ERROR | 등록되지 않은 서비스키
+| 조치: 인증키를 확인한다. Encoding/Decoding 키를 바꿔 넣었거나, 신청 직후라 아직 반영되지 않은 경우가 많다.
+```
+
+사전에 없는 코드를 만났다면 항목을 추가해 주세요. 형식과 등재 기준은 [docs/error-codes.md](./docs/error-codes.md)에 있습니다.
+
 ### 빌드와 테스트
 
 빌드에는 JDK 17 이상이 필요합니다. Gradle 실행에 쓰는 JDK와 무관하게 컴파일은 toolchain 설정에 따라
@@ -248,7 +260,7 @@ main              ← 최종 병합 (PR 필수)
 - [x] 생성 코드 패키지 지정 옵션(`--package`), 응답 포맷 지정(`--format`)
 - [x] HWP 표 파싱 정확도 개선 (머리행 기준 열 매핑, 병합 셀 대응)
 - [x] HWPX(신형식, OWPML) 파싱 지원 (`hwpxlib` 기반)
-- [ ] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
+- [x] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
 
 ## 라이선스
 

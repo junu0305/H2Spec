@@ -67,6 +67,32 @@ class PublicDataErrorInterceptorTest {
     }
 
     @Test
+    void 실제_인증실패_응답에_사전의_조치_안내가_붙는다() {
+        // 잘못된 인증키로 실제 호출해 받은 응답 원문 (HTTP 403, returnReasonCode 30)
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <OpenAPI_ServiceResponse>
+                <cmmMsgHeader>
+                  <errMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</errMsg>
+                  <returnAuthMsg>등록되지 않은 서비스키</returnAuthMsg>
+                  <returnReasonCode>30</returnReasonCode>
+                </cmmMsgHeader>
+                </OpenAPI_ServiceResponse>"""));
+
+        assertEquals("30", e.getResultCode());
+        assertTrue(e.getMessage().contains("조치: 인증키를 확인한다"), e.getMessage());
+    }
+
+    @Test
+    void 결과코드가_없어도_에러명으로_조치_안내를_찾는다() {
+        PublicDataApiException e = assertThrows(PublicDataApiException.class,
+                () -> intercept("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"));
+
+        assertNull(e.getResultCode());
+        assertTrue(e.getMessage().contains("일일 트래픽을 넘겼다"), e.getMessage());
+    }
+
+    @Test
     void 정상_JSON_응답은_그대로_통과한다() throws IOException {
         assertDoesNotThrow(() -> intercept("""
                 {"response":{"header":{"resultCode":"00","resultMsg":"NORMAL SERVICE."},"body":{"totalCount":1}}}"""));

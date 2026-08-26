@@ -9,16 +9,34 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 /** 공공데이터 응답 바디에서 성공/실패 여부와 오류 정보를 판정한다. */
 final class PublicDataErrorDetector {
     private static final List<String> RESULT_CODE_KEYS = List.of("resultCode", "RESULT_CODE", "returnReasonCode", "errorCode", "ERROR_CODE");
     private static final List<String> RESULT_MSG_KEYS = List.of("resultMsg", "RESULT_MSG", "returnAuthMsg", "errorMsg", "ERROR_MSG");
-    private static final List<String> ERROR_KEYWORDS = List.of(
-            "SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "INVALID_REQUEST_PARAMETER_ERROR", "NO_OPENAPI_SERVICE_ERROR",
-            "SERVICE_ACCESS_DENIED_ERROR", "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "DEADLINE_HAS_EXPIRED_ERROR",
-            "UNKNOWN_ERROR", "HTTP ROUTING ERROR", "SERVICE ERROR", "잘못된 요청", "인증키가 유효하지");
+    /** 사전에 없는, 결과코드가 딸리지 않는 오류 표현들. 나머지 키워드는 사전에서 가져온다. */
+    private static final List<String> EXTRA_ERROR_KEYWORDS =
+            List.of("HTTP ROUTING ERROR", "SERVICE ERROR", "잘못된 요청", "인증키가 유효하지");
+
+    /**
+     * 결과코드가 없는 응답을 판정할 키워드. 사전({@link PublicDataErrorCatalog})의 에러명을 그대로 쓰므로
+     * 사전에 항목을 추가하면 탐지 범위도 함께 넓어진다.
+     */
+    private static final List<String> ERROR_KEYWORDS = errorKeywords();
+
+    private static List<String> errorKeywords() {
+        List<String> keywords = new ArrayList<>();
+        for (PublicDataErrorCatalog.ErrorCode entry : PublicDataErrorCatalog.entries()) {
+            keywords.add(entry.name());
+            keywords.addAll(entry.nameAliases());
+        }
+        keywords.addAll(EXTRA_ERROR_KEYWORDS);
+        // 긴 이름부터 맞춰야 짧은 이름이 부분 문자열로 먼저 걸리지 않는다
+        keywords.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        return List.copyOf(keywords);
+    }
     /** 결과코드 후보는 응답 메타데이터 영역까지만 탐색하고, 데이터 배열 내부는 내려가지 않는다. */
     private static final int MAX_SEARCH_DEPTH = 3;
 
@@ -50,8 +68,14 @@ final class PublicDataErrorDetector {
 
     DetectionResult detect(String content) {
         ResultInfo result = content.startsWith("<") ? parseXml(content) : parseJson(content);
-        boolean failure = result.code != null ? !successCode.equals(result.code) : containsErrorKeyword(content);
-        return new DetectionResult(failure, result.code, result.message);
+        if (result.code != null) {
+            return new DetectionResult(!successCode.equals(result.code), result.code, result.message);
+        }
+        // 결과코드가 없으면 본문의 에러 키워드로 판정한다. 어떤 키워드가 걸렸는지도
+        // 남겨야 호출자가 원인을 알 수 있다.
+        String keyword = matchedErrorKeyword(content);
+        String message = result.message != null ? result.message : keyword;
+        return new DetectionResult(keyword != null, null, message);
     }
 
     private ResultInfo parseXml(String content) {
@@ -105,9 +129,12 @@ final class PublicDataErrorDetector {
         return null;
     }
 
-    private boolean containsErrorKeyword(String content) {
+    private String matchedErrorKeyword(String content) {
         String upper = content.toUpperCase();
-        return ERROR_KEYWORDS.stream().anyMatch(keyword -> upper.contains(keyword.toUpperCase()));
+        return ERROR_KEYWORDS.stream()
+                .filter(keyword -> upper.contains(keyword.toUpperCase()))
+                .findFirst()
+                .orElse(null);
     }
 
     static final class DetectionResult {
