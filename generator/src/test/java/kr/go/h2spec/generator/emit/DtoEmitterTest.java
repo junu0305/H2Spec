@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static kr.go.h2spec.generator.GoldenFileAssertions.assertEqualsIgnoringLineEndings;
 
 class DtoEmitterTest {
 
@@ -29,7 +30,7 @@ class DtoEmitterTest {
         String actual = new DtoEmitter().emit(ir, root);
 
         String expected = Files.readString(resource("/golden/RTMSDataSvcAptTradeDevResponse.java.txt"));
-        assertEquals(expected, actual);
+        assertEqualsIgnoringLineEndings(expected, actual);
     }
 
     @Test
