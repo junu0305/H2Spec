@@ -15,3 +15,10 @@ application {
     // installDist 산출물이 build/install/h2spec/bin/h2spec 이 되도록
     applicationName = 'h2spec'
 }
+
+// --version 이 읽는 값. 배포판 jar에만 들어간다.
+tasks.named('jar') {
+    manifest {
+        attributes('Implementation-Version': project.version)
+    }
+}
