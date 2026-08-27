@@ -2,6 +2,8 @@ plugins {
     id 'java-library'
 }
 
+description = '공공데이터포털 표준 기술문서(DOCX/HWP/HWPX)를 중간 규격(IR) JSON으로 변환'
+
 dependencies {
     implementation 'org.apache.poi:poi-ooxml:5.2.5'
     // POI가 log4j2-api를 쓰므로 구현체가 없으면 StatusLogger 에러가 출력됨

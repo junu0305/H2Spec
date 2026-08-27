@@ -2,6 +2,8 @@ plugins {
     id 'application'
 }
 
+description = '명세 문서를 OpenAPI 스펙과 Spring 클라이언트로 변환하는 커맨드라인 도구'
+
 dependencies {
     implementation project(':generator')
     implementation project(':parser')

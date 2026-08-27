@@ -2,6 +2,8 @@ plugins {
     id 'application'
 }
 
+description = 'IR JSON에서 OpenAPI 3.0 스펙과 Spring 클라이언트/DTO 코드를 생성'
+
 dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
 
