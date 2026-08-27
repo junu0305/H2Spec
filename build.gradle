@@ -6,7 +6,8 @@ subprojects {
     apply plugin: 'maven-publish'
 
     group = 'kr.go.h2spec'
-    version = '0.1.0-SNAPSHOT'
+    // JitPack은 태그 이름을 -Pversion 으로 넘긴다. 넘어온 값이 있으면 그것을 쓴다.
+    version = rootProject.version == Project.DEFAULT_VERSION ? '0.1.0-SNAPSHOT' : rootProject.version
 
     java {
         toolchain {
