@@ -185,7 +185,25 @@ resultCode=30, resultMsg=SERVICE_KEY_IS_NOT_REGISTERED_ERROR | 등록되지 않�
 
 ### 내 프로젝트에서 쓰기
 
-생성된 클라이언트는 `interceptor-core`를 런타임 의존성으로 요구합니다.
+생성된 클라이언트는 `interceptor-core`를 의존성으로 요구합니다. JitPack에서 받습니다.
+
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.1.0'
+
+    // XML 응답 API일 때만 추가합니다. 생성된 DTO가 @JacksonXmlProperty를 씁니다.
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
+}
+```
+
+`spring-web`과 `jackson-databind`는 `interceptor-core`가 `api`로 노출하므로 따로 선언하지 않아도 됩니다.
+
+로컬에서 고쳐가며 쓰려면 `~/.m2`에 올립니다.
 
 ```bash
 ./gradlew publishToMavenLocal
@@ -196,9 +214,6 @@ repositories { mavenLocal(); mavenCentral() }
 
 dependencies {
     implementation 'kr.go.h2spec:interceptor-core:0.1.0-SNAPSHOT'
-
-    // XML 응답 API일 때만 추가합니다. 생성된 DTO가 @JacksonXmlProperty를 씁니다.
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
 }
 ```
 
