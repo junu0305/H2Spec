@@ -183,6 +183,62 @@ resultCode=30, resultMsg=SERVICE_KEY_IS_NOT_REGISTERED_ERROR | 등록되지 않�
 
 사전에 없는 코드를 만났다면 항목을 추가해 주세요. 형식과 등재 기준은 [docs/error-codes.md](./docs/error-codes.md)에 있습니다.
 
+### 내 프로젝트에서 쓰기
+
+생성된 클라이언트는 `interceptor-core`를 런타임 의존성으로 요구합니다.
+
+```bash
+./gradlew publishToMavenLocal
+```
+
+```groovy
+repositories { mavenLocal(); mavenCentral() }
+
+dependencies {
+    implementation 'kr.go.h2spec:interceptor-core:0.1.0-SNAPSHOT'
+
+    // XML 응답 API일 때만 추가합니다. 생성된 DTO가 @JacksonXmlProperty를 씁니다.
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
+}
+```
+
+원격 저장소에 올리려면 URL과 인증 정보를 넘깁니다.
+
+```bash
+./gradlew publish \
+    -Ph2specRepoUrl=https://... \
+    -Ph2specRepoUser=... \
+    -Ph2specRepoPassword=...
+```
+
+게시하지 않고 소스에서 바로 쓰려면 composite build로 끌어옵니다.
+
+```groovy
+// settings.gradle
+includeBuild('/path/to/H2Spec') {
+    name = 'h2spec'   // 디렉터리명이 H2Spec이라 못 박아야 합니다
+}
+```
+
+변환을 빌드 단계로 넣으면 명세서가 바뀔 때만 다시 생성됩니다.
+
+```groovy
+def generatedDir = layout.buildDirectory.dir('generated/h2spec')
+
+def generateClients = tasks.register('generateClients', Exec) {
+    dependsOn gradle.includedBuild('h2spec').task(':cli:installDist')
+    inputs.dir 'specs'
+    outputs.dir generatedDir
+    commandLine '/path/to/H2Spec/cli/build/install/h2spec/bin/h2spec',
+            'convert', '--input', file('specs').absolutePath,
+            '--output', generatedDir.get().asFile.absolutePath,
+            '--package', 'com.example.publicdata'
+}
+
+sourceSets.main.java.srcDir generatedDir
+tasks.named('compileJava') { dependsOn generateClients }
+```
+
 ### 빌드와 테스트
 
 빌드에는 JDK 17 이상이 필요합니다. Gradle 실행에 쓰는 JDK와 무관하게 컴파일은 toolchain 설정에 따라

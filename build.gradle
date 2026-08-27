@@ -1,5 +1,9 @@
+// 게시 메타데이터에서 공통으로 쓰는 저장소 주소
+ext.PROJECT_URL = 'https://github.com/junu0305/H2Spec'
+
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'maven-publish'
 
     group = 'kr.go.h2spec'
     version = '0.1.0-SNAPSHOT'
@@ -8,6 +12,9 @@ subprojects {
         toolchain {
             languageVersion = JavaLanguageVersion.of(17)
         }
+        // 소비자가 IDE에서 원본을 보고 디버깅할 수 있도록 함께 올린다
+        withSourcesJar()
+        withJavadocJar()
     }
 
     repositories {
@@ -22,5 +29,54 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+
+                pom {
+                    name = "H2Spec ${project.name}"
+                    // 하위 프로젝트의 build.gradle이 아직 평가되기 전이라 지연 조회한다
+                    description = provider { project.description }
+                    url = PROJECT_URL
+                    licenses {
+                        license {
+                            name = 'MIT License'
+                            url = "$PROJECT_URL/blob/main/LICENSE"
+                        }
+                    }
+                    developers {
+                        developer {
+                            id = 'h2spec'
+                            name = 'H2Spec Contributors'
+                            url = PROJECT_URL
+                        }
+                    }
+                    scm {
+                        url = PROJECT_URL
+                        connection = "scm:git:${PROJECT_URL}.git"
+                        developerConnection = "scm:git:${PROJECT_URL}.git"
+                    }
+                }
+            }
+        }
+
+        repositories {
+            // 기본은 로컬 저장소(~/.m2)다. publishToMavenLocal 로 올린다.
+            // 원격 저장소는 아래 세 속성을 넘길 때만 추가된다.
+            //   ./gradlew publish -Ph2specRepoUrl=... -Ph2specRepoUser=... -Ph2specRepoPassword=...
+            if (project.hasProperty('h2specRepoUrl')) {
+                maven {
+                    name = 'remote'
+                    url = project.property('h2specRepoUrl')
+                    credentials {
+                        username = project.findProperty('h2specRepoUser')
+                        password = project.findProperty('h2specRepoPassword')
+                    }
+                }
+            }
+        }
     }
 }
