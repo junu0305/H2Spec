@@ -183,6 +183,56 @@ resultCode=30, resultMsg=SERVICE_KEY_IS_NOT_REGISTERED_ERROR | 등록되지 않�
 
 사전에 없는 코드를 만났다면 항목을 추가해 주세요. 형식과 등재 기준은 [docs/error-codes.md](./docs/error-codes.md)에 있습니다.
 
+### 빠른 시작
+
+저장소를 클론하지 않고 씁니다. Java 17 이상이 필요합니다.
+
+**1. 변환 도구 받기**
+
+```bash
+curl -sL -o h2spec.zip https://github.com/junu0305/H2Spec/releases/download/v0.1.0/h2spec-v0.1.0.zip
+unzip h2spec.zip
+```
+
+**2. 명세서 변환**
+
+```bash
+./h2spec-v0.1.0/bin/h2spec convert \
+    --input 기술문서.docx \
+    --output generated \
+    --package com.mycorp.publicdata
+```
+
+`generated/` 아래에 클라이언트와 DTO가 패키지 경로대로, OpenAPI 스펙이 `openapi/`에 나옵니다.
+
+**3. 프로젝트에 붙이기**
+
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.1.0'
+
+    // XML 응답 API일 때만 추가합니다
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
+}
+
+sourceSets.main.java.srcDir 'generated'
+```
+
+**4. 호출**
+
+```java
+MsrstnListClient client = new MsrstnListClient(serviceKey);
+MsrstnListResponse res = client.getMsrstnList(2L, 1L, null, null);
+```
+
+인증키는 생성자에서 받으므로 메서드마다 넘기지 않습니다.
+HTTP 200으로 위장한 실패 응답은 `PublicDataApiException`으로 올라옵니다.
+
 ### 내 프로젝트에서 쓰기
 
 생성된 클라이언트는 `interceptor-core`를 의존성으로 요구합니다. JitPack에서 받습니다.
