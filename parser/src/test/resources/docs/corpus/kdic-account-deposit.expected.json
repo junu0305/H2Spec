@@ -1,0 +1,40 @@
+{
+  "source": "예금보험공사_오픈API_활용자가이드_영업정지저축은행_계좌별_수신_신규현황_조회_서비스_V1.0.hwp",
+  "organization": "예금보험공사",
+  "operations": [
+    {
+      "url": "http://apis.data.go.kr/B190017/service/GetAcnutAcctoRecptnNewSttusService/getAcnutAcctoRecptnNewSttus",
+      "request": [
+        "numOfRows",
+        "pageNo",
+        "resultType",
+        "serviceKey",
+        "svbkNm",
+        "svbkLctplcNm",
+        "newDt",
+        "dpsAccno",
+        "custDscdNm",
+        "accSbjcNm",
+        "custLctplcNm"
+      ],
+      "response": [
+        "resultCode",
+        "resultMsg",
+        "numOfRows",
+        "pageNo",
+        "totalCount",
+        "num",
+        "svbkNm",
+        "newDt",
+        "dpsAccno",
+        "custDscdNm",
+        "newDpsamt",
+        "dpsIrt",
+        "accSbjcNm",
+        "dpsTerm",
+        "custLctplcNm",
+        "svbkLctplcNm"
+      ]
+    }
+  ]
+}

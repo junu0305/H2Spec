@@ -1,0 +1,29 @@
+{
+  "source": "OpenAPI활용가이드(대중교통_신호연계_정보_조회_서비스)-V1.0.hwp",
+  "organization": "제주특별자치도",
+  "operations": [
+    {
+      "url": "http://apis.data.go.kr/6500000/trafficLightService4/trafficLightList4",
+      "request": [
+        "serviceKey",
+        "page",
+        "countPerPage",
+        "type"
+      ],
+      "response": [
+        "resultMsg",
+        "resultCode",
+        "countPerPage",
+        "page",
+        "ecallId",
+        "gnssLat",
+        "gnssLon",
+        "gnssSpd",
+        "gnssTim",
+        "no",
+        "routeNo",
+        "sensorCd"
+      ]
+    }
+  ]
+}

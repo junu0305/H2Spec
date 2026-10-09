@@ -1,0 +1,34 @@
+{
+  "source": "와이파이읍면동별와이파이사용량API.hwp",
+  "organization": "제주특별자치도",
+  "operations": [
+    {
+      "url": "https://open.jejudatahub.net/api/proxy/7tttaDaD5ataaba75a57ttDtaDb6tb7t/{your_appkey}",
+      "request": [
+        "your_appkey",
+        "number",
+        "limit",
+        "searchDate",
+        "city",
+        "emd",
+        "category",
+        "gender",
+        "ageGroup"
+      ],
+      "response": [
+        "totCnt",
+        "hasMore",
+        "baseDate",
+        "uploadBytes",
+        "downloadBytes",
+        "sessionTime",
+        "userCount",
+        "city",
+        "emd",
+        "category",
+        "gender",
+        "ageGroup"
+      ]
+    }
+  ]
+}

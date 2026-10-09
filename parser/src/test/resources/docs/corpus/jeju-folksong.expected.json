@@ -1,0 +1,30 @@
+{
+  "source": "OpenAPI활용가이드(제주도청_C04_제주민요정보)_v1.1.hwp",
+  "organization": "제주특별자치도",
+  "operations": [
+    {
+      "url": "https://www.jeju.go.kr/rest/JejuFolksongService/getJejuFolksongList",
+      "request": [
+        "startPage",
+        "pageSize",
+        "authApiKey"
+      ],
+      "response": [
+        "resultCode",
+        "resultMsg",
+        "pageIndex",
+        "pageSize",
+        "page",
+        "rows",
+        "type",
+        "name",
+        "minute",
+        "second",
+        "sound",
+        "soundUrl",
+        "contents",
+        "lyrics"
+      ]
+    }
+  ]
+}

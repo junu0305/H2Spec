@@ -1,0 +1,25 @@
+{
+  "source": "3._한국산업안전보건공단_방호장치_자율안전확인신고서_진위확인_조회서비스_오픈API_활용가이드.hwp",
+  "organization": "한국산업안전보건공단",
+  "operations": [
+    {
+      "url": "https://portal.kosha.or.kr/openapi/v1/koshagw",
+      "request": [
+        "serviceKey",
+        "callApiId",
+        "certNo",
+        "numOfRows",
+        "pageNo"
+      ],
+      "response": [
+        "resultCode",
+        "resultMsg",
+        "crtdcIssuYmd",
+        "docAuthYn",
+        "totalCount",
+        "numOfRows",
+        "pageNo"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "source": "OpenAPI_활용가이드(응급안전안심_응급안전안심_서비스_운영기관정보).hwp",
+  "organization": "보건복지부",
+  "operations": [
+    {
+      "url": "http://apis.data.go.kr/1352000/ODMS_EMG_02/callEmg02Api",
+      "request": [
+        "serviceKey",
+        "numOfRows",
+        "pageNo",
+        "apiType",
+        "sido",
+        "sigungu"
+      ],
+      "response": [
+        "resultCode",
+        "resultMsg",
+        "numOfRows",
+        "pageNo",
+        "totalCount",
+        "sido",
+        "sigungu",
+        "organNm",
+        "chrNm",
+        "organTel",
+        "organFax",
+        "organZip",
+        "organAddr",
+        "organHomepage",
+        "organEmail",
+        "estbDt",
+        "qobnDt",
+        "upperOrgan",
+        "bzType",
+        "organType",
+        "organCenterYn",
+        "bsnsRegNo",
+        "fcltyAuthNo",
+        "careOrgNo",
+        "corpNm"
+      ]
+    }
+  ]
+}
