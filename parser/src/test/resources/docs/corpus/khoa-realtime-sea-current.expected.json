@@ -1,0 +1,30 @@
+{
+  "source": "오픈API_활용가이드_준실시간_해류도.hwp",
+  "organization": "해양수산부 국립해양조사원",
+  "operations": [
+    {
+      "url": "https://apis.data.go.kr/1192136/realTimeSeaCurrent/GetRealTimeSeaCurrentApiService",
+      "request": [
+        "serviceKey",
+        "type",
+        "sea",
+        "reqDate",
+        "pageNo",
+        "numOfRows",
+        "include",
+        "exclude"
+      ],
+      "response": [
+        "resultCode",
+        "resultMsg",
+        "totalCount",
+        "pageNo",
+        "numOfRows",
+        "type",
+        "ocSeNm",
+        "obsrvnYmd",
+        "urlAddr"
+      ]
+    }
+  ]
+}

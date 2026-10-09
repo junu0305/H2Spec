@@ -115,11 +115,17 @@ public class ConvertCommand implements Callable<Integer> {
         String fileName = file.getFileName().toString().toLowerCase(Locale.ROOT);
         try {
             if (fileName.endsWith(DOCX_EXTENSION)) {
-                convertDocument(new DocxSpecParser().parse(file), file);
+                DocxSpecParser parser = new DocxSpecParser();
+                convertDocument(parser.parse(file), file);
+                warnSkipped(parser.skipped(), file);
             } else if (fileName.endsWith(HWPX_EXTENSION)) {
-                convertDocument(new HwpxSpecParser().parse(file), file);
+                HwpxSpecParser parser = new HwpxSpecParser();
+                convertDocument(parser.parse(file), file);
+                warnSkipped(parser.skipped(), file);
             } else if (fileName.endsWith(HWP_EXTENSION)) {
-                convertDocument(new HwpSpecParser().parse(file), file);
+                HwpSpecParser parser = new HwpSpecParser();
+                convertDocument(parser.parse(file), file);
+                warnSkipped(parser.skipped(), file);
             } else {
                 generateFrom(file, file);
             }
@@ -158,6 +164,13 @@ public class ConvertCommand implements Callable<Integer> {
         }
         List<Path> written = new CodeGenerator().generate(ir, output);
         written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
+    }
+
+    /** 문서의 일부 오퍼레이션만 변환됐으면 빠진 오퍼레이션과 이유를 알린다. 성공으로 집계돼 놓치기 쉽다 */
+    private void warnSkipped(List<String> skipped, Path source) {
+        for (String reason : skipped) {
+            err("건너뛴 오퍼레이션 (" + source.getFileName() + "): " + reason);
+        }
     }
 
     /**

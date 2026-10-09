@@ -1,0 +1,34 @@
+{
+  "source": "OpenAPI활용가이드(개표소정보)_v3.10.hwpx",
+  "organization": "중앙선거관리위원회",
+  "operations": [
+    {
+      "url": "http://apis.data.go.kr/9760000/CountingSttnInfoInqireService/getCountingSttnInfoInqire",
+      "request": [
+        "serviceKey",
+        "pageNo",
+        "numOfRows",
+        "resultType",
+        "sgId",
+        "sdName",
+        "wiwName"
+      ],
+      "response": [
+        "resultCode",
+        "resultMsg",
+        "numOfRows",
+        "pageNo",
+        "totalCount",
+        "num",
+        "sgId",
+        "countingSttnName",
+        "sdName",
+        "wiwName",
+        "countingSttnSeq",
+        "placeName",
+        "placeAddr",
+        "placeFloor"
+      ]
+    }
+  ]
+}

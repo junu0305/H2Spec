@@ -250,6 +250,69 @@ class IrAssemblerTest {
         assertEquals(0, notes.size(), "확정한 필드에 노트가 남으면 검토 신호가 희석된다: " + notes);
     }
 
+    @Test
+    void 기관별_필수_표기를_필수로_읽는다() {
+        // 항목구분 1 외에 필수여부 열에 Y·O·○·필수를 적는 기관이 있다
+        for (String mark : List.of("1", "1..n", "Y", "O", "○", "필수", "필수(1)")) {
+            JsonNode param = param(List.of("q1", "검색어", "20", mark, "a", "검색어"), "q1");
+            assertTrue(param.get("required").asBoolean(), "필수 표기: " + mark);
+        }
+        for (String mark : List.of("0", "0..n", "N", "옵션", "선택", "")) {
+            JsonNode param = param(List.of("q1", "검색어", "20", mark, "a", "검색어"), "q1");
+            assertFalse(param.get("required").asBoolean(), "선택 표기: " + mark);
+        }
+    }
+
+    @Test
+    void 타입_열의_선언을_따른다() {
+        // 표준 열 뒤 일곱째 칸이 타입 열이다 (Name/Description/Type/Note 표)
+        assertEquals("string", typeOf("zipNo", "12345", "varchar(5)"), "문자 선언은 숫자 샘플이어도 문자열");
+        assertEquals("integer", typeOf("page", "1", "int"));
+        assertEquals("boolean", typeOf("hasMore", "true", "boolean"));
+        assertEquals("number", typeOf("lat", "37", "double"));
+        assertEquals("string", typeOf("grade", "03", "int"), "선행 0은 정수 선언이어도 지킨다");
+    }
+
+    @Test
+    void 컨테이너_행의_변형을_걸러낸다() {
+        List<List<String>> rows = List.of(
+                // 항목크기 칸에 자료형을 적은 컨테이너 (국립해양조사원)
+                List.of("items", "목록", "number", "0..n", "-", "정보 목록", ""),
+                // 컨테이너에도 크기를 적었지만 국문명이 없다 (국립환경과학원)
+                List.of("items", "", "4", "0..n", "", "", ""),
+                // 타입 열이 배열 (제주특별자치도청)
+                List.of("data", "목록", "", "O", "", "데이터 목록", "array"),
+                // 값 칸이 모두 빈 목록 래퍼 (농촌진흥청 국립농업과학원)
+                List.of("zone_Spot_List", "관측지점 목록", "-", "-", "-", "관측지점 목록", ""),
+                // 크기·샘플이 있는 반복 필드는 실제 필드다 (국민연금공단)
+                List.of("lsnDg1Cnt", "1급인원수", "10", "0..n", "3", "1급인원수", ""));
+
+        JsonNode fields = assemble(List.of(), rows).get("api").get("responseFields");
+
+        assertEquals(1, fields.size(), fields.toString());
+        assertEquals("response.body.items.item[].lsnDg1Cnt", fields.get(0).get("path").asText());
+    }
+
+    @Test
+    void 숫자로_시작하는_경로와_경로_변수에서_apiId와_path_파라미터를_만든다() {
+        JsonNode ir = new IrAssembler().assemble("t.hwp", "HWP",
+                Map.of(SpecBlockAssembler.ENDPOINT_URL_KEY, "https://gw.jejudatahub.net/api/proxy/2058570a/{your_appkey}"),
+                List.of(), List.of(responseRow("totCnt", "총 개수", "13", "총 개수"))).ir();
+
+        JsonNode api = ir.get("api");
+        assertEquals("Api2058570a", api.get("apiId").asText());
+        assertEquals("https://gw.jejudatahub.net/api/proxy", api.get("baseUrl").asText());
+        assertEquals("/2058570a/{your_appkey}", api.get("endpoint").asText());
+        JsonNode appKey = api.get("requestParameters").get(0);
+        assertEquals("your_appkey", appKey.get("name").asText());
+        assertEquals("path", appKey.get("in").asText());
+        assertTrue(appKey.get("required").asBoolean());
+    }
+
+    private String typeOf(String name, String sample, String declaredType) {
+        return param(List.of(name, name, "10", "0", sample, name, declaredType), name).get("type").asText();
+    }
+
     private String responseFormat(List<String> requestRow) {
         return assemble(List.of(requestRow), List.of()).get("api").get("responseFormat").asText();
     }

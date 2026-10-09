@@ -1,0 +1,35 @@
+{
+  "source": "OpenAPI_활용_매뉴얼_-_친환경_농업_우수사례.hwp",
+  "organization": "농촌진흥청",
+  "operations": [
+    {
+      "url": "http://api.nongsaro.go.kr/service/evrfrndFarmng/selectAreaInfoLst",
+      "request": [
+        "apiKey"
+      ],
+      "response": [
+        "code",
+        "codeNm"
+      ]
+    },
+    {
+      "url": "http://api.nongsaro.go.kr/service/evrfrndFarmng/evrfrndFarmngLst",
+      "request": [
+        "apiKey",
+        "sText",
+        "sAreaNm",
+        "pageNo",
+        "numOfRows"
+      ],
+      "response": [
+        "cntntsNo",
+        "cntntsSj",
+        "areaNm",
+        "rtnOrginlFileNm",
+        "rtnFileSn",
+        "rtnFileSeCode",
+        "linkUrl"
+      ]
+    }
+  ]
+}

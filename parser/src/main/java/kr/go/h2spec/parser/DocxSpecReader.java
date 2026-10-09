@@ -23,7 +23,7 @@ public class DocxSpecReader {
             List<Block> blocks = new ArrayList<>();
             for (IBodyElement element : doc.getBodyElements()) {
                 if (element instanceof XWPFParagraph paragraph) {
-                    String text = paragraph.getText().trim();
+                    String text = SpecLabels.cleanText(paragraph.getText());
                     if (!text.isEmpty()) {
                         blocks.add(new Block.Heading(text));
                     }
@@ -44,12 +44,27 @@ public class DocxSpecReader {
         return Math.max(1, properties.getGridSpan().getVal().intValue());
     }
 
+    /**
+     * 셀 안의 문단을 줄바꿈으로 잇는다. {@link XWPFTableCell#getText()}는 문단을 구분 없이 붙여
+     * "xml/json" + "default : xml"이 "xml/jsondefault : xml"이 된다.
+     */
+    private String cellText(XWPFTableCell cell) {
+        StringBuilder text = new StringBuilder();
+        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+            if (!text.isEmpty()) {
+                text.append('\n');
+            }
+            text.append(paragraph.getText());
+        }
+        return SpecLabels.cleanText(text.toString());
+    }
+
     private List<List<String>> readRows(XWPFTable table) {
         List<List<String>> rows = new ArrayList<>();
         for (XWPFTableRow row : table.getRows()) {
             List<String> cells = new ArrayList<>();
             for (XWPFTableCell cell : row.getTableCells()) {
-                cells.add(cell.getText().trim());
+                cells.add(cellText(cell));
                 // 가로 병합된 칸은 하나로만 나오므로 나머지 폭을 빈 칸으로 채워
                 // 다른 행과 열 위치를 맞춘다. 채우지 않으면 그 행만 열이 밀린다.
                 for (int i = 1; i < gridSpan(cell); i++) {
