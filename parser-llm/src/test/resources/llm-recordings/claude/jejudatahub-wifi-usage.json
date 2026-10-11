@@ -1,6 +1,7 @@
 {
-  "serviceName": "",
+  "serviceName": "읍면동별 와이파이 사용량 API",
   "provider": "",
+  "errorCodes": [],
   "operations": [
     {
       "operationName": "",
@@ -17,36 +18,225 @@
       "responseFormat": "JSON",
       "defaultResponseFormat": "JSON",
       "formatParameter": "",
-      "auth": {"kind": "PATH_KEY", "parameterName": "your_appkey"},
+      "auth": {
+        "kind": "PATH_KEY",
+        "parameterName": "your_appkey"
+      },
       "requestParameters": [
-        {"name": "your_appkey", "location": "PATH", "type": "STRING", "required": "REQUIRED",
-         "description": "프로젝트키", "example": "", "defaultValue": "", "common": false},
-        {"name": "number", "location": "QUERY", "type": "INTEGER", "required": "OPTIONAL",
-         "description": "페이지 번호", "example": "", "defaultValue": "1", "common": true},
-        {"name": "limit", "location": "QUERY", "type": "INTEGER", "required": "OPTIONAL",
-         "description": "페이지별 컨텐츠 수", "example": "", "defaultValue": "10", "common": true},
-        {"name": "searchDate", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
-         "description": "분석일(필수)", "example": "20190704", "defaultValue": "", "common": false}
+        {
+          "name": "your_appkey",
+          "location": "PATH",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "프로젝트키",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "number",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "OPTIONAL",
+          "description": "페이지 번호",
+          "example": "",
+          "defaultValue": "1",
+          "common": true
+        },
+        {
+          "name": "limit",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "OPTIONAL",
+          "description": "페이지별 컨텐츠 수",
+          "example": "",
+          "defaultValue": "10",
+          "common": true
+        },
+        {
+          "name": "searchDate",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "분석일(필수)",
+          "example": "20190704",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "city",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "UNKNOWN",
+          "description": "시군구",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "emd",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "UNKNOWN",
+          "description": "읍면동",
+          "example": "이호1동",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "category",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "UNKNOWN",
+          "description": "카테고리",
+          "example": "해변",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "gender",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "UNKNOWN",
+          "description": "성별",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "ageGroup",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "UNKNOWN",
+          "description": "연령대",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
       ],
       "responseStructure": "EXAMPLE",
       "responseExampleFormat": "JSON",
       "responseFields": [
-        {"path": "totCnt", "type": "INTEGER", "description": "요청 컨텐츠 총 개수",
-         "sample": "13", "pathSource": "RESPONSE_EXAMPLE", "common": true},
-        {"path": "hasMore", "type": "BOOLEAN", "description": "이후 페이지 데이터 유무",
-         "sample": "true", "pathSource": "RESPONSE_EXAMPLE", "common": true},
-        {"path": "data[].baseDate", "type": "STRING", "description": "",
-         "sample": "20190704", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "data[].uploadBytes", "type": "STRING", "description": "",
-         "sample": "46645463", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+        {
+          "path": "totCnt",
+          "type": "INTEGER",
+          "description": "요청 컨텐츠 총 개수",
+          "sample": "13",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": true
+        },
+        {
+          "path": "hasMore",
+          "type": "BOOLEAN",
+          "description": "이후 페이지 데이터 유무",
+          "sample": "true",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": true
+        },
+        {
+          "path": "data[].baseDate",
+          "type": "STRING",
+          "description": "",
+          "sample": "20190704",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].uploadBytes",
+          "type": "STRING",
+          "description": "",
+          "sample": "46645463",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].downloadBytes",
+          "type": "STRING",
+          "description": "",
+          "sample": "1163358166",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].sessionTime",
+          "type": "STRING",
+          "description": "",
+          "sample": "33128",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].userCount",
+          "type": "STRING",
+          "description": "",
+          "sample": "4",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].city",
+          "type": "STRING",
+          "description": "",
+          "sample": "제주시",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].emd",
+          "type": "STRING",
+          "description": "",
+          "sample": "이호1동",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].category",
+          "type": "STRING",
+          "description": "",
+          "sample": "해변",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].gender",
+          "type": "STRING",
+          "description": "",
+          "sample": "여",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "data[].ageGroup",
+          "type": "STRING",
+          "description": "",
+          "sample": "60",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
       ],
-      "resultCode": {"fieldName": "", "successCodes": []},
+      "resultCode": {
+        "fieldName": "",
+        "successCodes": []
+      },
       "errorCodes": [],
-      "evidence": ["P23", "P24", "T14", "T20", "T27", "T31"],
-      "uncertain": ["data 배열 원소의 필드는 설명 표가 없어 응답 예제의 키와 값 모양으로 정했다"],
-      "unsupported": ["인증키를 쿼리 serviceKey가 아니라 주소 경로({your_appkey})로 받는다",
-                      "응답 JSON의 최상위 키가 여럿이다 (totCnt, hasMore, data)"]
+      "evidence": [
+        "P21",
+        "P22",
+        "P24",
+        "P25",
+        "T27",
+        "T31",
+        "T14",
+        "T19",
+        "T20",
+        "P10"
+      ],
+      "uncertain": [],
+      "unsupported": [
+        "인증키를 URL 경로({your_appkey})로 받는다.",
+        "최상위 키가 여럿인 JSON 응답이다."
+      ]
     }
   ],
-  "documentNotes": ["문서에 제공 기관 이름이 없다"]
+  "documentNotes": []
 }

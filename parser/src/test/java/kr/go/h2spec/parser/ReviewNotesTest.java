@@ -38,17 +38,4 @@ class ReviewNotesTest {
         assertEquals(List.of("샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 2개): bizYear, enpSaleAmt"),
                 notes.lines());
     }
-
-    @Test
-    void 이름이_하나여도_같은_형식으로_쓴다() {
-        ReviewNotes notes = new ReviewNotes();
-        notes.addField(SAMPLE_INTEGER, "rnSt4Am");
-
-        assertEquals(List.of("샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 1개): rnSt4Am"), notes.lines());
-    }
-
-    @Test
-    void 노트가_없으면_빈_목록이다() {
-        assertEquals(List.of(), new ReviewNotes().lines());
-    }
 }

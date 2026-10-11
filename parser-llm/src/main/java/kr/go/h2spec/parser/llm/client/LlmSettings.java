@@ -4,6 +4,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * 어댑터를 만들 때 넘기는 설정 ({@link LlmProviderFactory#create}).
@@ -19,6 +20,8 @@ import java.util.Objects;
  *                       응답 전체에 걸리는 시간은 제한하지 않는다. thinking이 길면 응답이 몇 분씩 걸리기 때문이다
  * @param retryAttempts 다시 부르면 나을 수 있는 실패({@link LlmException.Kind#retryable()}) 뒤에 다시 부르는 최대 횟수. 0이면 한 번만 부른다
  * @param baseUrl API 주소(스킴·호스트와 경로 앞부분). null이면 회사 기본 주소다. 테스트가 가짜 서버를 가리킬 때 쓴다
+ * @param workspaceId 요청을 실행할 워크스페이스 ID. null이면 보내지 않는다. 한 워크스페이스에 묶이지 않은 키(여러 워크스페이스에서 쓰는
+ *                    개인 키·서비스 계정 키)는 요청마다 워크스페이스를 밝혀야 한다(Claude는 {@code anthropic-workspace-id} 머리)
  */
 public record LlmSettings(
         String model,
@@ -26,7 +29,8 @@ public record LlmSettings(
         String apiKey,
         Duration requestTimeout,
         int retryAttempts,
-        URI baseUrl) {
+        URI baseUrl,
+        String workspaceId) {
 
     /** 기본 대기 시간. 회사 SDK의 기본 타임아웃과 같은 10분이다. 정상 스트림은 ping 이벤트가 계속 와서 이만큼 멈추지 않는다 */
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofMinutes(10);
@@ -34,6 +38,8 @@ public record LlmSettings(
     public static final int DEFAULT_RETRY_ATTEMPTS = 3;
     /** {@link #toString()}에서 키 자리에 쓰는 글. 어댑터가 오류 글의 키를 가릴 때도 쓴다 */
     public static final String MASKED_API_KEY = "****";
+    /** 워크스페이스 ID 꼴. 요청 머리에 실리므로 다른 글자는 받지 않는다 */
+    private static final Pattern WORKSPACE_ID = Pattern.compile("wrkspc_[A-Za-z0-9_-]+");
 
     public LlmSettings {
         requireText(model, "모델 ID가 비었습니다");
@@ -54,6 +60,9 @@ public record LlmSettings(
         if (baseUrl != null && !isHttpUrl(baseUrl)) {
             throw new IllegalArgumentException("API 주소는 질의 문자열 없는 http 또는 https 주소여야 합니다: " + baseUrl);
         }
+        if (workspaceId != null && !WORKSPACE_ID.matcher(workspaceId).matches()) {
+            throw new IllegalArgumentException("워크스페이스 ID는 wrkspc_로 시작해야 합니다: " + workspaceId);
+        }
     }
 
     /**
@@ -65,7 +74,7 @@ public record LlmSettings(
      * @return 설정
      */
     public static LlmSettings of(String model, String effort, String apiKey) {
-        return new LlmSettings(model, effort, apiKey, DEFAULT_REQUEST_TIMEOUT, DEFAULT_RETRY_ATTEMPTS, null);
+        return new LlmSettings(model, effort, apiKey, DEFAULT_REQUEST_TIMEOUT, DEFAULT_RETRY_ATTEMPTS, null, null);
     }
 
     /**
@@ -73,7 +82,7 @@ public record LlmSettings(
      * @return 대기 시간만 바꾼 설정
      */
     public LlmSettings withRequestTimeout(Duration timeout) {
-        return new LlmSettings(model, effort, apiKey, timeout, retryAttempts, baseUrl);
+        return new LlmSettings(model, effort, apiKey, timeout, retryAttempts, baseUrl, workspaceId);
     }
 
     /**
@@ -81,7 +90,7 @@ public record LlmSettings(
      * @return 재시도 횟수만 바꾼 설정
      */
     public LlmSettings withRetryAttempts(int attempts) {
-        return new LlmSettings(model, effort, apiKey, requestTimeout, attempts, baseUrl);
+        return new LlmSettings(model, effort, apiKey, requestTimeout, attempts, baseUrl, workspaceId);
     }
 
     /**
@@ -89,14 +98,23 @@ public record LlmSettings(
      * @return 주소만 바꾼 설정
      */
     public LlmSettings withBaseUrl(URI url) {
-        return new LlmSettings(model, effort, apiKey, requestTimeout, retryAttempts, url);
+        return new LlmSettings(model, effort, apiKey, requestTimeout, retryAttempts, url, workspaceId);
+    }
+
+    /**
+     * @param id 새 워크스페이스 ID. null이면 보내지 않는다
+     * @return 워크스페이스 ID만 바꾼 설정
+     */
+    public LlmSettings withWorkspaceId(String id) {
+        return new LlmSettings(model, effort, apiKey, requestTimeout, retryAttempts, baseUrl, id);
     }
 
     /** @return 키를 {@value #MASKED_API_KEY}로 가린 설정 */
     @Override
     public String toString() {
         return "LlmSettings[model=" + model + ", effort=" + effort + ", apiKey=" + MASKED_API_KEY
-                + ", requestTimeout=" + requestTimeout + ", retryAttempts=" + retryAttempts + ", baseUrl=" + baseUrl + "]";
+                + ", requestTimeout=" + requestTimeout + ", retryAttempts=" + retryAttempts + ", baseUrl=" + baseUrl
+                + ", workspaceId=" + workspaceId + "]";
     }
 
     private static void requireText(String value, String message) {

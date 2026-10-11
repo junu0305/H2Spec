@@ -32,6 +32,8 @@ import kr.go.h2spec.parser.llm.normalize.LlmMetadata;
 import kr.go.h2spec.parser.llm.normalize.NormalizedOperation;
 import kr.go.h2spec.parser.llm.schema.LlmExtraction;
 import kr.go.h2spec.parser.llm.validate.ExtractionValidator;
+import kr.go.h2spec.parser.llm.validate.ValidationFeedback;
+import kr.go.h2spec.parser.llm.validate.ValidationResult;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -48,7 +50,8 @@ import java.util.function.Consumer;
  *   <li>{@link DocumentSerializer}로 직렬화하고, 시스템 프롬프트·문서·작업 지시·스키마로 요청을 만든다({@link ExtractionPrompt}).</li>
  *   <li>결과 캐시({@link ExtractionCache})를 거쳐 회사 어댑터({@link LlmClient})를 문서당 한 번 부른다(설계 4.4).</li>
  *   <li>응답을 중간 스키마로 엄격하게 읽는다. 읽지 못하면 한 번만 다시 부르고, 그래도 못 읽으면 그 문서는 실패다.</li>
- *   <li>원문 대조({@link ExtractionValidator}), 정규화({@link IrNormalizer}), 같은 Block 목록으로 돌린 rule 엔진과의 교차검증({@link CrossChecker})을 거친다.</li>
+ *   <li>원문 대조({@link ExtractionValidator})에서 버린 것이 있으면({@link ValidationFeedback}) 그것을 알려 한 번 더 부르고, 검증을 더 많이 통과한 결과를 쓴다.</li>
+ *   <li>정규화({@link IrNormalizer}), 같은 Block 목록으로 돌린 rule 엔진과의 교차검증({@link CrossChecker})을 거친다.</li>
  * </ol>
  * 호출 실패와 쓸 수 없는 응답은 {@link SpecParseException}의 종류로 바꿔 CLI가 처리를 가르게 한다(설계 7.3).
  * 키 오류는 {@code AUTH}, 재시도한 뒤에도 남은 호출 한도·서버·네트워크 오류는 {@code RETRYABLE}, 나머지(잘못된 요청, 출력 잘림, 거절,
@@ -58,14 +61,14 @@ import java.util.function.Consumer;
 public final class LlmSpecParser implements SpecParser {
 
     /**
-     * 출력 토큰 상한의 기본값. thinking(추론) 토큰도 이 안에서 쓰이므로(설계 10장) 보이는 출력보다 넉넉히 잡는다.
-     * 보이는 출력은 오퍼레이션당 약 0.8천~3천 토큰이고 샘플 문서의 오퍼레이션은 1~6개라 많아야 2만 토큰쯤이다. thinking이 그만큼 더 나와도
-     * 4만 토큰 안쪽이라 6만 4천으로 두었다. Claude Opus 5.5 출력 한도(12만 8천)의 절반이다. 상한일 뿐이라 쓰지 않은 토큰은 과금되지 않고,
-     * 어댑터가 스트리밍으로 받아 출력이 길어도 HTTP 타임아웃에 걸리지 않는다.
-     * 결과 캐시 키에 들어가므로 바꾸면 같은 문서도 다시 부른다. 1-0 스파이크와 1-10 평가에서 모델·추론 깊이별 잘림 비율을 재서 확정하고,
+     * 출력 토큰 상한의 기본값. thinking(추론) 토큰도 이 안에서 쓰인다(설계 10장).
+     * 실제 호출에서 보이는 출력은 오퍼레이션당 약 2천~4천 토큰이었다(기상청 중기예보 4개에 1만 6천여 토큰). 나눠 부르기가 없어 출력이
+     * 잘리면 문서 전체가 실패하므로, 6만 4천이면 오퍼레이션이 15개를 넘는 문서에서 잘릴 수 있어 Claude Opus 5.5·Sonnet 5.5의
+     * 출력 한도인 12만 8천으로 두었다. 상한일 뿐이라 쓰지 않은 토큰은 과금되지 않고, 어댑터가 스트리밍으로 받아 출력이 길어도
+     * HTTP 타임아웃에 걸리지 않는다. 결과 캐시 키에 들어가므로 바꾸면 같은 문서도 다시 부른다.
      * 출력 한도가 다른 회사의 모델은 2-1에서 어댑터마다 확인한다.
      */
-    public static final int DEFAULT_MAX_OUTPUT_TOKENS = 64_000;
+    public static final int DEFAULT_MAX_OUTPUT_TOKENS = 128_000;
 
     /** {@link SpecParseResult.Engine#name()}에 적는 엔진 이름 */
     private static final String ENGINE = "llm";
@@ -151,16 +154,21 @@ public final class LlmSpecParser implements SpecParser {
     /**
      * {@inheritDoc}
      * <p>
-     * 변환한 오퍼레이션이 없으면 rule 엔진과 같은 문구("문서에서 상세기능 명세를 찾지 못했습니다: 파일명")로
-     * {@link SpecParseException.Kind#FAILED}를 던지고, 건너뛴 오퍼레이션이 있으면 그 이유를 붙인다.
-     * LLM은 이미 답했으므로 예외에 엔진 정보(토큰 사용량)를 담는다.
+     * 변환한 오퍼레이션이 없으면 {@link SpecParseException.Kind#FAILED}를 던진다. 오퍼레이션을 하나도 찾지 못했으면 rule 엔진과
+     * 같은 문구("문서에서 상세기능 명세를 찾지 못했습니다: 파일명")이고, 찾았지만 모두 건너뛰었으면 명세를 찾지 못한 것으로 읽히지 않게
+     * 다른 문구에 건너뛴 이유를 붙인다. LLM은 이미 답했으므로 예외에 엔진 정보(토큰 사용량)를 담는다.
      */
     @Override
     public SpecParseResult parse(Path document) throws IOException, SpecParseException {
         SpecParseResult result = extract(document);
         if (result.apis().isEmpty()) {
-            throw new SpecParseException(SpecParseException.Kind.FAILED,
-                    notFoundMessage(document.getFileName().toString(), result.skipped()), null, result.engine());
+            String fileName = document.getFileName().toString();
+            String message = result.operations().isEmpty()
+                    ? notFoundMessage(fileName, result.skipped())
+                    : "변환할 수 있는 상세기능이 없습니다 (찾은 " + result.operations().size()
+                            + "개 모두 지원 범위 밖이거나 검증에서 건너뜀): " + fileName
+                            + " (" + String.join("; ", result.skipped()) + ")";
+            throw new SpecParseException(SpecParseException.Kind.FAILED, message, null, result.engine());
         }
         return result;
     }
@@ -193,12 +201,48 @@ public final class LlmSpecParser implements SpecParser {
     public SpecParseResult extract(List<Block> blocks, String sourceFile, String sourceFormat) throws SpecParseException {
         LlmRequest request = prompt.wholeDocumentRequest(serialize(blocks, sourceFile), options.maxOutputTokens());
         Extraction extraction = call(request, sourceFile);
-        List<NormalizedOperation> operations = new IrNormalizer(metadata).normalize(
-                new ExtractionValidator().validate(extraction.value(), blocks), sourceFile, sourceFormat);
+        ValidationResult validation = new ExtractionValidator().validate(extraction.value(), blocks);
+        if (options.retryOnValidation()) {
+            List<String> problems = ValidationFeedback.problems(validation);
+            if (!problems.isEmpty()) {
+                Checked checked = retry(prompt.retryRequest(request, problems), new Checked(extraction, validation),
+                        blocks, sourceFile);
+                extraction = checked.extraction();
+                validation = checked.validation();
+            }
+        }
+        List<NormalizedOperation> operations = new IrNormalizer(metadata).normalize(validation, sourceFile, sourceFormat);
         if (options.crossCheck()) {
             operations = crossCheck(operations, blocks, sourceFile, sourceFormat);
         }
         return result(operations, extraction);
+    }
+
+    /**
+     * 원문 대조에서 버린 것을 알려 한 번 더 부르고, 검증을 더 많이 통과한 결과를 쓴다. 같으면 처음 결과를 쓴다.
+     * 두 호출 모두 과금되므로 토큰은 합친다. 다시 부르기가 실패해도 처음 결과는 쓸 수 있어 경고만 남긴다.
+     */
+    private Checked retry(LlmRequest request, Checked first, List<Block> blocks, String sourceFile) {
+        Extraction again;
+        try {
+            again = call(request, sourceFile);
+        } catch (SpecParseException e) {
+            SpecParseResult.TokenUsage spent = e.engine()
+                    .map(engine -> add(first.extraction().spent(), engine.tokenUsage()))
+                    .orElse(first.extraction().spent());
+            warn(sourceFile, "검증 결과를 알려 다시 부르지 못해 처음 결과를 씁니다: " + e.getMessage());
+            return new Checked(new Extraction(first.extraction().value(), false, spent), first.validation());
+        }
+        ValidationResult validation = new ExtractionValidator().validate(again.value(), blocks);
+        boolean better = ValidationFeedback.better(first.validation(), validation);
+        warn(sourceFile, "원문 대조에서 버린 항목이 있어 검증 결과를 알려 한 번 더 불렀습니다 (통과한 오퍼레이션 "
+                + ValidationFeedback.keptOperations(first.validation()) + "개 → "
+                + ValidationFeedback.keptOperations(validation) + "개, " + (better ? "다시 부른 결과를 씀" : "처음 결과를 씀") + ")");
+        SpecParseResult.TokenUsage spent = add(first.extraction().spent(), again.spent());
+        boolean fromCache = first.extraction().fromCache() && again.fromCache();
+        return better
+                ? new Checked(new Extraction(again.value(), fromCache, spent), validation)
+                : new Checked(new Extraction(first.extraction().value(), fromCache, spent), first.validation());
     }
 
     private String serialize(List<Block> blocks, String sourceFile) throws SpecParseException {
@@ -395,6 +439,11 @@ public final class LlmSpecParser implements SpecParser {
         return e;
     }
 
+    private static SpecParseResult.TokenUsage add(SpecParseResult.TokenUsage total, SpecParseResult.TokenUsage more) {
+        return new SpecParseResult.TokenUsage(total.input() + more.input(), total.cacheRead() + more.cacheRead(),
+                total.cacheWrite() + more.cacheWrite(), total.output() + more.output());
+    }
+
     private static SpecParseResult.TokenUsage add(SpecParseResult.TokenUsage total, LlmResponse.Usage usage) {
         // thinking 토큰(reasoningTokens)은 출력 토큰에 이미 들어 있어 따로 더하지 않는다
         return new SpecParseResult.TokenUsage(total.input() + usage.inputTokens(),
@@ -441,6 +490,10 @@ public final class LlmSpecParser implements SpecParser {
     private record Extraction(LlmExtraction value, boolean fromCache, SpecParseResult.TokenUsage spent) {
     }
 
+    /** 읽은 중간 스키마와 그 검증 결과 */
+    private record Checked(Extraction extraction, ValidationResult validation) {
+    }
+
     /**
      * llm 엔진의 실행 설정. {@link #defaults()}에서 바꿀 것만 바꿔 쓴다.
      *
@@ -449,8 +502,11 @@ public final class LlmSpecParser implements SpecParser {
      * @param crossCheck      rule 엔진과 교차검증할지. {@code --no-cross-check}면 false
      * @param warnings        CLI가 표준 오류로 알릴 경고를 받는다. rule 엔진만 찾은 오퍼레이션과, 교차검증이나 결과 캐시를 쓰지 못한 일이다.
      *                        "파일명: 내용" 꼴의 한 줄이다. {@link SpecParseResult}에는 이것을 담을 자리가 없어 따로 받는다
+     * @param retryOnValidation 원문 대조에서 버린 것({@link ValidationFeedback})이 있으면 그것을 알려 한 번 더 부를지.
+     *                        다시 부른 문서는 토큰을 두 번 쓴다
      */
-    public record Options(int maxOutputTokens, ExtractionCache cache, boolean crossCheck, Consumer<String> warnings) {
+    public record Options(int maxOutputTokens, ExtractionCache cache, boolean crossCheck, Consumer<String> warnings,
+                          boolean retryOnValidation) {
 
         /** 출력 한도는 1 이상이고, 결과 캐시와 경고를 받을 곳은 늘 있다. 끄려면 꺼진 캐시와 버리는 곳을 준다 */
         public Options {
@@ -462,12 +518,13 @@ public final class LlmSpecParser implements SpecParser {
         }
 
         /**
-         * @return 기본 출력 한도, 기본 위치의 결과 캐시, 교차검증 켬, 경고는 버림. 경고를 표준 오류로 알리는 것은 CLI의 일이라
-         *         라이브러리가 직접 찍지 않는다. CLI는 {@link #withWarnings}로 받을 곳을 준다
+         * @return 기본 출력 한도, 기본 위치의 결과 캐시, 교차검증 켬, 경고는 버림, 검증 결과를 알려 다시 부르기 켬.
+         *         경고를 표준 오류로 알리는 것은 CLI의 일이라 라이브러리가 직접 찍지 않는다. CLI는 {@link #withWarnings}로 받을 곳을 준다
          */
         public static Options defaults() {
             Consumer<String> ignore = warning -> { };
-            return new Options(DEFAULT_MAX_OUTPUT_TOKENS, ExtractionCache.at(ExtractionCache.defaultDirectory()), true, ignore);
+            return new Options(DEFAULT_MAX_OUTPUT_TOKENS, ExtractionCache.at(ExtractionCache.defaultDirectory()), true, ignore,
+                    true);
         }
 
         /**
@@ -475,7 +532,7 @@ public final class LlmSpecParser implements SpecParser {
          * @return 출력 한도만 바꾼 설정
          */
         public Options withMaxOutputTokens(int tokens) {
-            return new Options(tokens, cache, crossCheck, warnings);
+            return new Options(tokens, cache, crossCheck, warnings, retryOnValidation);
         }
 
         /**
@@ -483,7 +540,7 @@ public final class LlmSpecParser implements SpecParser {
          * @return 결과 캐시만 바꾼 설정
          */
         public Options withCache(ExtractionCache newCache) {
-            return new Options(maxOutputTokens, newCache, crossCheck, warnings);
+            return new Options(maxOutputTokens, newCache, crossCheck, warnings, retryOnValidation);
         }
 
         /**
@@ -491,7 +548,7 @@ public final class LlmSpecParser implements SpecParser {
          * @return 교차검증 여부만 바꾼 설정
          */
         public Options withCrossCheck(boolean enabled) {
-            return new Options(maxOutputTokens, cache, enabled, warnings);
+            return new Options(maxOutputTokens, cache, enabled, warnings, retryOnValidation);
         }
 
         /**
@@ -499,7 +556,15 @@ public final class LlmSpecParser implements SpecParser {
          * @return 경고를 받을 곳만 바꾼 설정
          */
         public Options withWarnings(Consumer<String> sink) {
-            return new Options(maxOutputTokens, cache, crossCheck, sink);
+            return new Options(maxOutputTokens, cache, crossCheck, sink, retryOnValidation);
+        }
+
+        /**
+         * @param enabled 원문 대조에서 버린 것을 알려 다시 부를지
+         * @return 다시 부르기 여부만 바꾼 설정
+         */
+        public Options withRetryOnValidation(boolean enabled) {
+            return new Options(maxOutputTokens, cache, crossCheck, warnings, enabled);
         }
     }
 }

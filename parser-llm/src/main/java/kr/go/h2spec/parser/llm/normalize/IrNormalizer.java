@@ -21,6 +21,7 @@ import kr.go.h2spec.parser.llm.validate.ValidatedOperation.Parameter;
 import kr.go.h2spec.parser.llm.validate.ValidationResult;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,13 +86,14 @@ public final class IrNormalizer {
             result.add(operation.dropped()
                     ? new NormalizedOperation(operation.operationName(), operation.title(), apiId(operation), null,
                     operation.dropReason(), false)
-                    : normalize(operation, validation.extraction(), sourceFile, sourceFormat));
+                    : normalize(operation, validation, sourceFile, sourceFormat));
         }
         return result;
     }
 
-    private NormalizedOperation normalize(ValidatedOperation operation, LlmExtraction extraction,
+    private NormalizedOperation normalize(ValidatedOperation operation, ValidationResult validation,
                                           String sourceFile, String sourceFormat) {
+        LlmExtraction extraction = validation.extraction();
         LlmOperation source = operation.source();
         IrConventions.UrlParts parts = operation.address().parts();
         String apiId = parts.apiId();
@@ -111,9 +113,10 @@ public final class IrNormalizer {
         operation.address().correctionNotes().forEach(addressNotes::add);
         IrConventions.addPathParameters(parameters, parts.endpoint());
         String authType = authType(source.auth(), parameters, outOfScope);
-        String responseFormat = responseFormat(operation, notes);
+        JsonNode formatParameter = hintedFormatParameter(source, parameters);
+        String responseFormat = responseFormat(operation, formatParameter != null, notes);
         boolean formatSelectable = source.responseFormat() == LlmOperation.ResponseFormat.BOTH
-                && hasGeneratorFormatParameter(parameters);
+                && (formatParameter != null || hasGeneratorFormatParameter(parameters));
         if (source.responseStructure() == null
                 || source.responseStructure() == LlmOperation.ResponseStructure.STANDARD_ASSUMED) {
             notes.add(STANDARD_ASSUMED_NOTE);
@@ -136,7 +139,7 @@ public final class IrNormalizer {
         api.put("responseFormat", responseFormat);
         api.set("requestParameters", parameters);
         api.set("responseFields", fields);
-        api.set("errorSpec", errorSpec(operation, success.code()));
+        api.set("errorSpec", errorSpec(operation, validation.errorCodes(), success.code()));
 
         List<String> reviewNotes = new ArrayList<>();
         list(source.uncertain()).forEach(text -> addLlmNote(reviewNotes, text));
@@ -152,7 +155,13 @@ public final class IrNormalizer {
         ObjectNode ir = objectMapper.createObjectNode();
         ir.set("metadata", metadata(sourceFile, sourceFormat, reviewNotes));
         ir.set("api", api);
-        ir.set("generatorHints", IrConventions.generatorHints(apiId));
+        ObjectNode hints = IrConventions.generatorHints(apiId);
+        if (formatParameter != null) {
+            ObjectNode hint = hints.putObject("responseFormatParameter");
+            hint.put("name", formatParameter.get("name").asText());
+            hint.put("value", formatValue(formatParameter, responseFormat));
+        }
+        ir.set("generatorHints", hints);
         String skipReason = outOfScope.isEmpty() ? null : String.join("; ", outOfScope);
         return new NormalizedOperation(operation.operationName(), operation.title(), apiId, ir, skipReason,
                 skipReason != null, formatSelectable);
@@ -275,11 +284,12 @@ public final class IrNormalizer {
      * IR의 응답 포맷. 문서가 한 형식만 밝혔으면 그 형식이고, 두 형식을 다 내면 포맷 파라미터 없이 부를 때의 형식(기본 형식)이다.
      * 기본 형식을 모르거나 형식이 적혀 있지 않으면 응답 경로를 정한 예제의 형식을 쓴다. 경로와 다른 형식으로 두면 생성 DTO가
      * 응답을 읽지 못할 수 있기 때문이다. 예제도 없으면 XML이다(rule 엔진도 형식을 모르면 XML이다).
-     * 포맷 파라미터 이름이 generator가 값을 채워 보내는 이름({@code returnType}, {@code dataType}, {@code resultType})이 아니면
-     * 클라이언트가 형식을 고르지 못해 서버 기본 형식이 오므로, 그 기본 형식을 모르면 알린다.
+     * 생성 클라이언트가 포맷 파라미터에 값을 채우지 못하면 서버 기본 형식이 오므로, 그 기본 형식을 모르면 알린다.
      * 문서가 정한 형식과 경로를 정한 예제의 형식이 다르면, 표준 구조가 아닌 한 경로가 맞는지 알린다.
+     *
+     * @param hinted 포맷 파라미터를 generatorHints로 알려 생성 클라이언트가 값을 채우는지
      */
-    private String responseFormat(ValidatedOperation operation, GroupedNotes notes) {
+    private String responseFormat(ValidatedOperation operation, boolean hinted, GroupedNotes notes) {
         LlmOperation source = operation.source();
         LlmOperation.ResponseFormat format = source.responseFormat() == null
                 ? LlmOperation.ResponseFormat.UNKNOWN
@@ -298,7 +308,7 @@ public final class IrNormalizer {
                 } else {
                     chosen = example == null ? XML : example;
                     String parameter = LlmText.oneLine(source.formatParameter());
-                    if (!IrConventions.responseFormatParameters().contains(parameter)) {
+                    if (!hinted && !IrConventions.responseFormatParameters().contains(parameter)) {
                         notes.add((parameter.isEmpty()
                                 ? "응답 형식을 고르는 파라미터가 없고"
                                 : "포맷 파라미터 " + parameter + "는 generator가 값을 채우지 않고")
@@ -341,6 +351,36 @@ public final class IrNormalizer {
     /** 경로가 모두 표준 구조의 루트 아래에 있으면 생성 DTO가 XML과 JSON의 두 모양을 다 읽는다 ({@code DtoEmitter}) */
     private static boolean standardPaths(ValidatedOperation operation) {
         return operation.responseFields().stream().allMatch(field -> STANDARD_ROOT.equals(field.root()));
+    }
+
+    /**
+     * generatorHints로 알려 줄 포맷 파라미터. LLM이 고른 포맷 파라미터가 IR의 쿼리 파라미터이고 generator가 이미 아는
+     * 이름({@code returnType}, {@code dataType}, {@code resultType})이 아닐 때만 돌려준다. 없으면 null
+     */
+    private static JsonNode hintedFormatParameter(LlmOperation source, ArrayNode parameters) {
+        String name = LlmText.oneLine(source.formatParameter());
+        if (name.isEmpty() || IrConventions.responseFormatParameters().contains(name)) {
+            return null;
+        }
+        for (JsonNode parameter : parameters) {
+            if (name.equals(parameter.get("name").asText()) && "query".equals(parameter.get("in").asText())) {
+                return parameter;
+            }
+        }
+        return null;
+    }
+
+    /** 포맷 파라미터에 넣을 값. 예제나 기본값에 적힌 형식 이름이 대문자이면 대문자로, 아니면 소문자로 넣는다 */
+    private static String formatValue(JsonNode parameter, String responseFormat) {
+        for (String field : List.of("example", "default")) {
+            String value = parameter.path(field).asText("");
+            if (value.equalsIgnoreCase(XML) || value.equalsIgnoreCase(JSON)) {
+                return value.equals(value.toUpperCase(Locale.ROOT))
+                        ? responseFormat
+                        : responseFormat.toLowerCase(Locale.ROOT);
+            }
+        }
+        return responseFormat.toLowerCase(Locale.ROOT);
     }
 
     /** 생성 클라이언트가 IR의 응답 형식을 값으로 채워 보내는 포맷 파라미터가 있는지 ({@code ClientEmitter}) */
@@ -386,7 +426,11 @@ public final class IrNormalizer {
         return fields;
     }
 
-    private ObjectNode errorSpec(ValidatedOperation operation, String successCode) {
+    /**
+     * 에러코드는 오퍼레이션에만 있는 표를 먼저, 문서 공통 표를 뒤에 둔다. 같은 코드는 앞의 것만 남긴다.
+     */
+    private ObjectNode errorSpec(ValidatedOperation operation, List<LlmErrorCode> documentErrorCodes,
+                                 String successCode) {
         ObjectNode errorSpec = IrConventions.errorSpec();
         errorSpec.put("successResultCode", successCode);
         String fieldName = resultCodeFieldName(operation.source());
@@ -395,9 +439,13 @@ public final class IrNormalizer {
             // 기본 목록에 없는 결과코드 위치만 앞에 더한다. generator는 아직 읽지 않는다 (3-3)
             candidates.insert(0, fieldName);
         }
-        if (!operation.errorCodes().isEmpty()) {
+        List<LlmErrorCode> errors = new ArrayList<>(operation.errorCodes());
+        errors.addAll(documentErrorCodes);
+        Set<String> codes = new HashSet<>();
+        errors.removeIf(error -> !codes.add(error.code()));
+        if (!errors.isEmpty()) {
             ArrayNode known = errorSpec.putArray("knownErrorCodes");
-            for (LlmErrorCode error : operation.errorCodes()) {
+            for (LlmErrorCode error : errors) {
                 ObjectNode node = known.addObject();
                 node.put("code", error.code());
                 node.put("message", LlmText.oneLine(error.message()));

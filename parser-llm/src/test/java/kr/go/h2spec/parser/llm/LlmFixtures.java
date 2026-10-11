@@ -41,7 +41,13 @@ public final class LlmFixtures {
     }
 
     public static LlmExtraction extraction(String provider, List<String> documentNotes, OperationBuilder... operations) {
-        return new LlmExtraction("", provider, Arrays.stream(operations).map(OperationBuilder::build).toList(),
+        return extraction(provider, List.of(), documentNotes, operations);
+    }
+
+    /** 문서 공통 에러코드 표가 있는 문서 */
+    public static LlmExtraction extraction(String provider, List<LlmErrorCode> errorCodes, List<String> documentNotes,
+                                           OperationBuilder... operations) {
+        return new LlmExtraction("", provider, errorCodes, Arrays.stream(operations).map(OperationBuilder::build).toList(),
                 documentNotes);
     }
 

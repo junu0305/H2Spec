@@ -1,5 +1,6 @@
 package kr.go.h2spec.generator.emit;
 
+import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.generator.ir.RequestParameter;
 
@@ -82,9 +83,10 @@ public class ClientEmitter {
      * CodeGenerator가 인자 이름의 식별자 여부와 겹침을 검사할 때도 이 목록을 쓴다.
      */
     public static List<RequestParameter> methodParameters(IrSpec ir) {
+        String formatParam = formatParamName(ir);
         List<RequestParameter> result = new ArrayList<>();
         for (RequestParameter p : ir.api().requestParameters()) {
-            if (!isHidden(p.name())) {
+            if (!isHidden(p.name(), formatParam)) {
                 result.add(p);
             }
         }
@@ -95,8 +97,9 @@ public class ClientEmitter {
      * 메서드 시그니처에서 감추는 파라미터. serviceKey는 생성자로 받고, 포맷 파라미터는
      * 생성 시점에 확정한 값으로 박는다 — 호출자가 매퍼와 어긋나는 값을 넣을 수 없게 한다.
      */
-    private static boolean isHidden(String name) {
-        return SERVICE_KEY_PARAM.equalsIgnoreCase(name) || RESPONSE_FORMAT_PARAMS.contains(name);
+    private static boolean isHidden(String name, String formatParam) {
+        return SERVICE_KEY_PARAM.equalsIgnoreCase(name) || RESPONSE_FORMAT_PARAMS.contains(name)
+                || name.equals(formatParam);
     }
 
     private static String mapperVar(boolean isXml) {
@@ -139,11 +142,42 @@ public class ClientEmitter {
         return segment.endsWith(LIST_SUFFIX) ? segment.substring(0, segment.length() - LIST_SUFFIX.length()) : segment;
     }
 
-    /** 문서에 포맷 파라미터가 있으면 그 이름을 돌려준다. 없으면 null */
-    private String formatParamName(IrSpec ir) {
+    /**
+     * 문서에 포맷 파라미터가 있으면 그 이름을 돌려준다. 없으면 null.
+     * generatorHints가 가리키는 파라미터가 requestParameters에 있으면 그것을 먼저 쓴다.
+     */
+    private static String formatParamName(IrSpec ir) {
+        GeneratorHints.ResponseFormatParameter hint = formatHint(ir);
+        if (hint != null) {
+            return hint.name();
+        }
         for (RequestParameter p : ir.api().requestParameters()) {
             if (RESPONSE_FORMAT_PARAMS.contains(p.name())) {
                 return p.name();
+            }
+        }
+        return null;
+    }
+
+    /** 포맷 파라미터에 넣을 값. 힌트에 값이 있으면 그 값, 없으면 responseFormat을 소문자로 */
+    private static String formatParamValue(IrSpec ir) {
+        GeneratorHints.ResponseFormatParameter hint = formatHint(ir);
+        if (hint != null && hint.value() != null && !hint.value().isBlank()) {
+            return hint.value();
+        }
+        return ir.api().responseFormat().toLowerCase(Locale.ROOT);
+    }
+
+    /** requestParameters에 있는 파라미터를 가리키는 힌트만 쓴다. 없으면 null */
+    private static GeneratorHints.ResponseFormatParameter formatHint(IrSpec ir) {
+        GeneratorHints.ResponseFormatParameter hint =
+                ir.generatorHints() == null ? null : ir.generatorHints().responseFormatParameter();
+        if (hint == null || hint.name() == null) {
+            return null;
+        }
+        for (RequestParameter p : ir.api().requestParameters()) {
+            if (hint.name().equals(p.name())) {
+                return hint;
             }
         }
         return null;
@@ -302,7 +336,7 @@ public class ClientEmitter {
           .append("=\").append(encode(").append(SERVICE_KEY_PARAM).append("));\n");
         String formatParam = formatParamName(ir);
         if (formatParam != null) {
-            String formatValue = ir.api().responseFormat().toLowerCase(Locale.ROOT);
+            String formatValue = formatParamValue(ir);
             sb.append(indent2).append("url.append(\"&").append(formatParam).append("=")
               .append(JavaText.literal(formatValue)).append("\");\n");
         }

@@ -1,6 +1,72 @@
 {
   "serviceName": "중기예보 조회서비스",
   "provider": "기상청",
+  "errorCodes": [
+    {
+      "code": "01",
+      "message": "APPLICATION_ERROR"
+    },
+    {
+      "code": "02",
+      "message": "DB_ERROR"
+    },
+    {
+      "code": "03",
+      "message": "NODATA_ERROR"
+    },
+    {
+      "code": "04",
+      "message": "HTTP_ERROR"
+    },
+    {
+      "code": "05",
+      "message": "SERVICETIME_OUT"
+    },
+    {
+      "code": "10",
+      "message": "INVALID_REQUEST_PARAMETER_ERROR"
+    },
+    {
+      "code": "11",
+      "message": "NO_MANDATORY_REQUEST_PARAMETERS_ERROR"
+    },
+    {
+      "code": "12",
+      "message": "NO_OPENAPI_SERVICE_ERROR"
+    },
+    {
+      "code": "20",
+      "message": "SERVICE_ACCESS_DENIED_ERROR"
+    },
+    {
+      "code": "21",
+      "message": "TEMPORARILY_DISABLE_THE_SERVICEKEY_ERROR"
+    },
+    {
+      "code": "22",
+      "message": "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"
+    },
+    {
+      "code": "30",
+      "message": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"
+    },
+    {
+      "code": "31",
+      "message": "DEADLINE_HAS_EXPIRED_ERROR"
+    },
+    {
+      "code": "32",
+      "message": "UNREGISTERED_IP_ERROR"
+    },
+    {
+      "code": "33",
+      "message": "UNSIGNED_CALL_ERROR"
+    },
+    {
+      "code": "99",
+      "message": "UNKNOWN_ERROR"
+    }
+  ],
   "operations": [
     {
       "operationName": "",
@@ -17,51 +83,1496 @@
       "responseFormat": "BOTH",
       "defaultResponseFormat": "XML",
       "formatParameter": "dataType",
-      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
       "requestParameters": [
-        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
-         "description": "공공데이터포털에서 발급받은 인증키", "example": "인증키 (URL Encode)", "defaultValue": "", "common": false},
-        {"name": "numOfRows", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
-         "description": "한 페이지 결과 수 Default: 10", "example": "10", "defaultValue": "10", "common": false},
-        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
-         "description": "페이지 번호 Default: 1", "example": "1", "defaultValue": "1", "common": false},
-        {"name": "dataType", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
-         "description": "요청자료형식(XML/JSON) Default: XML", "example": "XML", "defaultValue": "XML", "common": false},
-        {"name": "stnId", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
-         "description": "하단 참고자료 참조", "example": "108", "defaultValue": "", "common": false},
-        {"name": "tmFc", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
-         "description": "-일 2회(06:00,18:00)회 생성 되며 발표시각을 입력 -최근 24시간 자료만 제공", "example": "201310170600",
-         "defaultValue": "", "common": false}
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "numOfRows",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수 Default: 10",
+          "example": "10",
+          "defaultValue": "10",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호 Default: 1",
+          "example": "1",
+          "defaultValue": "1",
+          "common": false
+        },
+        {
+          "name": "dataType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "요청자료형식(XML/JSON) Default: XML",
+          "example": "XML",
+          "defaultValue": "XML",
+          "common": false
+        },
+        {
+          "name": "stnId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "하단 참고자료 참조",
+          "example": "108",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "tmFc",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "-일 2회(06:00,18:00)회 생성 되며 발표시각을 입력 -최근 24시간 자료만 제공",
+          "example": "201310170600",
+          "defaultValue": "",
+          "common": false
+        }
       ],
       "responseStructure": "EXAMPLE",
       "responseExampleFormat": "XML",
       "responseFields": [
-        {"path": "response.header.resultCode", "type": "STRING", "description": "응답 메시지코드",
-         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.header.resultMsg", "type": "STRING", "description": "응답 메시지 설명",
-         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.dataType", "type": "STRING", "description": "응답자료형식 (XML/JSON)",
-         "sample": "XML", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].wfSv", "type": "STRING", "description": "기상전망 정보",
-         "sample": "예제 참고", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.numOfRows", "type": "INTEGER", "description": "한 페이지당 표출 데이터 수",
-         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지 수",
-         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.totalCount", "type": "INTEGER", "description": "데이터 총 개수",
-         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "응답 메시지코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "응답 메시지 설명",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.dataType",
+          "type": "STRING",
+          "description": "응답자료형식 (XML/JSON)",
+          "sample": "XML",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wfSv",
+          "type": "STRING",
+          "description": "기상전망 정보",
+          "sample": "예제 참고",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
       ],
-      "resultCode": {"fieldName": "resultCode", "successCodes": [
-        {"code": "00", "source": "FIELD_TABLE"},
-        {"code": "0", "source": "RESPONSE_EXAMPLE"}
-      ]},
-      "errorCodes": [
-        {"code": "01", "message": "APPLICATION_ERROR"},
-        {"code": "03", "message": "NODATA_ERROR"},
-        {"code": "30", "message": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"}
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "0",
+            "source": "RESPONSE_EXAMPLE"
+          },
+          {
+            "code": "00",
+            "source": "ERROR_TABLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T17",
+        "T19",
+        "P21",
+        "T23",
+        "T25",
+        "T28",
+        "T31",
+        "T85"
       ],
-      "evidence": ["T23", "T25", "T28", "T31", "T85"],
-      "uncertain": ["응답 필드 표의 결과코드 샘플은 00, 응답 예제는 0이다"],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "중기육상예보조회",
+      "description": "(6시 발표기준) 예보구역코드, 발표시각의 조회 조건으로 예보일로부터 4일에서 10일까지 육상날씨정보를 조회하는 기능 (18시 발표기준) 예보구역코드, 발표시각의 조회 조건으로 예보일로부터 5일에서 10일까지 육상날씨정보를 조회하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=인증키&numOfRows=10&pageNo=1&regId=11B00000&tmFc=201310171800",
+        "serviceUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "dataType",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "numOfRows",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수 Default: 10",
+          "example": "10",
+          "defaultValue": "10",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호 Default: 1",
+          "example": "1",
+          "defaultValue": "1",
+          "common": false
+        },
+        {
+          "name": "dataType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "요청자료형식(XML/JSON) Default: XML",
+          "example": "XML",
+          "defaultValue": "XML",
+          "common": false
+        },
+        {
+          "name": "regId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "하단 참고자료 참조",
+          "example": "11B00000",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "tmFc",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "-일 2회(06:00,18:00)회 생성 되며 발표시각을 입력 -최근 24시간 자료만 제공",
+          "example": "201307300600",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "응답 메시지코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "응답 메시지 설명",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.dataType",
+          "type": "STRING",
+          "description": "응답자료형식 (XML/JSON)",
+          "sample": "XML",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].regId",
+          "type": "STRING",
+          "description": "예보구역코드",
+          "sample": "11D20000",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt4Am",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 오전 강수 확률",
+          "sample": "30",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt4Pm",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 오후 강수 확률",
+          "sample": "30",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt5Am",
+          "type": "INTEGER",
+          "description": "5일 후 오전 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt5Pm",
+          "type": "INTEGER",
+          "description": "5일 후 오후 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt6Am",
+          "type": "INTEGER",
+          "description": "6일 후 오전 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt6Pm",
+          "type": "INTEGER",
+          "description": "6일 후 오후 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt7Am",
+          "type": "INTEGER",
+          "description": "7일 후 오전 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt7Pm",
+          "type": "INTEGER",
+          "description": "7일 후 오후 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt8",
+          "type": "INTEGER",
+          "description": "8일 후 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt9",
+          "type": "INTEGER",
+          "description": "9일 후 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].rnSt10",
+          "type": "INTEGER",
+          "description": "10일 후 강수 확률",
+          "sample": "30",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf4Am",
+          "type": "STRING",
+          "description": "(6시 발표의 경우만) 4일 후 오전 날씨예보",
+          "sample": "흐리고 비",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf4Pm",
+          "type": "STRING",
+          "description": "(6시 발표의 경우만) 4일 후 오후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf5Am",
+          "type": "STRING",
+          "description": "5일 후 오전 날씨예보",
+          "sample": "흐리고 비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf5Pm",
+          "type": "STRING",
+          "description": "5일 후 오후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf6Am",
+          "type": "STRING",
+          "description": "6일 후 오전 날씨예보",
+          "sample": "흐리고 비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf6Pm",
+          "type": "STRING",
+          "description": "6일 후 오후 날씨예보",
+          "sample": "구름많고 비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf7Am",
+          "type": "STRING",
+          "description": "7일 후 오전 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf7Pm",
+          "type": "STRING",
+          "description": "7일 후 오후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf8",
+          "type": "STRING",
+          "description": "8일 후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf9",
+          "type": "STRING",
+          "description": "9일 후 날씨예보",
+          "sample": "흐리고 비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf10",
+          "type": "STRING",
+          "description": "10일 후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "0",
+            "source": "RESPONSE_EXAMPLE"
+          },
+          {
+            "code": "00",
+            "source": "ERROR_TABLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T17",
+        "T19",
+        "P32",
+        "T34",
+        "T36",
+        "T39",
+        "T43",
+        "T85"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "중기기온조회",
+      "description": "(6시 발표기준) 예보구역코드, 발표시각의 조회 조건으로 예보일로부터 4일에서 10일까지 최저/최고기온정보를 조회하는 기능 (18시 발표기준) 예보구역코드, 발표시각의 조회 조건으로 예보일로부터 5일에서 10일까지 최저/최고기온정보를 조회하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=인증키&numOfRows=10&pageNo=1&regId=11D20501&tmFc=201404080600",
+        "serviceUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "dataType",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "numOfRows",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수 Default: 10",
+          "example": "10",
+          "defaultValue": "10",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호 Default: 1",
+          "example": "1",
+          "defaultValue": "1",
+          "common": false
+        },
+        {
+          "name": "dataType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "요청자료형식(XML/JSON) Default: XML",
+          "example": "XML",
+          "defaultValue": "XML",
+          "common": false
+        },
+        {
+          "name": "regId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "별첨 엑셀파일 참조",
+          "example": "11B10101",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "tmFc",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "-일 2회(06:00,18:00)회 생성 되며 발표시각을 입력 -최근 24시간 자료만 제공",
+          "example": "201309030600",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "응답 메시지코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "응답 메시지 설명",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.dataType",
+          "type": "STRING",
+          "description": "응답자료형식 (XML/JSON)",
+          "sample": "XML",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].regId",
+          "type": "STRING",
+          "description": "예보구역코드",
+          "sample": "11D20501",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin4",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 예상최저기온(℃)",
+          "sample": "14",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin4Low",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 예상최저기온 하한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin4High",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax4",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 예상최고기온(℃)",
+          "sample": "20",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax4Low",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 예상최고기온 하한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax4High",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일 후 예상최고기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin5",
+          "type": "INTEGER",
+          "description": "5일 후 예상최저기온(℃)",
+          "sample": "13",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin5Low",
+          "type": "INTEGER",
+          "description": "5일 후 예상최저기온 하한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin5High",
+          "type": "INTEGER",
+          "description": "5일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax5",
+          "type": "INTEGER",
+          "description": "5일 후 예상최고기온(℃)",
+          "sample": "20",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax5Low",
+          "type": "INTEGER",
+          "description": "5일 후 예상최고기온 하한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax5High",
+          "type": "INTEGER",
+          "description": "5일 후 예상최고기온 상한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin6",
+          "type": "INTEGER",
+          "description": "6일 후 예상최저기온(℃)",
+          "sample": "13",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin6Low",
+          "type": "INTEGER",
+          "description": "6일 후 예상최저기온 하한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin6High",
+          "type": "INTEGER",
+          "description": "6일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax6",
+          "type": "INTEGER",
+          "description": "6일 후 예상최고기온(℃)",
+          "sample": "21",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax6Low",
+          "type": "INTEGER",
+          "description": "6일 후 예상최고기온 하한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax6High",
+          "type": "INTEGER",
+          "description": "6일 후 예상최고기온 상한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin7",
+          "type": "INTEGER",
+          "description": "7일 후 예상최저기온(℃)",
+          "sample": "13",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin7Low",
+          "type": "INTEGER",
+          "description": "7일 후 예상최저기온 하한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin7High",
+          "type": "INTEGER",
+          "description": "7일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax7",
+          "type": "INTEGER",
+          "description": "7일 후 예상최고기온(℃)",
+          "sample": "20",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax7Low",
+          "type": "INTEGER",
+          "description": "7일 후 예상최고기온 하한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax7High",
+          "type": "INTEGER",
+          "description": "7일 후 예상최고기온 상한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin8",
+          "type": "INTEGER",
+          "description": "8일 후 예상최저기온(℃)",
+          "sample": "20",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin8Low",
+          "type": "INTEGER",
+          "description": "8일 후 예상최저기온 하한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin8High",
+          "type": "INTEGER",
+          "description": "8일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax8",
+          "type": "INTEGER",
+          "description": "8일 후 예상최고기온(℃)",
+          "sample": "13",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax8Low",
+          "type": "INTEGER",
+          "description": "8일 후 예상최고기온 하한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax8High",
+          "type": "INTEGER",
+          "description": "8일 후 예상최고기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin9",
+          "type": "INTEGER",
+          "description": "9일 후 예상최저기온(℃)",
+          "sample": "21",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin9Low",
+          "type": "INTEGER",
+          "description": "9일 후 예상최저기온 하한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin9High",
+          "type": "INTEGER",
+          "description": "9일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax9",
+          "type": "INTEGER",
+          "description": "9일 후 예상최고기온(℃)",
+          "sample": "13",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax9Low",
+          "type": "INTEGER",
+          "description": "9일 후 예상최고기온 하한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax9High",
+          "type": "INTEGER",
+          "description": "9일 후 예상최고기온 상한범위",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin10",
+          "type": "INTEGER",
+          "description": "10일 후 예상최저기온(℃)",
+          "sample": "20",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin10Low",
+          "type": "INTEGER",
+          "description": "10일 후 예상최저기온 하한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin10High",
+          "type": "INTEGER",
+          "description": "10일 후 예상최저기온 상한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax10",
+          "type": "INTEGER",
+          "description": "10일 후 예상최고기온(℃)",
+          "sample": "20",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax10Low",
+          "type": "INTEGER",
+          "description": "10일 후 예상최고기온 하한범위",
+          "sample": "2",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax10High",
+          "type": "INTEGER",
+          "description": "10일 후 예상최고기온 상한범위",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax8Min",
+          "type": "INTEGER",
+          "description": "",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax9Min",
+          "type": "INTEGER",
+          "description": "",
+          "sample": "2",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMax10Min",
+          "type": "INTEGER",
+          "description": "",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin8Min",
+          "type": "INTEGER",
+          "description": "",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].taMin9Min",
+          "type": "INTEGER",
+          "description": "",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "0",
+            "source": "RESPONSE_EXAMPLE"
+          },
+          {
+            "code": "00",
+            "source": "ERROR_TABLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T17",
+        "T19",
+        "P44",
+        "T46",
+        "T48",
+        "T51",
+        "T55",
+        "T85"
+      ],
+      "uncertain": [
+        "응답 예제의 8~10일 구간에 taMax8Min, taMin8Min처럼 Min으로 끝나는 태그가 있고 응답 표에는 Low로 적혀 있어, 둘 다 필드로 적었다.",
+        "응답 예제에 taMin10 계열 태그가 없어 표에만 있는 필드의 자리를 item 아래로 짐작했다."
+      ],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "중기해상예보조회",
+      "description": "(6시 발표기준) 예보구역코드, 발표시각의 조회 조건으로 예보일로부터 4일에서 10일까지 해상 날씨 및 파고정보를 조회하는 기능 (18시 발표기준) 예보구역코드, 발표시각의 조회 조건으로 예보일로부터 5일에서 10일까지 해상 날씨 및 파고정보를 조회하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidSeaFcst",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidSeaFcst?serviceKey=인증키&numOfRows=10&pageNo=1&regId=12A10000&tmFc=201404080600",
+        "serviceUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "dataType",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "numOfRows",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수 Default: 10",
+          "example": "10",
+          "defaultValue": "10",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호 Default: 1",
+          "example": "1",
+          "defaultValue": "1",
+          "common": false
+        },
+        {
+          "name": "dataType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "요청자료형식(XML/JSON) Default: XML",
+          "example": "XML",
+          "defaultValue": "XML",
+          "common": false
+        },
+        {
+          "name": "regId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "하단 참고자료 참조",
+          "example": "12A20000",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "tmFc",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "-일 2회(06:00,18:00)회 생성 되며 발표시각을 입력 -최근 24시간 자료만 제공",
+          "example": "201404080600",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "응답 메시지코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "응답 메시지 설명",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.dataType",
+          "type": "STRING",
+          "description": "응답자료형식 (XML/JSON)",
+          "sample": "XML",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].regId",
+          "type": "STRING",
+          "description": "입력한 예보구역코드",
+          "sample": "12A10000",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf4Am",
+          "type": "STRING",
+          "description": "(6시 발표의 경우만) 4일후 오전날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf4Pm",
+          "type": "STRING",
+          "description": "(6시 발표의 경우만) 4일후 오후날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf5Am",
+          "type": "STRING",
+          "description": "5일후 오전날씨예보",
+          "sample": "구름많고비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf5Pm",
+          "type": "STRING",
+          "description": "5일후 오후날씨예보",
+          "sample": "구름많고비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf6Am",
+          "type": "STRING",
+          "description": "6일후 오전날씨예보",
+          "sample": "구름많고비",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf6Pm",
+          "type": "STRING",
+          "description": "6일후 오후날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf7Am",
+          "type": "STRING",
+          "description": "7일후 오전날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf7Pm",
+          "type": "STRING",
+          "description": "7일후 오후날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf8",
+          "type": "STRING",
+          "description": "8일후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf9",
+          "type": "STRING",
+          "description": "9일후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wf10",
+          "type": "STRING",
+          "description": "10일후 날씨예보",
+          "sample": "구름많음",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh4AAm",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일후 오전 최저 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh4APm",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일후 오후 최저 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh4BAm",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일후 오전 최고 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh4BPm",
+          "type": "INTEGER",
+          "description": "(6시 발표의 경우만) 4일후 오후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh5AAm",
+          "type": "INTEGER",
+          "description": "5일후 오전 최저 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh5APm",
+          "type": "INTEGER",
+          "description": "5일후 오후 최저 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh5BAm",
+          "type": "INTEGER",
+          "description": "5일후 오전 최고 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh5BPm",
+          "type": "INTEGER",
+          "description": "5일후 오후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh6AAm",
+          "type": "INTEGER",
+          "description": "6일후 오전 최저 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh6APm",
+          "type": "INTEGER",
+          "description": "6일후 오후 최저 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh6BAm",
+          "type": "INTEGER",
+          "description": "6일후 오전 최고 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh6BPm",
+          "type": "INTEGER",
+          "description": "6일후 오후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh7AAm",
+          "type": "INTEGER",
+          "description": "7일후 오전 최저 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh7APm",
+          "type": "INTEGER",
+          "description": "7일후 오후 최저 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh7BAm",
+          "type": "INTEGER",
+          "description": "7일후 오전 최고 예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh7BPm",
+          "type": "INTEGER",
+          "description": "7일후 오후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh8A",
+          "type": "INTEGER",
+          "description": "8일후 최저예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh8B",
+          "type": "INTEGER",
+          "description": "8일후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh9A",
+          "type": "INTEGER",
+          "description": "9일후 최저예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh9B",
+          "type": "INTEGER",
+          "description": "9일후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh10A",
+          "type": "INTEGER",
+          "description": "10일후 최저예상파고(m)",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].wh10B",
+          "type": "INTEGER",
+          "description": "10일후 최고 예상파고(m)",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "0",
+            "source": "RESPONSE_EXAMPLE"
+          },
+          {
+            "code": "00",
+            "source": "ERROR_TABLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T17",
+        "T19",
+        "P56",
+        "T58",
+        "T60",
+        "T63",
+        "T67",
+        "T85"
+      ],
+      "uncertain": [],
       "unsupported": []
     }
   ],

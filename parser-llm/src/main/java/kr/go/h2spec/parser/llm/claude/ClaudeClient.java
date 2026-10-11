@@ -68,11 +68,16 @@ public final class ClaudeClient implements LlmClient {
      */
     @Override
     public LlmResponse complete(LlmRequest request) throws LlmException {
-        HttpRequest httpRequest = HttpRequest.newBuilder(messagesUri)
+        HttpRequest.Builder builder = HttpRequest.newBuilder(messagesUri)
                 .timeout(settings.requestTimeout())
                 .header("x-api-key", settings.apiKey())
                 .header("anthropic-version", API_VERSION)
-                .header("content-type", "application/json")
+                .header("content-type", "application/json");
+        if (settings.workspaceId() != null) {
+            // 한 워크스페이스에 묶이지 않은 키는 이 머리가 없으면 400으로 거절된다
+            builder.header("anthropic-workspace-id", settings.workspaceId());
+        }
+        HttpRequest httpRequest = builder
                 .POST(HttpRequest.BodyPublishers.ofByteArray(json(ClaudeRequests.body(request, settings))))
                 .build();
         return retry.call(() -> send(httpRequest));

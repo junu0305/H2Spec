@@ -62,7 +62,8 @@ class LlmEvalTest {
         assertTrue(summary.startsWith("# llm 엔진 평가 — 세트 A\n"), summary);
         assertTrue(summary.contains("| 오퍼레이션 재현율 | 100.0% (1/1) |"), summary);
         String document = Files.readString(reports.resolve("documents/its-traffic-light.hwp.json"));
-        assertTrue(document.contains("[교차검증]"), "llm 엔진의 검수 노트를 문서별 JSON에서 볼 수 있다: " + document);
+        // 녹화는 실제 응답이다. 신호연계의 page는 body 밖 response 바로 아래에 있다(rule 엔진은 items.item[] 아래로 본다)
+        assertTrue(document.contains("response.page.page"), "llm 엔진의 응답 경로를 문서별 JSON에서 볼 수 있다: " + document);
         assertTrue(out().contains("녹화 응답: " + responses), out());
     }
 

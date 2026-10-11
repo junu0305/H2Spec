@@ -1,6 +1,44 @@
 {
   "serviceName": "한국연구재단_KCI 참고문헌 서비스",
   "provider": "한국연구재단",
+  "errorCodes": [
+    {
+      "code": "1",
+      "message": "APPLICATION_ERROR"
+    },
+    {
+      "code": "10",
+      "message": "INVALID_REQUEST_PARAMETER_ERROR"
+    },
+    {
+      "code": "12",
+      "message": "NO_OPENAPI_SERVICE_ERROR"
+    },
+    {
+      "code": "20",
+      "message": "SERVICE_ACCESS_DENIED_ERROR"
+    },
+    {
+      "code": "22",
+      "message": "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"
+    },
+    {
+      "code": "30",
+      "message": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"
+    },
+    {
+      "code": "31",
+      "message": "DEADLINE_HAS_EXPIRED_ERROR"
+    },
+    {
+      "code": "32",
+      "message": "UNREGISTERED_IP_ERROR"
+    },
+    {
+      "code": "99",
+      "message": "UNKNOWN_ERROR"
+    }
+  ],
   "operations": [
     {
       "operationName": "",
@@ -17,62 +55,1733 @@
       "responseFormat": "XML",
       "defaultResponseFormat": "XML",
       "formatParameter": "",
-      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
       "requestParameters": [
-        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
-         "description": "공공데이터포털에서 발급받은 인증키", "example": "인증키 (URL Encode)", "defaultValue": "", "common": false},
-        {"name": "recordCnt", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
-         "description": "한 페이지 결과 수", "example": "10", "defaultValue": "", "common": false},
-        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
-         "description": "페이지 번호", "example": "1", "defaultValue": "", "common": false},
-        {"name": "insiId", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
-         "description": "[한국연구재단_KCI 기관정보 서비스] API의 상세기능[기관정보 조회]에서 기관명으로 조회 시 확인가능",
-         "example": "", "defaultValue": "", "common": false},
-        {"name": "artiId", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
-         "description": "상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능", "example": "", "defaultValue": "",
-         "common": false}
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "recordCnt",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수",
+          "example": "10",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "insiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 기관정보 서비스] API의 상세기능[기관정보 조회]에서 기관명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "artiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
       ],
       "responseStructure": "EXAMPLE",
       "responseExampleFormat": "XML",
       "responseFields": [
-        {"path": "response.header.resultCode", "type": "STRING", "description": "결과코드",
-         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.header.resultMsg", "type": "STRING", "description": "결과메시지",
-         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].NUM", "type": "INTEGER", "description": "데이터 순번",
-         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].ARTIID", "type": "STRING", "description": "논문ID",
-         "sample": "ART001945795", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].REFSEQ", "type": "STRING", "description": "참고문헌시퀀스",
-         "sample": "00001", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].TITLE", "type": "STRING", "description": "논문명",
-         "sample": "<label>1</label>", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].TITLESUB", "type": "STRING", "description": "논문부제목",
-         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].TRANTITLE", "type": "STRING", "description": "번역제목",
-         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].SOURCE", "type": "STRING", "description": "저널명or표제",
-         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.items.item[].MONTH", "type": "INTEGER", "description": "발행월",
-         "sample": "05", "pathSource": "FIELD_TABLE", "common": false},
-        {"path": "response.body.items.item[].REFARTIID", "type": "STRING", "description": "KCI참고문헌제어번호",
-         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.recordCnt", "type": "INTEGER", "description": "한 페이지당 표출 데이터 수",
-         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지 수",
-         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
-        {"path": "response.body.totalCount", "type": "INTEGER", "description": "데이터 총 개수",
-         "sample": "116550", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메시지",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].NUM",
+          "type": "INTEGER",
+          "description": "데이터 순번",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].INSIID",
+          "type": "STRING",
+          "description": "기관ID",
+          "sample": "INS000000015",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ARTIID",
+          "type": "STRING",
+          "description": "논문ID",
+          "sample": "ART001945795",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFSEQ",
+          "type": "STRING",
+          "description": "참고문헌시퀀스",
+          "sample": "00001",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ELEMENTCITATION",
+          "type": "STRING",
+          "description": "참고문헌시작",
+          "sample": "C302",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].COLLAB",
+          "type": "STRING",
+          "description": "기관명",
+          "sample": "경기도교육청",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TITLE",
+          "type": "STRING",
+          "description": "논문명",
+          "sample": "<label>1</label>",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TITLESUB",
+          "type": "STRING",
+          "description": "논문부제목",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TRANTITLE",
+          "type": "STRING",
+          "description": "번역제목",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TRANTITLESUB",
+          "type": "STRING",
+          "description": "번역부제목",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SOURCE",
+          "type": "STRING",
+          "description": "저널명or표제",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PUBID",
+          "type": "STRING",
+          "description": "영구식별번호",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PATENT",
+          "type": "STRING",
+          "description": "특허번호",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PATENTGOV",
+          "type": "STRING",
+          "description": "특허국가",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].VOLUME",
+          "type": "STRING",
+          "description": "권정보",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ISSUE",
+          "type": "STRING",
+          "description": "호정보",
+          "sample": "4",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].FPAGE",
+          "type": "STRING",
+          "description": "시작페이지",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].LPAGE",
+          "type": "STRING",
+          "description": "끝페이지",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].YEAR",
+          "type": "STRING",
+          "description": "발행년도",
+          "sample": "2014",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].MONTH",
+          "type": "STRING",
+          "description": "발행월",
+          "sample": "05",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DAY",
+          "type": "STRING",
+          "description": "발행일자",
+          "sample": "25",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].EDITION",
+          "type": "STRING",
+          "description": "판사항",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PUBLISHERNAME",
+          "type": "STRING",
+          "description": "출판사명",
+          "sample": "경기도교육청",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PUBLISHERLOC",
+          "type": "STRING",
+          "description": "출판사소재지",
+          "sample": "수원",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CONFNAME",
+          "type": "STRING",
+          "description": "컨퍼런스명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CONFLOC",
+          "type": "STRING",
+          "description": "컨퍼런스개최지역",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CONFDATE",
+          "type": "STRING",
+          "description": "컨퍼런스개최일자",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DEGREES",
+          "type": "STRING",
+          "description": "학위",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DATEINCITATION",
+          "type": "STRING",
+          "description": "인용일자",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].URI",
+          "type": "STRING",
+          "description": "URL",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CHAPTERTITLE",
+          "type": "STRING",
+          "description": "챕터제목",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PAGENATION",
+          "type": "STRING",
+          "description": "쪽수",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REPORTNM",
+          "type": "STRING",
+          "description": "보고서번호",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].INTCOMMENT",
+          "type": "STRING",
+          "description": "코멘트",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ORIREF",
+          "type": "STRING",
+          "description": "참고문헌원형",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].URLCOMMENT",
+          "type": "STRING",
+          "description": "URL코멘트",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFID",
+          "type": "STRING",
+          "description": "참고문헌아이디",
+          "sample": "B001",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFARTIID",
+          "type": "STRING",
+          "description": "KCI참고문헌제어번호",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.recordCnt",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "116550",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
       ],
-      "resultCode": {"fieldName": "resultCode", "successCodes": [
-        {"code": "00", "source": "FIELD_TABLE"},
-        {"code": "00", "source": "RESPONSE_EXAMPLE"}
-      ]},
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
       "errorCodes": [],
-      "evidence": ["T16", "T22", "T24", "T27", "T30"],
-      "uncertain": ["응답 예제의 MONTH는 빈 태그라 응답 필드 표의 샘플(05)로 타입을 정했다"],
+      "evidence": [
+        "P20",
+        "T22",
+        "T24",
+        "T27",
+        "T30",
+        "T16",
+        "T87"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "OA학술지-참고문헌저자관리 조회",
+      "description": "OA학술지-참고문헌저자관리 정보를 조회 하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiD273List",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiD273List?serviceKey=인증키&pageNo=1&recordCnt=10",
+        "serviceUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "XML",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "recordCnt",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수",
+          "example": "10",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "insiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 기관정보 서비스] API의 상세기능 [기관정보 조회]에서 기관명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "artiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 논문정보 서비스] API의 상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메시지",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].NUM",
+          "type": "INTEGER",
+          "description": "데이터 순번",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].INSIID",
+          "type": "STRING",
+          "description": "기관ID",
+          "sample": "INS000000015",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ARTIID",
+          "type": "STRING",
+          "description": "논문ID",
+          "sample": "ART001945795",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFSEQ",
+          "type": "STRING",
+          "description": "참고문헌시퀀스",
+          "sample": "00002",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].AU_SEQ",
+          "type": "STRING",
+          "description": "저자시퀀스",
+          "sample": "00001",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TYPE",
+          "type": "STRING",
+          "description": "타입",
+          "sample": "C104",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SURNAME",
+          "type": "STRING",
+          "description": "성",
+          "sample": "곽",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].GIVEN_NAME",
+          "type": "STRING",
+          "description": "이름",
+          "sample": "선희",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SUFFIX",
+          "type": "STRING",
+          "description": "서픽스",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ETAL",
+          "type": "STRING",
+          "description": "기타",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.recordCnt",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "189633",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "P31",
+        "T33",
+        "T35",
+        "T38",
+        "T41",
+        "T16",
+        "T87"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "KCI참고문헌공동저자 조회",
+      "description": "KCI참고문헌공동저자 정보를 조회 하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiD321List",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiD321List?serviceKey=인증키&pageNo=1&recordCnt=10",
+        "serviceUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "XML",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "recordCnt",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수",
+          "example": "10",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "artiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 논문정보 서비스] API의 상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메시지",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].NUM",
+          "type": "INTEGER",
+          "description": "데이터 순번",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ARTIID",
+          "type": "STRING",
+          "description": "논문ID",
+          "sample": "ART000852272",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFEBIBLID",
+          "type": "STRING",
+          "description": "참고문헌ID",
+          "sample": "REF016129592",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFEBIBLPEBLCRETSEQ",
+          "type": "STRING",
+          "description": "참고문헌공동저자SEQ",
+          "sample": "000002398641",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PEBLCRETNM",
+          "type": "STRING",
+          "description": "공동저자명",
+          "sample": "Ansari N.",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PEBLCRETID",
+          "type": "STRING",
+          "description": "공동저자ID",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.recordCnt",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "50753903",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "P42",
+        "T44",
+        "T46",
+        "T49",
+        "T52",
+        "T16",
+        "T87"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "KCI참고문헌 조회",
+      "description": "KCI참고문헌 정보를 조회 하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiM320List",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiM320List?serviceKey=인증키&pageNo=1&recordCnt=10",
+        "serviceUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "XML",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "recordCnt",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수",
+          "example": "10",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "artiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 논문정보 서비스] API의 상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메시지",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].NUM",
+          "type": "INTEGER",
+          "description": "데이터 순번",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SERE_ID",
+          "type": "STRING",
+          "description": "학술지ID",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ARTI_ID",
+          "type": "STRING",
+          "description": "논문ID",
+          "sample": "ART000850943",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_ID",
+          "type": "STRING",
+          "description": "참고문헌ID",
+          "sample": "REF014893743",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_TYPE_CD",
+          "type": "STRING",
+          "description": "참고문헌유형코드",
+          "sample": "01",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CONM_DIV_CD",
+          "type": "STRING",
+          "description": "확인구분코드",
+          "sample": "N",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].RESI_TYPE_CD",
+          "type": "STRING",
+          "description": "입력구분",
+          "sample": "01",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_ARTI_ID",
+          "type": "STRING",
+          "description": "참고문헌논문ID",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CRET_NM",
+          "type": "STRING",
+          "description": "저자명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TITL",
+          "type": "STRING",
+          "description": "제목",
+          "sample": "The future of health social work",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DATA_NATE",
+          "type": "STRING",
+          "description": "자료출처",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PUBI_YR",
+          "type": "STRING",
+          "description": "발행년도",
+          "sample": "2003",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PUBI_MON",
+          "type": "STRING",
+          "description": "발행월",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].VOL",
+          "type": "STRING",
+          "description": "권",
+          "sample": "37",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ISSE",
+          "type": "STRING",
+          "description": "호",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SERNO",
+          "type": "STRING",
+          "description": "통권",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SPEC_ISSE",
+          "type": "STRING",
+          "description": "특별호",
+          "sample": "SYSTEM",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ST_PG",
+          "type": "STRING",
+          "description": "시작페이지",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].FINI_PG",
+          "type": "STRING",
+          "description": "끝페이지",
+          "sample": "15",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].PUBI_INSI_NM",
+          "type": "STRING",
+          "description": "발행기관명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].WRIT_NO",
+          "type": "STRING",
+          "description": "총서번호",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DEGE_DIV_CD",
+          "type": "STRING",
+          "description": "학위구분",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].UNIV_NM",
+          "type": "STRING",
+          "description": "학교명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DEPR_NM",
+          "type": "STRING",
+          "description": "학과명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ADDR_URL",
+          "type": "STRING",
+          "description": "주소URL",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CITA_DAY",
+          "type": "STRING",
+          "description": "인용일",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].WEB_RESI_DAY",
+          "type": "STRING",
+          "description": "웹문서작성일",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DATA_TYPE",
+          "type": "STRING",
+          "description": "자료유형",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REMR",
+          "type": "STRING",
+          "description": "비고",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].RESI_DT",
+          "type": "STRING",
+          "description": "등록일시",
+          "sample": "20080623025118",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].UPDATE_DT",
+          "type": "STRING",
+          "description": "수정일시",
+          "sample": "20080623025118",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REPO_NO",
+          "type": "STRING",
+          "description": "보고서번호",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SEAR_TITL",
+          "type": "STRING",
+          "description": "검색제목",
+          "sample": "thefutureofhealthsocialwork",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SEAR_CRET_NM",
+          "type": "STRING",
+          "description": "검색저자명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].TITL_TMPL",
+          "type": "STRING",
+          "description": "임시",
+          "sample": "11954004",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_SERE_ID",
+          "type": "STRING",
+          "description": "매핑된참고문헌학술지ID",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CRET_ID",
+          "type": "STRING",
+          "description": "저자ID",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_ORDER",
+          "type": "INTEGER",
+          "description": "참고문헌순서",
+          "sample": "11",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].UCI",
+          "type": "STRING",
+          "description": "UCI",
+          "sample": "G704-REF014893743",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CONT",
+          "type": "STRING",
+          "description": "논문에서가져온원형정보",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CONT_PARSE",
+          "type": "STRING",
+          "description": "원형분석",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ABBR_NM",
+          "type": "STRING",
+          "description": "학술지축약명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].RESI_TYPE",
+          "type": "STRING",
+          "description": "입력정보구분",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].URL",
+          "type": "STRING",
+          "description": "원문URL",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ETC",
+          "type": "STRING",
+          "description": "참고문헌이력및변경사항기록내용",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DOI",
+          "type": "STRING",
+          "description": "DOI",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DOME_FORE_DIV_CD",
+          "type": "STRING",
+          "description": "참고문헌학술지국내외구분",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ORI_SERE_NM",
+          "type": "STRING",
+          "description": "원시학술지명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CHAPTER",
+          "type": "STRING",
+          "description": "챕터명",
+          "sample": "",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.recordCnt",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "42725244",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "P53",
+        "T55",
+        "T57",
+        "T60",
+        "T63",
+        "T16",
+        "T87"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "참고문헌연동 조회",
+      "description": "참고문헌연동 정보를 조회 하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiM325List",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiM325List?serviceKey=인증키&pageNo=1&recordCnt=10",
+        "serviceUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "XML",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "recordCnt",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수",
+          "example": "10",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "artiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 논문정보 서비스] API의 상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메시지",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].NUM",
+          "type": "INTEGER",
+          "description": "데이터 순번",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ARTI_ID",
+          "type": "STRING",
+          "description": "논문ID",
+          "sample": "ART001037471",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_ID",
+          "type": "STRING",
+          "description": "참고문헌ID",
+          "sample": "REF029628831",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].SYSTEM_NM",
+          "type": "STRING",
+          "description": "시스템명",
+          "sample": "KRI",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DATA_ID",
+          "type": "STRING",
+          "description": "자료ID",
+          "sample": "205_10183082_",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].RESI_DT",
+          "type": "STRING",
+          "description": "등록일시",
+          "sample": "20140205201344",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].UPDATE_DT",
+          "type": "STRING",
+          "description": "수정일시",
+          "sample": "20140205201344",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.recordCnt",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "1184843",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "P64",
+        "T66",
+        "T68",
+        "T71",
+        "T74",
+        "T16",
+        "T87"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "참고문헌_KRI연동 조회",
+      "description": "참고문헌_KRI연동 정보를 조회 하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiM326List",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiM326List?serviceKey=인증키&pageNo=1&recordCnt=10",
+        "serviceUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "XML",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "공공데이터포털에서 발급받은 인증키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "recordCnt",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "한 페이지 결과 수",
+          "example": "10",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "REQUIRED",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "artiId",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "[한국연구재단_KCI 논문정보 서비스] API의 상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능",
+          "example": "",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메시지",
+          "sample": "NORMAL SERVICE",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].NUM",
+          "type": "INTEGER",
+          "description": "데이터 순번",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].ARTI_ID",
+          "type": "STRING",
+          "description": "논문ID",
+          "sample": "ART001248073",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].REFE_BIBL_ID",
+          "type": "STRING",
+          "description": "참고문헌ID",
+          "sample": "REF017927997",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].CRET_ID",
+          "type": "STRING",
+          "description": "저자ID",
+          "sample": "10021586",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].DATA_ID",
+          "type": "STRING",
+          "description": "자료ID",
+          "sample": "C20030300004",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].RESI_DT",
+          "type": "STRING",
+          "description": "등록일시",
+          "sample": "20131218160307",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].UPDATE_DT",
+          "type": "STRING",
+          "description": "수정일시",
+          "sample": "20131218160307",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.recordCnt",
+          "type": "INTEGER",
+          "description": "한 페이지당 표출 데이터 수",
+          "sample": "10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "데이터 총 개수",
+          "sample": "293391",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "P75",
+        "T77",
+        "T79",
+        "T82",
+        "T85",
+        "T16",
+        "T87"
+      ],
+      "uncertain": [],
       "unsupported": []
     }
   ],
-  "documentNotes": ["문서에 에러코드 표가 없다"]
+  "documentNotes": []
 }

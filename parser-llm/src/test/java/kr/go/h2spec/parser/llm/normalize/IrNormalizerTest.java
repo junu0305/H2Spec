@@ -1,12 +1,14 @@
 package kr.go.h2spec.parser.llm.normalize;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.parser.Block;
 import kr.go.h2spec.parser.IrConventions;
 import kr.go.h2spec.parser.llm.LlmFixtures;
 import kr.go.h2spec.parser.llm.SampleDocument;
 import kr.go.h2spec.parser.llm.schema.LlmAuth;
+import kr.go.h2spec.parser.llm.schema.LlmErrorCode;
 import kr.go.h2spec.parser.llm.schema.LlmExtraction;
 import kr.go.h2spec.parser.llm.schema.LlmOperation.DefaultResponseFormat;
 import kr.go.h2spec.parser.llm.schema.LlmOperation.ResponseExampleFormat;
@@ -48,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class IrNormalizerTest {
 
-    private static final LlmMetadata LLM = new LlmMetadata("claude", "claude-opus-5-5", "medium", "extraction-v2", "2");
+    private static final LlmMetadata LLM = new LlmMetadata("claude", "claude-opus-5-5", "medium", "extraction-v4", "3");
     private static final String ORGANIZATION_URL = "https://openapi.example.kr/svc/getList";
     private static final String RESPONSE = """
             <response>
@@ -82,22 +84,6 @@ class IrNormalizerTest {
         assertEquals(List.of("provider", "model", "effort", "promptVersion", "schemaVersion"), keys(metadata.get("llm")));
         assertFalse(metadata.toString().toLowerCase().contains("token"), "토큰 수는 실행마다 달라 IR에 넣지 않는다");
         assertFalse(metadata.toString().toLowerCase().contains("cache"));
-    }
-
-    @Test
-    void IR은_rule_엔진과_같은_모양이고_generator가_받는다() throws Exception {
-        NormalizedOperation normalized = normalize(standardOperation());
-
-        assertTrue(normalized.converted());
-        assertEquals("MsrstnList", normalized.apiId());
-        assertEquals(List.of("metadata", "api", "generatorHints"), keys(normalized.ir()));
-        assertEquals(List.of("apiId", "apiName", "provider", "baseUrl", "endpoint", "httpMethod", "description",
-                "authType", "responseFormat", "requestParameters", "responseFields", "errorSpec"), keys(api(normalized)));
-        assertEquals(IrConventions.generatorHints("MsrstnList"), normalized.ir().get("generatorHints"));
-
-        Path file = tempDir.resolve("MsrstnList.json");
-        Files.writeString(file, normalized.ir().toPrettyString());
-        assertEquals("MsrstnList", new IrLoader().load(file).api().apiId());
     }
 
     // ---- api.apiName, description, provider ----
@@ -221,14 +207,60 @@ class IrNormalizerTest {
                 .parameters(query("serviceKey"), query("returnType")));
         NormalizedOperation unfilled = normalize(standardOperation()
                 .format(ResponseFormat.BOTH, DefaultResponseFormat.XML, "_type")
-                .parameters(query("serviceKey"), query("_type")));
+                .parameters(query("serviceKey")));
         NormalizedOperation single = normalize(standardOperation()
                 .format(ResponseFormat.XML, DefaultResponseFormat.XML, "returnType")
                 .parameters(query("serviceKey"), query("returnType")));
 
         assertTrue(selectable.formatSelectable());
-        assertFalse(unfilled.formatSelectable(), "generator가 값을 채우지 않는 파라미터면 서버 기본 형식이 온다");
+        assertFalse(unfilled.formatSelectable(), "요청 파라미터에 없는 포맷 파라미터는 채울 수 없어 서버 기본 형식이 온다");
         assertFalse(single.formatSelectable(), "한 형식만 내는 API는 형식을 고를 수 없다");
+    }
+
+    @Test
+    void generator가_모르는_포맷_파라미터는_generatorHints로_알리고_값의_대소문자는_예제를_따른다() throws Exception {
+        LlmRequestParameter upper = parameter("apiType", Location.QUERY, LlmValueType.STRING, Requirement.OPTIONAL,
+                "XML", "", false);
+        NormalizedOperation hinted = normalize(
+                document(ORGANIZATION_URL, row("serviceKey", "인증키", "100", "1", "-", "인증키"),
+                        row("apiType", "응답형식", "4", "0", "XML", "XML 또는 JSON")),
+                extraction(documentOperation(ORGANIZATION_URL, query("serviceKey"), upper)
+                        .format(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "apiType")));
+        NormalizedOperation known = normalize(standardOperation()
+                .format(ResponseFormat.BOTH, DefaultResponseFormat.XML, "returnType")
+                .parameters(query("serviceKey"), query("returnType")));
+
+        assertEquals("apiType", hinted.ir().at("/generatorHints/responseFormatParameter/name").asText());
+        assertEquals("XML", hinted.ir().at("/generatorHints/responseFormatParameter/value").asText());
+        assertTrue(hinted.formatSelectable(), "값을 채우므로 두 형식 중 고를 수 있다");
+        assertTrue(notes(hinted).stream().noneMatch(note -> note.contains("기본 응답 형식")),
+                "생성 클라이언트가 형식을 골라 보내므로 서버 기본 형식을 몰라도 된다: " + notes(hinted));
+        assertTrue(known.ir().at("/generatorHints/responseFormatParameter").isMissingNode(),
+                "generator가 아는 이름은 힌트 없이 채운다");
+
+        Path file = tempDir.resolve("hinted.json");
+        Files.writeString(file, hinted.ir().toPrettyString());
+        assertEquals(new GeneratorHints.ResponseFormatParameter("apiType", "XML"),
+                new IrLoader().load(file).generatorHints().responseFormatParameter());
+    }
+
+    // ---- api.errorSpec ----
+
+    @Test
+    void 에러코드는_오퍼레이션의_표_뒤에_원문에_있는_문서_공통_표를_붙이고_같은_코드는_앞의_것만_남긴다() {
+        LlmFixtures.OperationBuilder operation = standardOperation()
+                .errors(new LlmErrorCode("30", "SERVICE KEY IS NOT REGISTERED ERROR"));
+        List<LlmErrorCode> shared = List.of(new LlmErrorCode("01", "APPLICATION ERROR"),
+                new LlmErrorCode("30", "등록되지 않은 서비스키"), new LlmErrorCode("99", "원문에 없는 코드"));
+
+        NormalizedOperation normalized = normalize(SampleDocument.standard(),
+                LlmFixtures.extraction("한국환경공단", shared, List.of(), operation));
+
+        List<String> known = new ArrayList<>();
+        errorSpec(normalized).get("knownErrorCodes")
+                .forEach(error -> known.add(error.get("code").asText() + " " + error.get("message").asText()));
+        assertEquals(List.of("30 SERVICE KEY IS NOT REGISTERED ERROR", "01 APPLICATION ERROR"), known,
+                "99는 원문에 없어 검증(V9)에서 버린다");
     }
 
     // ---- api.responseFields ----

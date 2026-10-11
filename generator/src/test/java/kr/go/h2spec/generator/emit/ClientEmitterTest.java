@@ -4,6 +4,7 @@ import kr.go.h2spec.client.interceptor.PublicDataApiException;
 import kr.go.h2spec.client.interceptor.PublicDataErrorInterceptor;
 import kr.go.h2spec.generator.InterceptorProbe;
 import kr.go.h2spec.generator.ir.ErrorSpec;
+import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.IrSpec;
@@ -76,6 +77,39 @@ class ClientEmitterTest {
         assertFalse(source.contains("String returnType"));
         assertTrue(source.contains("url.append(\"&returnType=xml\");"));
         assertTrue(source.contains("xmlMapper.readValue"));
+    }
+
+    @Test
+    void 힌트가_가리키는_포맷_파라미터도_감추고_힌트의_값을_박는다() throws Exception {
+        // 국가교통정보센터의 type처럼 generator가 모르는 이름은 IR의 generatorHints로 알린다
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        List<RequestParameter> params = new java.util.ArrayList<>(base.api().requestParameters());
+        params.add(new RequestParameter("type", "query", "string", true, "xml 또는 json", null, "XML", null));
+        ApiSpec a = base.api();
+        IrSpec ir = new IrSpec(
+                new ApiSpec(a.apiId(), a.apiName(), a.description(), a.baseUrl(), a.endpoint(),
+                        a.httpMethod(), "XML", params, a.responseFields(), a.errorSpec()),
+                new GeneratorHints(base.generatorHints().targetPackage(),
+                        new GeneratorHints.ResponseFormatParameter("type", "XML")));
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertFalse(source.contains("String type"), "메서드 시그니처에 포맷 파라미터가 남으면 안 된다");
+        assertTrue(source.contains("url.append(\"&type=XML\");"));
+        assertEquals(List.of(), ClientEmitter.methodParameters(ir).stream()
+                .map(RequestParameter::name).filter("type"::equals).toList());
+    }
+
+    @Test
+    void 힌트의_파라미터가_요청_파라미터에_없으면_힌트를_쓰지_않는다() throws Exception {
+        IrSpec base = withFormatParam("JSON");
+        IrSpec ir = new IrSpec(base.api(), new GeneratorHints(base.generatorHints().targetPackage(),
+                new GeneratorHints.ResponseFormatParameter("type", "JSON")));
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertTrue(source.contains("url.append(\"&returnType=json\");"));
+        assertFalse(source.contains("&type="));
     }
 
     @Test

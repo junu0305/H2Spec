@@ -105,7 +105,8 @@ public final class ExtractionValidator {
         correctSharedUrls(drafts);
         drafts.forEach(this::checkUrl);
         dropDuplicates(drafts);
-        return new ValidationResult(extraction, drafts.stream().map(Draft::result).toList());
+        return new ValidationResult(extraction, drafts.stream().map(Draft::result).toList(),
+                checkErrorCodes(extraction.errorCodes(), source, Set.of(), null));
     }
 
     /** 주소를 고르는 데까지와 오퍼레이션마다 따로 보는 검사 */
@@ -120,7 +121,7 @@ public final class ExtractionValidator {
             draft.drop("검증을 통과한 응답 필드가 없습니다");
         }
         draft.successCodes = checkSuccessCodes(draft, source, evidence);
-        draft.errorCodes = checkErrorCodes(draft, source, evidence);
+        draft.errorCodes = checkErrorCodes(draft.operation.errorCodes(), source, evidence, draft);
         return draft;
     }
 
@@ -286,9 +287,11 @@ public final class ExtractionValidator {
                     .findFirst().orElse(null);
             if (sameUrl != null) {
                 draft.drop("주소가 앞 오퍼레이션(" + sameUrl.label() + ")과 같습니다: " + url);
+                draft.remove("V11", url, "주소가 앞 오퍼레이션과 같음");
                 sameUrl.notes.add(V11_URL_NOTE, draft.label());
             } else if (sameApiId != null) {
                 draft.drop("apiId가 앞 오퍼레이션(" + sameApiId.label() + ")과 같습니다: " + draft.parts.apiId());
+                draft.remove("V11", draft.parts.apiId(), "apiId가 앞 오퍼레이션과 같음");
                 sameApiId.notes.add(V11_API_ID_NOTE, draft.label() + " (" + url + ")");
             } else {
                 kept.add(draft);
@@ -591,13 +594,23 @@ public final class ExtractionValidator {
         return found;
     }
 
-    /** 에러코드가 원문에 있는지 본다 (V9). 버린 항목은 노트를 남기지 않는다 */
-    private List<LlmErrorCode> checkErrorCodes(Draft draft, SourceText source, Set<Integer> evidence) {
+    /**
+     * 에러코드가 원문에 있는지 본다 (V9). 버린 항목은 노트를 남기지 않는다.
+     *
+     * @param draft 오퍼레이션의 에러코드면 버린 항목을 남길 오퍼레이션. 문서 공통 에러코드면 null
+     */
+    private List<LlmErrorCode> checkErrorCodes(List<LlmErrorCode> errors, SourceText source, Set<Integer> evidence,
+                                               Draft draft) {
         List<LlmErrorCode> found = new ArrayList<>();
-        for (LlmErrorCode error : list(draft.operation.errorCodes())) {
+        for (LlmErrorCode error : list(errors)) {
+            if (error == null) {
+                continue;
+            }
             String code = LlmText.restore(error.code()).strip();
             if (source.names(code, false, evidence).isEmpty()) {
-                draft.remove("V9", code, "원문에 없음");
+                if (draft != null) {
+                    draft.remove("V9", code, "원문에 없음");
+                }
             } else {
                 found.add(new LlmErrorCode(code, LlmText.restore(error.message())));
             }

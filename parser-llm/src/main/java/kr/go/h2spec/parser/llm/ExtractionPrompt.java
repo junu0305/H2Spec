@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 
 /**
  * 리소스의 추출 프롬프트(시스템 프롬프트)와 중간 스키마(JSON Schema)를 읽고, 작업 지시를 더해 보낼 요청을 만든다 (설계 4.3).
@@ -18,8 +19,8 @@ import java.util.HexFormat;
  */
 public final class ExtractionPrompt {
 
-    private static final String PROMPT_VERSION = "extraction-v2";
-    private static final String SCHEMA_VERSION = "2";
+    private static final String PROMPT_VERSION = "extraction-v4";
+    private static final String SCHEMA_VERSION = "3";
     private static final String PROMPT_RESOURCE = "prompt/" + PROMPT_VERSION + ".md";
     private static final String SCHEMA_RESOURCE = "extraction-schema-v" + SCHEMA_VERSION + ".json";
     /**
@@ -29,6 +30,23 @@ public final class ExtractionPrompt {
      */
     private static final String WHOLE_DOCUMENT_INSTRUCTION =
             "위 <document>의 문서 전체에서 오퍼레이션을 모두 찾아, 문서에 나온 순서대로 operations에 적어라.";
+
+    /**
+     * 원문 대조에서 버린 것을 알려 다시 부를 때 작업 지시 뒤에 붙이는 글. 프롬프트의 일부라 고치면 프롬프트 버전을 올린다.
+     * 사이에 {@code ValidationFeedback}이 적은 줄이 들어간다.
+     */
+    private static final String RETRY_HEAD = """
+
+
+            앞서 같은 지시로 뽑은 결과를 원문과 대조했더니 아래 항목을 버려야 했다. 버린 이유를 보고 원문에 적힌 그대로 고쳐서, \
+            문제가 없던 오퍼레이션까지 문서 전체를 처음부터 다시 적어라.
+            <validation_problems>
+            """;
+    private static final String RETRY_TAIL = """
+
+            </validation_problems>
+            응답 경로의 칸 이름은 응답 예제(예제가 없으면 응답 표)에 실제로 나오는 키·태그만 쓴다. 예제에 없는 감싸는 칸을 보태지 않는다. \
+            원문에서 근거를 찾지 못한 항목은 지어내지 말고 뺀다.""";
 
     private final String promptText;
     private final String schemaText;
@@ -62,12 +80,12 @@ public final class ExtractionPrompt {
         return schemaText;
     }
 
-    /** @return IR {@code metadata.llm.promptVersion}에 적는 값 ({@code extraction-v2}) */
+    /** @return IR {@code metadata.llm.promptVersion}에 적는 값 ({@code extraction-v4}) */
     public String promptVersion() {
         return PROMPT_VERSION;
     }
 
-    /** @return IR {@code metadata.llm.schemaVersion}에 적는 값 ({@code 2}) */
+    /** @return IR {@code metadata.llm.schemaVersion}에 적는 값 ({@code 3}) */
     public String schemaVersion() {
         return SCHEMA_VERSION;
     }
@@ -82,11 +100,6 @@ public final class ExtractionPrompt {
         return schemaSha256;
     }
 
-    /** @return 문서 전체를 한 번에 뽑으라는 작업 지시 */
-    public String wholeDocumentInstruction() {
-        return WHOLE_DOCUMENT_INSTRUCTION;
-    }
-
     /**
      * 문서 전체를 한 번에 뽑는 요청을 만든다. 평가 도구가 배치 요청을 만들 때도 이 요청을 써야 llm 엔진과 같은 것을 평가한다.
      *
@@ -96,6 +109,22 @@ public final class ExtractionPrompt {
      */
     public LlmRequest wholeDocumentRequest(String document, int maxOutputTokens) {
         return new LlmRequest(promptText, document, WHOLE_DOCUMENT_INSTRUCTION, schemaText, maxOutputTokens);
+    }
+
+    /**
+     * 원문 대조에서 버린 것을 알려 다시 부르는 요청을 만든다. 시스템 프롬프트와 문서는 처음 요청 그대로이고 작업 지시만 늘어난다.
+     *
+     * @param first    처음 요청
+     * @param problems {@code ValidationFeedback}이 적은 줄. 비어 있으면 안 된다
+     * @return 작업 지시 뒤에 검증 결과를 붙인 요청
+     */
+    public LlmRequest retryRequest(LlmRequest first, List<String> problems) {
+        if (problems.isEmpty()) {
+            throw new IllegalArgumentException("알릴 검증 결과가 없습니다");
+        }
+        return new LlmRequest(first.systemPrompt(), first.document(),
+                first.instruction() + RETRY_HEAD + String.join("\n", problems) + RETRY_TAIL,
+                first.jsonSchema(), first.maxOutputTokens());
     }
 
     private static byte[] read(String resource) {

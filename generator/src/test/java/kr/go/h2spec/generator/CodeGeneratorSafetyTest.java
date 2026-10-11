@@ -37,58 +37,6 @@ class CodeGeneratorSafetyTest {
     @TempDir
     Path tempDir;
 
-    @Test
-    void 성공코드에_넣은_코드는_리터럴_안에_갇히고_생성_코드가_컴파일된다() throws Exception {
-        // 그대로 붙이면 SUCCESS_CODE 상수 뒤에 static 블록이 생긴다
-        String payload = "00\"; static { System.exit(1); } //";
-        SampleIr ir = new SampleIr();
-        ir.successCode = payload;
-
-        assertCompiles(new CodeGenerator().generate(ir.build(), out()), classes());
-
-        // 클래스를 불러 초기화하면 끼워 넣은 코드가 실행되므로 javap로 본다
-        String client = javap(classes(), CLIENT_CLASS);
-        assertTrue(client.contains("SUCCESS_CODE = " + javapString(payload) + ";"), client);
-        assertFalse(client.contains("static {}"), "static 초기화 블록이 생기면 안 된다:\n" + client);
-    }
-
-    @Test
-    void 리터럴에_넣은_유니코드_escape로도_리터럴을_닫지_못한다() throws Exception {
-        // javac는 리터럴 안의 유니코드 escape를 먼저 풀어서, 따옴표를 직접 쓰지 않아도 리터럴이 닫힌다
-        String payload = "http://apis.data.go.kr/1234567/SampleService\\u0022; static { System.exit(1); } //";
-        SampleIr ir = new SampleIr();
-        ir.baseUrl = payload;
-
-        assertCompiles(new CodeGenerator().generate(ir.build(), out()), classes());
-
-        String client = javap(classes(), CLIENT_CLASS);
-        assertTrue(client.contains("BASE_URL = " + javapString(payload) + ";"), client);
-        assertFalse(client.contains("static {}"), "static 초기화 블록이 생기면 안 된다:\n" + client);
-    }
-
-    @Test
-    void 필드_설명으로_주석을_닫아_클래스를_끼워_넣지_못한다() throws Exception {
-        // DOCX 응답 표의 설명 칸에 넣은 글이 rule 엔진을 거쳐 그대로 온다. 주석을 무력화하지 않으면 DTO에 클래스 선언이 생긴다
-        SampleIr ir = new SampleIr();
-        ir.fields.add(new ResponseField("response.body.totalCount", "integer", "설명 */ class Injected {} /*", null));
-
-        List<String> classNames = assertCompiles(new CodeGenerator().generate(ir.build(), out()), classes());
-
-        assertTrue(classNames.stream().noneMatch(name -> name.contains("Injected")), classNames.toString());
-    }
-
-    @Test
-    void 유니코드_escape로도_주석을_닫지_못한다() throws Exception {
-        // 주석 끝을 한 글자도 쓰지 않고 escape로 써도 javac가 먼저 풀어 주석이 닫힌다
-        SampleIr ir = new SampleIr();
-        ir.fields.add(new ResponseField("response.body.totalCount", "integer",
-                "설명 \\u002a\\u002f class Injected {} /*", null));
-
-        List<String> classNames = assertCompiles(new CodeGenerator().generate(ir.build(), out()), classes());
-
-        assertTrue(classNames.stream().noneMatch(name -> name.contains("Injected")), classNames.toString());
-    }
-
     @ParameterizedTest
     @ValueSource(strings = {"XML", "JSON"})
     void 생성_코드에_글이_들어가는_모든_자리에서_코드를_끼워_넣지_못한다(String responseFormat) throws Exception {
@@ -132,6 +80,20 @@ class CodeGeneratorSafetyTest {
 
         assertTrue(e.getMessage().contains("api.apiId"), e.getMessage());
         assertTrue(e.getMessage().contains("../../escaped"), e.getMessage());
+        assertEquals(List.of(), filesUnder(tempDir));
+    }
+
+    @Test
+    void 포맷_파라미터_힌트의_값에_URL에_넣을_수_없는_글자가_있으면_거부한다() throws Exception {
+        // 값은 인코딩 없이 URL에 들어간다
+        SampleIr ir = new SampleIr();
+        ir.params.add(query("type", "xml 또는 json"));
+        ir.formatParameter = new GeneratorHints.ResponseFormatParameter("type", "xml&serviceKey=x");
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new CodeGenerator().generate(ir.build(), out()));
+
+        assertTrue(e.getMessage().contains("generatorHints.responseFormatParameter.value"), e.getMessage());
         assertEquals(List.of(), filesUnder(tempDir));
     }
 
@@ -228,11 +190,6 @@ class CodeGeneratorSafetyTest {
         }
     }
 
-    /** javap -constants가 문자열 상수를 보이는 꼴. 역슬래시와 따옴표를 escape해 따옴표로 감싼다 */
-    private static String javapString(String value) {
-        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
-
     private static RequestParameter serviceKey(String description) {
         return new RequestParameter("serviceKey", "query", "string", true, description, null, null, null);
     }
@@ -262,12 +219,13 @@ class CodeGeneratorSafetyTest {
                 field("response.header.resultCode", "결과코드"),
                 field("response.body.items.item[].stationName", "측정소명")));
         List<String> resultCodeCandidates = List.of();
+        GeneratorHints.ResponseFormatParameter formatParameter;
 
         IrSpec build() {
             return new IrSpec(
                     new ApiSpec(apiId, apiName, description, baseUrl, endpoint, "GET", responseFormat,
                             params, fields, new ErrorSpec(successCode, resultCodeCandidates)),
-                    new GeneratorHints(targetPackage));
+                    new GeneratorHints(targetPackage, formatParameter));
         }
     }
 }

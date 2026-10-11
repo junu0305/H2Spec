@@ -38,7 +38,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class ConvertCommandEngineTest {
 
     private static final String KEY = "sk-ant-api03-cli-test-secret";
-    private static final String NOTICE = "문서 내용을 claude(claude-opus-5-5)로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.";
+    private static final String NOTICE =
+            "문서 내용을 claude(claude-sonnet-5-5, 추론 깊이 medium)로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.";
     private static final LlmProviderFactory CLAUDE = new FakeProvider("claude", List.of("ANTHROPIC_API_KEY"));
     private static final LlmProviderFactory OPENAI = new FakeProvider("openai", List.of("OPENAI_API_KEY"));
     /** 쓰이면 안 되는 엔진. 회사를 정하지 못한 실행이나 rule 엔진 실행에서 쓴다 */
@@ -59,7 +60,7 @@ class ConvertCommandEngineTest {
         Files.copy(docPath("msrstn-info.docx"), inputDir.resolve("msrstn-info.docx"));
         Files.copy(irPath(), inputDir.resolve("schema-example.json"));
         Map<String, String> keys = Map.of("ANTHROPIC_API_KEY", KEY, "OPENAI_API_KEY", "o-key",
-                "H2SPEC_LLM_PROVIDER", "claude", "H2SPEC_LLM_MODEL", "claude-opus-5-5");
+                "H2SPEC_LLM_PROVIDER", "claude", "H2SPEC_LLM_MODEL", "claude-sonnet-5-5");
 
         for (Path input : List.of(inputDir.resolve("msrstn-info.docx"), inputDir)) {
             String expectedOutput = out(input.getFileName() + "-expected");
@@ -108,6 +109,22 @@ class ConvertCommandEngineTest {
     }
 
     @Test
+    void ANTHROPIC_WORKSPACE_ID가_있으면_그_워크스페이스로_부르고_없으면_보내지_않는다() throws Exception {
+        Path doc = Files.writeString(tempDir.resolve("a.hwp"), "fake");
+        SpecParseResult result = llmResult(false, TokenUsage.NONE, api("FirstApi"));
+        SpecParser parser = document -> result;
+
+        run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY, "ANTHROPIC_WORKSPACE_ID", " wrkspc_01Test "), parser),
+                "--engine", "llm", "--input", doc.toString(), "--output", out("with"));
+        String withWorkspace = factory.settings.workspaceId();
+        run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--input", doc.toString(), "--output", out("without"));
+
+        assertEquals("wrkspc_01Test", withWorkspace, "여러 워크스페이스에서 쓰는 키는 요청마다 워크스페이스를 밝혀야 한다");
+        assertNull(factory.settings.workspaceId());
+    }
+
+    @Test
     void llm_엔진은_문서마다_엔진과_토큰을_알리고_디렉터리_요약에_토큰_합계를_붙인다() throws Exception {
         Path inputDir = Files.createDirectories(tempDir.resolve("input"));
         for (String name : List.of("a.hwp", "b.docx", "c.hwpx")) {
@@ -128,15 +145,45 @@ class ConvertCommandEngineTest {
 
         assertEquals(0, run.exit(), run.err());
         List<String> lines = run.out().lines().toList();
-        assertEquals("엔진: llm (claude / claude-opus-5-5), 캐시 없음, 토큰 입력 1230 / 출력 400 (thinking 포함)",
+        assertEquals("엔진: llm (claude / claude-sonnet-5-5, 추론 깊이 medium), 캐시 없음, "
+                        + "토큰 입력 1230 (프롬프트 캐시 읽기 200) / 출력 400 (thinking 포함)",
                 lineAfter(lines, "=== a.hwp ==="), "입력은 캐시에서 읽고 쓴 입력까지 더한 보낸 입력 전체다");
-        assertEquals("엔진: llm (claude / claude-opus-5-5), 캐시 없음, 토큰 입력 18 / 출력 8 (thinking 포함)",
+        assertEquals("엔진: llm (claude / claude-sonnet-5-5, 추론 깊이 medium), 캐시 없음, "
+                        + "토큰 입력 18 (프롬프트 캐시 읽기 6) / 출력 8 (thinking 포함)",
                 lineAfter(lines, "=== b.docx ==="));
-        assertEquals("엔진: llm (claude / claude-opus-5-5), 캐시 사용, 토큰 입력 0 / 출력 0 (thinking 포함)",
+        assertEquals("엔진: llm (claude / claude-sonnet-5-5, 추론 깊이 medium), 캐시 사용, 토큰 입력 0 / 출력 0 (thinking 포함)",
                 lineAfter(lines, "=== c.hwpx ==="));
         assertTrue(lineAfter(lines, "=== d.json ===").startsWith("생성: "), "IR JSON은 엔진을 쓰지 않는다: " + run.out());
         assertEquals(3, lines.stream().filter(line -> line.startsWith("엔진: ")).count(), run.out());
-        assertEquals("4개 중 4개 변환 성공, 0개 실패 · LLM 토큰 합계 입력 1248 / 출력 408", lastLine(run.out()));
+        assertEquals("4개 중 4개 변환 성공, 0개 실패 · LLM 토큰 합계 입력 1248 (프롬프트 캐시 읽기 206) / 출력 408",
+                lastLine(run.out()));
+    }
+
+    @Test
+    void 추론_깊이는_effort_옵션_H2SPEC_LLM_EFFORT_회사_기본값_순으로_정하고_회사가_받지_않는_값은_부르기_전에_멈춘다()
+            throws Exception {
+        Path doc = Files.writeString(tempDir.resolve("a.hwp"), "fake");
+        SpecParseResult result = llmResult(false, TokenUsage.NONE, api("FirstApi"));
+        SpecParser parser = document -> result;
+        Map<String, String> keyOnly = Map.of("ANTHROPIC_API_KEY", KEY);
+        Map<String, String> withEnvironment = Map.of("ANTHROPIC_API_KEY", KEY, "H2SPEC_LLM_EFFORT", "xhigh");
+
+        run(command(LlmProviders.ALL, keyOnly, parser), "--engine", "llm", "--input", doc.toString(), "--output", out("a"));
+        assertEquals("medium", factory.settings.effort(), "회사 기본값");
+        run(command(LlmProviders.ALL, withEnvironment, parser),
+                "--engine", "llm", "--input", doc.toString(), "--output", out("b"));
+        assertEquals("xhigh", factory.settings.effort(), "환경변수");
+        Run high = run(command(LlmProviders.ALL, withEnvironment, parser),
+                "--engine", "llm", "--effort", "HIGH", "--input", doc.toString(), "--output", out("c"));
+        assertEquals("high", factory.settings.effort(), "옵션이 환경변수보다 먼저이고 대소문자를 가리지 않는다");
+        assertTrue(high.err().contains("claude(claude-sonnet-5-5, 추론 깊이 high)로 보냅니다"), high.err());
+
+        Run wrong = run(command(LlmProviders.ALL, keyOnly, parser),
+                "--engine", "llm", "--effort", "adaptive", "--input", doc.toString(), "--output", out("d"));
+        assertNotEquals(0, wrong.exit());
+        assertEquals(0, factory.calls, "틀린 값이면 llm 엔진을 만들지 않는다");
+        assertEquals(List.of("--effort 값 'adaptive'은 claude가 받는 추론 깊이가 아닙니다. "
+                + "쓸 수 있는 값: low, medium, high, xhigh, max"), wrong.err().lines().toList());
     }
 
     @Test
@@ -229,7 +276,7 @@ class ConvertCommandEngineTest {
             operations.add(new Operation(api.apiId(), null, api, null, false));
         }
         return new SpecParseResult(operations, List.of(),
-                new Engine("llm", "claude", "claude-opus-5-5", "medium", cacheUsed, tokens));
+                new Engine("llm", "claude", "claude-sonnet-5-5", "medium", cacheUsed, tokens));
     }
 
     private static String lineAfter(List<String> lines, String line) {

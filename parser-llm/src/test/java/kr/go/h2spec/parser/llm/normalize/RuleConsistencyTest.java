@@ -61,8 +61,8 @@ class RuleConsistencyTest {
     }
 
     private List<NormalizedOperation> normalize(List<Block> blocks) {
-        LlmMetadata llm = new LlmMetadata("claude", "claude-opus-5-5", "medium", "extraction-v2", "2");
+        LlmMetadata llm = new LlmMetadata("claude", "claude-opus-5-5", "medium", "extraction-v4", "3");
         return new IrNormalizer(llm).normalize(
-                new ExtractionValidator().validate(TestDocuments.extraction("msrstn-info.json"), blocks), DOCUMENT, "DOCX");
+                new ExtractionValidator().validate(TestDocuments.fixture("msrstn-info-faithful.json"), blocks), DOCUMENT, "DOCX");
     }
 }

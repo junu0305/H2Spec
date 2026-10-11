@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CrossCheckerTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final LlmMetadata LLM = new LlmMetadata("claude", "claude-opus-5-5", "medium", "extraction-v2", "2");
+    private static final LlmMetadata LLM = new LlmMetadata("claude", "claude-opus-5-5", "medium", "extraction-v4", "3");
     private static final String URL_A = "https://api.example.kr/svc/getA";
     private static final String URL_B = "https://api.example.kr/svc/getB";
 
@@ -114,7 +114,7 @@ class CrossCheckerTest {
 
         assertSame(selectable, result.operations().get(0));
         assertEquals(List.of("응답 형식이 rule 엔진과 다름: rule XML, llm JSON"), CrossChecker.differences(
-                ir(URL_A, List.of(), List.of(), "JSON", "00"), ir(URL_A, List.of(), List.of(), "XML", "00")),
+                ir(URL_A, List.of(), List.of(), "JSON", "00"), ir(URL_A, List.of(), List.of(), "XML", "00"), false),
                 "형식을 고를 수 없는 오퍼레이션은 그대로 알린다");
     }
 

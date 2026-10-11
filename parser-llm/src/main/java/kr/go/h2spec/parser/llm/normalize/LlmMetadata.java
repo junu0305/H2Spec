@@ -11,8 +11,8 @@ import kr.go.h2spec.parser.llm.ExtractionPrompt;
  * @param provider      회사 ({@code claude}, {@code openai}, {@code gemini})
  * @param model         모델 ID
  * @param effort        회사별 추론 깊이 설정값 그대로 (Claude {@code effort}, OpenAI {@code reasoning.effort}, Gemini thinking 설정)
- * @param promptVersion 프롬프트 버전 ({@code extraction-v2})
- * @param schemaVersion 중간 스키마 버전 ({@code 2})
+ * @param promptVersion 프롬프트 버전 ({@code extraction-v4})
+ * @param schemaVersion 중간 스키마 버전 ({@code 3})
  */
 public record LlmMetadata(String provider, String model, String effort, String promptVersion, String schemaVersion) {
 

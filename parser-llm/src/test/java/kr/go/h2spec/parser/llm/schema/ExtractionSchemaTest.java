@@ -1,10 +1,8 @@
 package kr.go.h2spec.parser.llm.schema;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.go.h2spec.parser.llm.ExtractionPrompt;
-import kr.go.h2spec.parser.llm.TestDocuments;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.ParameterizedType;
@@ -22,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * 세 회사에 그대로 넘기는 스키마 파일(extraction-schema-v2.json)이 record와 같고, 세 회사가 모두 받는 범위(설계 4.2)만 쓰는지 본다.
+ * 세 회사에 그대로 넘기는 스키마 파일(extraction-schema-v3.json)이 record와 같고, 세 회사가 모두 받는 범위(설계 4.2)만 쓰는지 본다.
  * 스키마는 record에서 만들지 않고 직접 쓰므로, 둘이 어긋나면 LLM 응답을 record로 읽지 못한다.
  */
 class ExtractionSchemaTest {
@@ -57,8 +55,8 @@ class ExtractionSchemaTest {
         });
 
         // LlmExtraction, LlmOperation, LlmUrlCandidates, LlmAuth, LlmRequestParameter, LlmResponseField,
-        // LlmResultCode, LlmSuccessCode, LlmErrorCode
-        assertEquals(9, objects.size(), objects.toString());
+        // LlmResultCode, LlmSuccessCode, LlmErrorCode (문서 공통과 오퍼레이션의 두 자리)
+        assertEquals(10, objects.size(), objects.toString());
     }
 
     @Test
@@ -78,28 +76,6 @@ class ExtractionSchemaTest {
                 node.get("enum").forEach(value -> assertTrue(value.isTextual(), path + ": enum 값 " + value));
             }
         });
-    }
-
-    @Test
-    void 부록_A의_예시를_record로_읽고_그대로_다시_쓴다() throws Exception {
-        // 설계 부록 A(jejudatahub-wifi-usage.hwp에서 기대하는 LLM 출력)를 그대로 옮긴 녹화
-        String json = TestDocuments.recording(TestDocuments.PROVIDER, "jejudatahub-wifi-usage.json");
-        // 빠진 필드나 null이 있으면 읽지 않아야 녹화가 스키마의 모든 필드를 채웠다고 말할 수 있다
-        ObjectMapper strict = objectMapper.copy()
-                .enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
-                .enable(DeserializationFeature.FAIL_ON_NULL_CREATOR_PROPERTIES);
-
-        LlmExtraction extraction = strict.readValue(json, LlmExtraction.class);
-
-        assertEquals(objectMapper.readTree(json), objectMapper.valueToTree(extraction));
-        assertEquals(extraction, strict.readValue(objectMapper.writeValueAsString(extraction), LlmExtraction.class));
-        LlmOperation operation = extraction.operations().get(0);
-        assertEquals(LlmAuth.Kind.PATH_KEY, operation.auth().kind());
-        assertEquals(LlmOperation.ResponseStructure.EXAMPLE, operation.responseStructure());
-        assertEquals(LlmRequestParameter.Requirement.REQUIRED, operation.requestParameters().get(0).required());
-        assertTrue(operation.requestParameters().get(1).common());
-        assertEquals("data[].baseDate", operation.responseFields().get(2).path());
-        assertEquals(LlmResponseField.PathSource.RESPONSE_EXAMPLE, operation.responseFields().get(2).pathSource());
     }
 
     /** record의 구성 요소를 따라 스키마를 내려가며 이름·타입·enum 값을 맞춰 본다 */

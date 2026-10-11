@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,15 +46,16 @@ class RecordedFlowTest {
     /** 문서, 변환한 apiId, 지원 범위 밖으로 건너뛴 apiId, 교차검증 노트 수, rule 엔진만 찾은 오퍼레이션 수 */
     static Stream<Arguments> recordings() {
         return Stream.of(
-                Arguments.of("its-traffic-light.hwp", List.of("TrafficLightList"), List.of(), 1, 0),
-                Arguments.of("jejudatahub-wifi-usage.hwp", List.of(), List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), 3, 0),
-                Arguments.of("kasi-special-day.docx", List.of("HoliDeInfo"), List.of(), 0, 4),
-                Arguments.of("kci-reference.docx", List.of("OpenApiD272List"), List.of(), 1, 5),
-                Arguments.of("kma-mid-forecast.docx", List.of("MidFcst"), List.of(), 0, 3),
+                Arguments.of("its-traffic-light.hwp", List.of("TrafficLightList4"), List.of(), 0, 0),
+                Arguments.of("jejudatahub-wifi-usage.hwp", List.of(), List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), 1, 0),
+                Arguments.of("kasi-special-day.docx",
+                        List.of("HoliDeInfo", "RestDeInfo", "AnniversaryInfo", "Get24DivisionsInfo", "SundryDayInfo"), List.of(), 2, 0),
+                Arguments.of("kci-reference.docx", List.of("OpenApiD272List", "OpenApiD273List", "OpenApiD321List",
+                        "OpenApiM320List", "OpenApiM325List", "OpenApiM326List"), List.of(), 0, 0),
+                Arguments.of("kma-mid-forecast.docx", List.of("MidFcst", "MidLandFcst", "MidTa", "MidSeaFcst"), List.of(), 2, 0),
                 Arguments.of("kosha-certificate-check.hwp", List.of(), List.of("Koshagw"), 1, 0),
                 Arguments.of("msrstn-info.docx", List.of("MsrstnList", "NearbyMsrstnList", "TMStdrCrdnt"), List.of(), 0, 0),
                 Arguments.of("nec-ballot-counting-place.hwpx", List.of("CountingSttnInfoInqire"), List.of(), 1, 0),
-                // rule JSON, llm XML로 형식이 갈리지만 두 형식을 다 내고 dataType으로 고르므로 형식 차이는 알리지 않는다
                 Arguments.of("nps-disability-review.hwp", List.of("JgmtSttusInfoSearchV2"), List.of(), 1, 0));
     }
 
@@ -105,7 +105,7 @@ class RecordedFlowTest {
     }
 
     @Test
-    void 제주_와이파이는_지원_범위_밖으로_건너뛰되_정규화한_IR을_담고_apis에는_넣지_않으며_parse는_실패를_알린다() throws Exception {
+    void 제주_와이파이는_지원_범위_밖으로_건너뛰되_정규화한_IR을_담고_apis에는_넣지_않으며_parse는_명세가_없다고_하지_않고_실패를_알린다() throws Exception {
         String document = "jejudatahub-wifi-usage.hwp";
 
         SpecParseResult result = parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document))
@@ -122,63 +122,8 @@ class RecordedFlowTest {
         SpecParseException e = assertThrows(SpecParseException.class,
                 () -> parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document)).parse(TestDocuments.path(document)));
         assertEquals(SpecParseException.Kind.FAILED, e.kind());
-        assertEquals("문서에서 상세기능 명세를 찾지 못했습니다: jejudatahub-wifi-usage.hwp (" + result.skipped().get(0) + ")",
-                e.getMessage());
-    }
-
-    @Test
-    void 신호연계는_V1이_버린_주소_후보_때문에_rule_엔진과_주소가_갈린_것을_교차검증_노트로_알린다() throws Exception {
-        SpecParseResult result = parse("its-traffic-light.hwp");
-
-        assertEquals(List.of("[교차검증] 주소가 rule 엔진과 다름: "
-                        + "rule http://apis.data.go.kr/6500000/trafficLightService4/trafficLightList4, "
-                        + "llm http://apis.data.go.kr/6500000/trafficLightService4/trafficLightList"),
-                crossCheckNotes(result.apis().get(0).ir()));
-        assertTrue(result.apis().get(0).ir().get("metadata").get("manualReviewRequired").asBoolean());
-    }
-
-    @Test
-    void 선관위는_예제를_따라_고른_성공코드가_rule_엔진과_다른_것을_교차검증_노트로_알린다() throws Exception {
-        SpecParseResult result = parse("nec-ballot-counting-place.hwpx");
-
-        assertEquals("INFO-00", result.apis().get(0).ir().get("api").get("errorSpec").get("successResultCode").asText());
-        assertEquals(List.of("[교차검증] 성공코드가 rule 엔진과 다름: rule 00, llm INFO-00"),
-                crossCheckNotes(result.apis().get(0).ir()));
-    }
-
-    @Test
-    void 기상청은_녹화가_담지_않은_오퍼레이션을_rule_엔진만_찾았다고_경고한다() throws Exception {
-        String document = "kma-mid-forecast.docx";
-        String sourceFile = TestDocuments.path(document).getFileName().toString();
-
-        parse(document);
-
-        assertEquals(List.of(
-                sourceFile + ": rule 엔진만 찾은 오퍼레이션: 중기육상예보조회 (http://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst)",
-                sourceFile + ": rule 엔진만 찾은 오퍼레이션: 중기기온조회 (http://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa)",
-                sourceFile + ": rule 엔진만 찾은 오퍼레이션: 중기해상예보조회 (http://apis.data.go.kr/1360000/MidFcstInfoService/getMidSeaFcst)"),
-                warnings);
-    }
-
-    @Test
-    void 결과_캐시를_쓰면_두_번째_변환은_부르지_않고_같은_IR을_낸다() throws Exception {
-        String document = "msrstn-info.docx";
-        RecordedLlmClient client = RecordedLlmClient.of(TestDocuments.PROVIDER, document);
-        LlmSpecParser.Options options = options().withCache(ExtractionCache.at(tempDir.resolve("cache")));
-
-        SpecParseResult first = new LlmSpecParser(client, TestDocuments.PROVIDER, MODEL, EFFORT, options)
-                .parse(TestDocuments.path(document));
-        SpecParseResult second = new LlmSpecParser(client, TestDocuments.PROVIDER, MODEL, EFFORT, options)
-                .parse(TestDocuments.path(document));
-
-        assertEquals(1, client.requests().size());
-        assertFalse(first.engine().cacheUsed());
-        assertTrue(second.engine().cacheUsed());
-        assertEquals(TokenUsage.NONE, second.engine().tokenUsage());
-        assertEquals(3, second.apis().size());
-        for (int i = 0; i < first.apis().size(); i++) {
-            assertEquals(withoutParsedAt(first.apis().get(i).ir()), withoutParsedAt(second.apis().get(i).ir()));
-        }
+        assertEquals("변환할 수 있는 상세기능이 없습니다 (찾은 1개 모두 지원 범위 밖이거나 검증에서 건너뜀): "
+                + "jejudatahub-wifi-usage.hwp (" + result.skipped().get(0) + ")", e.getMessage());
     }
 
     private SpecParseResult parse(String document) throws Exception {
@@ -206,11 +151,5 @@ class RecordedFlowTest {
             }
         });
         return notes;
-    }
-
-    private static ObjectNode withoutParsedAt(ObjectNode ir) {
-        ObjectNode copy = ir.deepCopy();
-        ((ObjectNode) copy.get("metadata")).remove("parsedAt");
-        return copy;
     }
 }

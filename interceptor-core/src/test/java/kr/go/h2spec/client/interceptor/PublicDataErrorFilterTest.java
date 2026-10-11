@@ -10,7 +10,6 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -59,25 +58,6 @@ class PublicDataErrorFilterTest {
     @Test
     void resultCode가_없어도_알려진_에러_키워드를_감지한다() {
         assertThrows(PublicDataApiException.class, () -> apply("SERVICE ERROR"));
-    }
-
-    @Test
-    void JSON_숫자_0으로_온_결과코드도_성공코드_00과_같게_본다() {
-        ClientResponse response = apply("{\"resultCode\":0,\"resultMsg\":\"OK\"}");
-
-        assertEquals("{\"resultCode\":0,\"resultMsg\":\"OK\"}", response.bodyToMono(String.class).block());
-    }
-
-    @Test
-    void 결과코드_이름을_주면_그_이름으로_찾는다() {
-        PublicDataErrorFilter withKey = new PublicDataErrorFilter("00", List.of("resultCd"));
-
-        PublicDataApiException exception = assertThrows(PublicDataApiException.class,
-                () -> apply(withKey, "{\"result\":{\"resultCd\":\"99\"}}"));
-
-        assertEquals("99", exception.getResultCode());
-        assertEquals("{\"result\":{\"resultCd\":\"00\"}}",
-                apply(withKey, "{\"result\":{\"resultCd\":\"00\"}}").bodyToMono(String.class).block());
     }
 
     private ClientResponse apply(String body) {

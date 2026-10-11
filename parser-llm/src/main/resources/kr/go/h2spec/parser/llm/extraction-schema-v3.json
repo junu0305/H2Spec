@@ -3,6 +3,18 @@
   "properties": {
     "serviceName": {"type": "string"},
     "provider": {"type": "string"},
+    "errorCodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"}
+        },
+        "required": ["code", "message"],
+        "additionalProperties": false
+      }
+    },
     "operations": {
       "type": "array",
       "items": {
@@ -121,6 +133,6 @@
     },
     "documentNotes": {"type": "array", "items": {"type": "string"}}
   },
-  "required": ["serviceName", "provider", "operations", "documentNotes"],
+  "required": ["serviceName", "provider", "errorCodes", "operations", "documentNotes"],
   "additionalProperties": false
 }

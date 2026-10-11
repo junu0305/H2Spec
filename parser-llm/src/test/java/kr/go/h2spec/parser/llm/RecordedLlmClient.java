@@ -17,7 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 final class RecordedLlmClient implements LlmClient {
 
     /** 재생한 응답의 모델. 녹화는 중간 스키마 JSON뿐이라 모델이 없어 기본 모델로 둔다 */
-    static final String MODEL = "claude-opus-5-5";
+    static final String MODEL = "claude-sonnet-5-5";
     /** 재생한 응답의 사용량. 녹화에는 사용량이 없어, 엔진 정보의 합계를 확인할 수 있게 정해 둔 값이다 */
     static final LlmResponse.Usage USAGE = new LlmResponse.Usage(12_000, 3_000, 2_500, 4_200, 0);
 

@@ -19,7 +19,7 @@ import java.time.Duration;
 /**
  * Claude Messages API의 응답을 {@link LlmResponse}와 {@link LlmException}으로 바꾼다 (설계 6.1·6.2).
  * <p>
- * {@link ClaudeClient}가 스트리밍 응답을 해석할 때 쓰고, 평가 도구가 배치 결과를 해석할 때도 쓴다. 그래서 HTTP 호출과 따로 공개한다.
+ * {@link ClaudeClient}가 스트리밍 응답을 해석할 때 쓴다. HTTP 호출 없이 시험할 수 있게 따로 둔다.
  * <ul>
  *   <li>출력 JSON은 글 블록에만 온다. thinking 블록(요약이든 빈 글이든)과 서명은 버린다.</li>
  *   <li>사용량은 {@link Usage}의 뜻에 맞춰 옮긴다(설계 6.2의 토큰 집계). Claude의 {@code input_tokens}는 이미 캐시 읽기·쓰기를 뺀 값이고,
@@ -65,28 +65,6 @@ public final class ClaudeResponses {
         }
         // 정상 응답은 message_stop으로 끝난다. 그 전에 본문이 끝났으면 연결이 중간에 끊긴 것이다
         throw new LlmException(Kind.UNAVAILABLE, "Claude API 응답 스트림이 message_stop 전에 끝났습니다");
-    }
-
-    /**
-     * 스트리밍하지 않은 응답의 메시지 객체를 바꾼다. 배치 결과의 {@code result.message}가 이 꼴이다.
-     *
-     * @param message 메시지 객체 ({@code content}, {@code model}, {@code usage}, {@code stop_reason})
-     * @return 글 블록을 이은 출력, 모델, 사용량, 끝난 방식
-     * @throws LlmException {@code stop_reason}이 없거나 해석할 수 없을 때
-     */
-    public static LlmResponse fromMessage(JsonNode message) throws LlmException {
-        StringBuilder text = new StringBuilder();
-        for (JsonNode block : message.path("content")) {
-            if ("text".equals(block.path("type").asText())) {
-                text.append(block.path("text").asText(""));
-            }
-        }
-        String stopReason = message.path("stop_reason").asText(null);
-        if (stopReason == null) {
-            throw new LlmException(Kind.UNAVAILABLE, "Claude API 응답에 stop_reason이 없습니다");
-        }
-        return new LlmResponse(text.toString(), message.path("model").asText(""), usage(message.path("usage")),
-                finish(stopReason));
     }
 
     /**

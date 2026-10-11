@@ -6,6 +6,7 @@ import kr.go.h2spec.generator.emit.JavaNameRules;
 import kr.go.h2spec.generator.emit.JavaNames;
 import kr.go.h2spec.generator.emit.JavaText;
 import kr.go.h2spec.generator.emit.OpenApiEmitter;
+import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.generator.ir.RequestParameter;
@@ -22,9 +23,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** IR JSON → DTO/클라이언트 소스 파일 생성 퍼사드. */
 public class CodeGenerator {
+
+    /** 포맷 파라미터 값으로 받는 글자. 값은 인코딩 없이 URL에 들어간다 */
+    private static final Pattern FORMAT_VALUE = Pattern.compile("[A-Za-z0-9._-]+");
 
     public List<Path> generate(Path irJson, Path outputDir) throws IOException {
         return generate(new IrLoader().load(irJson), outputDir);
@@ -74,6 +79,13 @@ public class CodeGenerator {
         if (!JavaNameRules.isValidPackageName(targetPackage)) {
             throw new IllegalArgumentException("generatorHints.targetPackage 형식이 잘못되었습니다: " + quote(targetPackage)
                     + " — 점으로 이은 Java 식별자여야 하고 마디에 예약어를 쓸 수 없습니다.");
+        }
+        // 포맷 파라미터 값은 인코딩 없이 URL에 들어간다
+        GeneratorHints.ResponseFormatParameter formatHint = ir.generatorHints().responseFormatParameter();
+        if (formatHint != null && formatHint.value() != null && !formatHint.value().isBlank()
+                && !FORMAT_VALUE.matcher(formatHint.value()).matches()) {
+            throw new IllegalArgumentException("generatorHints.responseFormatParameter.value 형식이 잘못되었습니다: "
+                    + quote(formatHint.value()) + " — 영문자·숫자·.·_·-만 쓸 수 있습니다.");
         }
         // 원래 이름은 어노테이션과 URL의 문자열 리터럴에 그대로 들어간다
         for (RequestParameter p : ir.api().requestParameters()) {

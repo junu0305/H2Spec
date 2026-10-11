@@ -60,11 +60,13 @@ public final class ReplayLlmEvalEngine implements EvalEngine {
             throw new IOException("녹화 응답이 없습니다: " + response);
         }
         String json = Files.readString(response);
-        // 결과 캐시는 끈다. 녹화 응답이 바뀌어도 앞서 저장한 결과가 대신 쓰이지 않게 한다
+        // 결과 캐시는 끈다. 녹화 응답이 바뀌어도 앞서 저장한 결과가 대신 쓰이지 않게 한다.
+        // 녹화는 문서마다 응답이 하나라 검증 결과를 알려 다시 불러도 같은 응답이 오므로 다시 부르지 않는다
         LlmSpecParser parser = new LlmSpecParser(
                 request -> new LlmResponse(json, MODEL, NO_USAGE, LlmResponse.Finish.COMPLETE),
                 PROVIDER, MODEL, EFFORT,
-                LlmSpecParser.Options.defaults().withCache(ExtractionCache.disabled()).withWarnings(warnings));
+                LlmSpecParser.Options.defaults().withCache(ExtractionCache.disabled()).withWarnings(warnings)
+                        .withRetryOnValidation(false));
         SpecParseResult result;
         try {
             result = parser.extract(document);

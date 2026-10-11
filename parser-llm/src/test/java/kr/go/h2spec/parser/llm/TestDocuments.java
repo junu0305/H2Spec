@@ -22,8 +22,9 @@ import java.util.TreeMap;
  * 복사해 두면 한쪽만 고쳐져도 알 수 없기 때문이다. Gradle은 저장소 루트를 시스템 속성으로 넘기고(parser-llm/build.gradle),
  * IDE에서 모듈 디렉터리로 돌리면 그 부모를 쓴다. 테스트는 원본의 긴 이름 대신 녹화 파일과 같은 짧은 영문 이름으로 문서를 가리킨다.
  * <p>
- * 녹화({@code llm-recordings/<회사>/<문서>.json})는 LLM이 그 문서에서 낼 중간 스키마 JSON이다(설계 9.3). 지금 것은 손으로 쓴 것이고
- * 1-10에서 실제 응답으로 바꾼다. 빠진 필드나 null이 있으면 읽지 않아, 녹화가 스키마의 모든 필드를 채웠다고 말할 수 있게 한다.
+ * 녹화({@code llm-recordings/<회사>/<문서>.json})는 LLM이 그 문서에서 낸 중간 스키마 JSON이다(설계 9.3). 2026-10-11 실제 Claude 응답
+ * ({@code claude-sonnet-5-5}, effort medium, 프롬프트 extraction-v4, 스키마 v3)을 그대로 담았다. 빠진 필드나 null이 있으면 읽지 않아, 녹화가 스키마의
+ * 모든 필드를 채웠다고 말할 수 있게 한다. 손으로 쓴 응답은 {@code fixtures/}에 따로 둔다({@link #fixture}).
  */
 public final class TestDocuments {
 
@@ -128,6 +129,36 @@ public final class TestDocuments {
             return STRICT.readValue(recording(PROVIDER, name), LlmExtraction.class);
         } catch (IOException e) {
             throw new IllegalStateException("녹화를 중간 스키마로 읽을 수 없습니다: " + name, e);
+        }
+    }
+
+    /**
+     * 손으로 쓴 중간 스키마 JSON을 읽는다. 실제 응답과 달리 원하는 성질(문서를 충실히 옮김 등)을 정해 두고 시험할 때 쓴다.
+     *
+     * @param name {@code fixtures/} 아래 파일 이름 ({@code msrstn-info-faithful.json})
+     * @return 중간 스키마 record
+     */
+    public static LlmExtraction fixture(String name) {
+        try {
+            return STRICT.readValue(fixtureText(name), LlmExtraction.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("픽스처를 중간 스키마로 읽을 수 없습니다: " + name, e);
+        }
+    }
+
+    /**
+     * @param name {@code fixtures/} 아래 파일 이름
+     * @return 손으로 쓴 중간 스키마 JSON 글
+     */
+    private static String fixtureText(String name) {
+        String resource = "/fixtures/" + name;
+        try (InputStream input = TestDocuments.class.getResourceAsStream(resource)) {
+            if (input == null) {
+                throw new IllegalStateException("픽스처가 없습니다: " + resource);
+            }
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("픽스처를 읽을 수 없습니다: " + resource, e);
         }
     }
 }

@@ -1,0 +1,637 @@
+{
+  "serviceName": "측정소정보 조회 서비스",
+  "provider": "한국환경공단",
+  "errorCodes": [
+    {
+      "code": "01",
+      "message": "Application Error"
+    },
+    {
+      "code": "02",
+      "message": "DB Error"
+    },
+    {
+      "code": "03",
+      "message": "No Data"
+    },
+    {
+      "code": "04",
+      "message": "HTTP Error"
+    },
+    {
+      "code": "05",
+      "message": "service time out"
+    },
+    {
+      "code": "10",
+      "message": "잘못된 요청 파라미터 에러"
+    },
+    {
+      "code": "11",
+      "message": "필수 요청 파라미터 없음"
+    },
+    {
+      "code": "12",
+      "message": "해당 오픈API 서비스가 없거나 폐기됨"
+    },
+    {
+      "code": "20",
+      "message": "서비스 접근 거부"
+    },
+    {
+      "code": "22",
+      "message": "서비스 요청 제한 횟수 초과 에러"
+    },
+    {
+      "code": "30",
+      "message": "등록하지 않은 서비스키"
+    },
+    {
+      "code": "31",
+      "message": "서비스키 사용 기간 만료"
+    },
+    {
+      "code": "32",
+      "message": "등록하지 않은 도메인명 또는 IP주소"
+    },
+    {
+      "code": "34",
+      "message": "보고서가 등록 되지 않음"
+    }
+  ],
+  "operations": [
+    {
+      "operationName": "",
+      "title": "측정소 목록 조회",
+      "description": "측정소 주소 또는 측정소 명칭으로 검색하여 측정소 목록 또는 단 건의 측정소 상세 정보 조회 기능 제공",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getMsrstnList",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getMsrstnList?addr=서울&stationName=종로구&pageNo=1&numOfRows=10&serviceKey=서비스키&returnType=xml",
+        "serviceUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "returnType",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "서비스키",
+          "example": "인증키(URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "returnType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "데이터 표출방식 xml 또는 json",
+          "example": "xml",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "numOfRows",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "OPTIONAL",
+          "description": "한 페이지 결과 수",
+          "example": "100",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "OPTIONAL",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "addr",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "주소",
+          "example": "서울",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "stationName",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "측정소명",
+          "example": "종로구",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메세지",
+          "sample": "NORMAL SERVICE.",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지 결과 수",
+          "sample": "100",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 번호",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "전체 결과 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].stationCode",
+          "type": "STRING",
+          "description": "측정소 코드 값",
+          "sample": "111123",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].stationName",
+          "type": "STRING",
+          "description": "측정소명",
+          "sample": "종로구",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].addr",
+          "type": "STRING",
+          "description": "측정소가 위치한 주소",
+          "sample": "서울 종로구 효제동 173-2(종로5,6가 주민센터)",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].year",
+          "type": "INTEGER",
+          "description": "측정소 설치년도",
+          "sample": "1997",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].mangName",
+          "type": "STRING",
+          "description": "측정망",
+          "sample": "도시대기",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].item",
+          "type": "STRING",
+          "description": "측정소 측정항목",
+          "sample": "SO₂, CO, O₃, NO₂, PM10",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].dmX",
+          "type": "STRING",
+          "description": "WGS84기반 X좌표",
+          "sample": "37.572025 (1.1 이전버전) 127.005028 (1.1버전)",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].dmY",
+          "type": "STRING",
+          "description": "WGS84기반 Y좌표",
+          "sample": "127.005028 (1.1 이전버전) 37.572025 (1.1버전)",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T33",
+        "T40",
+        "T42",
+        "T49",
+        "T53",
+        "T82"
+      ],
+      "uncertain": [
+        "dmX, dmY의 샘플 값이 버전(1.1 이전, 1.1)에 따라 달라 숫자로 단정하지 않고 문자열로 두었다",
+        "stationCode는 응답 예제에 없어 응답 필드 표의 순서대로 item 아래에 두었다"
+      ],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "근접측정소 목록 조회",
+      "description": "TM 좌표를 입력하여 입력된 좌표 주변 측정소 정보와 입력 좌표와의 거리 조회 기능 제공",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList?tmX=244148.546388&tmY=412423.75772&returnType=xml&serviceKey=서비스키",
+        "serviceUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "returnType",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "서비스키",
+          "example": "인증키(URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "returnType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "데이터 표출방식 xml 또는 json",
+          "example": "xml",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "tmX",
+          "location": "QUERY",
+          "type": "NUMBER",
+          "required": "REQUIRED",
+          "description": "TM측정방식 X좌표",
+          "example": "244148.546388",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "tmY",
+          "location": "QUERY",
+          "type": "NUMBER",
+          "required": "REQUIRED",
+          "description": "TM측정방식 Y좌표",
+          "example": "412423.75772",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "ver",
+          "location": "QUERY",
+          "type": "NUMBER",
+          "required": "OPTIONAL",
+          "description": "버전별 상세 결과 아래쪽 참고",
+          "example": "1.0",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메세지",
+          "sample": "NORMAL SERVICE.",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지 결과 수",
+          "sample": "100",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 번호",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "전체 결과 수",
+          "sample": "3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].stationCode",
+          "type": "STRING",
+          "description": "측정소 코드 값",
+          "sample": "131442",
+          "pathSource": "FIELD_TABLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].stationName",
+          "type": "STRING",
+          "description": "측정소 이름",
+          "sample": "창전동",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].addr",
+          "type": "STRING",
+          "description": "측정소가 위치한 주소",
+          "sample": "경기 이천시 창전동105-3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].tm",
+          "type": "NUMBER",
+          "description": "요청한 TM좌표와 측정소간의 거리(km 단위)",
+          "sample": "9.3",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T33",
+        "T56",
+        "T58",
+        "T66",
+        "T69",
+        "T82"
+      ],
+      "uncertain": [
+        "tmX, tmY 칸 아래의 도로명주소API 좌표(ver1.0) 행은 같은 파라미터의 다른 샘플로 보았다",
+        "stationCode는 응답 예제에 없어 응답 필드 표의 순서대로 item 아래에 두었다"
+      ],
+      "unsupported": []
+    },
+    {
+      "operationName": "",
+      "title": "TM 기준좌표 조회",
+      "description": "TM 좌표를 알 수 없는 사용자를 위해 읍면동 이름으로 검색하여 TM기준좌표 내역을 조회하는 기능 제공",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getTMStdrCrdnt",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getTMStdrCrdnt?umdName=혜화동&pageNo=1&numOfRows=10&returnType=xml&serviceKey=서비스키",
+        "serviceUrl": "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "returnType",
+      "auth": {
+        "kind": "SERVICE_KEY_QUERY",
+        "parameterName": "serviceKey"
+      },
+      "requestParameters": [
+        {
+          "name": "serviceKey",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "서비스키",
+          "example": "인증키 (URL Encode)",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "returnType",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "OPTIONAL",
+          "description": "데이터 표출방식 xml 또는 json",
+          "example": "xml",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "numOfRows",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "OPTIONAL",
+          "description": "한 페이지 결과 수",
+          "example": "100",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "pageNo",
+          "location": "QUERY",
+          "type": "INTEGER",
+          "required": "OPTIONAL",
+          "description": "페이지 번호",
+          "example": "1",
+          "defaultValue": "",
+          "common": false
+        },
+        {
+          "name": "umdName",
+          "location": "QUERY",
+          "type": "STRING",
+          "required": "REQUIRED",
+          "description": "읍면동명",
+          "example": "혜화동",
+          "defaultValue": "",
+          "common": false
+        }
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {
+          "path": "response.header.resultCode",
+          "type": "STRING",
+          "description": "결과코드",
+          "sample": "00",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.header.resultMsg",
+          "type": "STRING",
+          "description": "결과메세지",
+          "sample": "NORMAL SERVICE.",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.numOfRows",
+          "type": "INTEGER",
+          "description": "한 페이지 결과 수",
+          "sample": "100",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.pageNo",
+          "type": "INTEGER",
+          "description": "페이지 번호",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.totalCount",
+          "type": "INTEGER",
+          "description": "전체 결과 수",
+          "sample": "1",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].sidoName",
+          "type": "STRING",
+          "description": "시도",
+          "sample": "서울특별시",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].sggName",
+          "type": "STRING",
+          "description": "시군구",
+          "sample": "종로구",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].umdName",
+          "type": "STRING",
+          "description": "읍면동",
+          "sample": "혜화동",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].tmX",
+          "type": "NUMBER",
+          "description": "TM측정방식 X좌표",
+          "sample": "200089.126044",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        },
+        {
+          "path": "response.body.items.item[].tmY",
+          "type": "NUMBER",
+          "description": "TM측정방식 Y좌표",
+          "sample": "453946.42329",
+          "pathSource": "RESPONSE_EXAMPLE",
+          "common": false
+        }
+      ],
+      "resultCode": {
+        "fieldName": "resultCode",
+        "successCodes": [
+          {
+            "code": "00",
+            "source": "FIELD_TABLE"
+          },
+          {
+            "code": "00",
+            "source": "RESPONSE_EXAMPLE"
+          }
+        ]
+      },
+      "errorCodes": [],
+      "evidence": [
+        "T33",
+        "T72",
+        "T74",
+        "T77",
+        "T80",
+        "T82"
+      ],
+      "uncertain": [],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": []
+}

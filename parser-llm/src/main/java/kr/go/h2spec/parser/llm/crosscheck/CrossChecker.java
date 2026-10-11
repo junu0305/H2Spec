@@ -152,19 +152,8 @@ public final class CrossChecker {
     /**
      * 짝지은 두 IR의 차이. 주소, 요청 파라미터 이름 집합, 응답 필드 이름 집합, 응답 포맷, 성공코드를 본다.
      * 응답 경로 구조는 rule 엔진이 표준 구조를 강제하므로 비교하지 않는다.
-     *
-     * @param llmIr  llm 엔진의 IR
-     * @param ruleIr rule 엔진의 IR
-     * @return 차이마다 한 줄 (출처 없는 글). 같으면 빈 목록
-     */
-    public static List<String> differences(ObjectNode llmIr, ObjectNode ruleIr) {
-        return differences(llmIr, ruleIr, false);
-    }
-
-    /**
-     * {@link #differences(ObjectNode, ObjectNode)}와 같지만, 응답 형식을 고를 수 있는 오퍼레이션이면 형식 차이를 알리지 않는다.
-     * 문서가 두 형식을 다 내고 생성 클라이언트가 포맷 파라미터로 IR의 형식을 골라 부르면 어느 엔진의 형식이든 동작해서,
-     * 그 차이는 검수할 거리가 아니다.
+     * 응답 형식을 고를 수 있는 오퍼레이션이면 형식 차이를 알리지 않는다. 문서가 두 형식을 다 내고 생성 클라이언트가
+     * 포맷 파라미터로 IR의 형식을 골라 부르면 어느 엔진의 형식이든 동작해서, 그 차이는 검수할 거리가 아니다.
      *
      * @param llmIr            llm 엔진의 IR
      * @param ruleIr           rule 엔진의 IR

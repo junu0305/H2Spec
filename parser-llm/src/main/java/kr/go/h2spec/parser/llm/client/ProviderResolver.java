@@ -79,11 +79,6 @@ public final class ProviderResolver {
         this.environment = Map.copyOf(environment);
     }
 
-    /** @return {@link LlmProviders#ALL}과 이 프로세스의 환경변수로 정하는 resolver */
-    public static ProviderResolver fromSystemEnvironment() {
-        return new ProviderResolver(LlmProviders.ALL, System.getenv());
-    }
-
     /**
      * @param engine llm 또는 auto
      * @param providerOption {@code --provider} 값. 주지 않았으면 null이나 빈 문자열

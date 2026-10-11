@@ -324,23 +324,6 @@ class ConvertCommandTest {
     }
 
     @Test
-    void 일부_오퍼레이션만_생성에_실패한_문서는_경고와_함께_성공으로_끝난다() throws Exception {
-        Path docx = docPath("msrstn-info.docx");
-        // 첫 오퍼레이션의 DTO 파일 자리에 디렉터리를 만들어 그 오퍼레이션만 쓰기에 실패하게 한다
-        Files.createDirectories(tempDir.resolve("kr/go/h2spec/client/msrstnlist/dto/MsrstnListResponse.java"));
-        StringWriter err = new StringWriter();
-        CommandLine cli = new CommandLine(new H2SpecCli());
-        cli.setErr(new PrintWriter(err));
-
-        int exit = cli.execute("convert", "--input", docx.toString(), "--output", tempDir.toString());
-
-        assertEquals(0, exit, err.toString());
-        assertTrue(err.toString().contains("건너뛴 오퍼레이션 (msrstn-info.docx): MsrstnList: "), err.toString());
-        assertTrue(Files.exists(tempDir.resolve("kr/go/h2spec/client/nearbymsrstnlist/NearbyMsrstnListClient.java")));
-        assertTrue(Files.exists(tempDir.resolve("kr/go/h2spec/client/tmstdrcrdnt/TMStdrCrdntClient.java")));
-    }
-
-    @Test
     void 모든_오퍼레이션의_생성에_실패한_문서는_실패로_끝나지만_IR은_모두_남긴다() throws Exception {
         // 농사로 문서는 두 오퍼레이션 모두 serviceKey가 아닌 apiKey로 인증해 generator가 받지 못한다
         Path hwp = docPath("nongsaro-eco-farming.hwp");

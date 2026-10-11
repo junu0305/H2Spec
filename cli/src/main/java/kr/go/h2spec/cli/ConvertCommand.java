@@ -56,6 +56,8 @@ public class ConvertCommand implements Callable<Integer> {
     private static final String AUTO_ENGINE = "auto";
     /** --model이 없을 때 읽는 모델 환경변수 (설계 7.1). 회사는 ProviderResolver가 H2SPEC_LLM_PROVIDER로 정한다 */
     private static final String MODEL_ENVIRONMENT_VARIABLE = "H2SPEC_LLM_MODEL";
+    /** --effort가 없을 때 읽는 추론 깊이 환경변수 */
+    private static final String EFFORT_ENVIRONMENT_VARIABLE = "H2SPEC_LLM_EFFORT";
 
     /** 환경변수. llm 엔진으로 변환할 문서가 있을 때만 읽는다. rule 엔진은 회사를 정하지 않고 키 환경변수도 읽지 않는다 (설계 7.1) */
     private final Supplier<Map<String, String>> environment;
@@ -103,6 +105,10 @@ public class ConvertCommand implements Callable<Integer> {
 
     @Option(names = "--model", description = "llm 엔진의 모델 ID (기본: H2SPEC_LLM_MODEL, 없으면 회사별 기본 모델)")
     private String model;
+
+    @Option(names = "--effort", description = "llm 엔진의 추론 깊이 (기본: H2SPEC_LLM_EFFORT, 없으면 회사별 기본값. "
+            + "claude는 low, medium, high, xhigh, max이고 기본은 medium). 높을수록 출력 토큰(비용)과 시간이 는다")
+    private String effort;
 
     @Option(names = "--no-cross-check", description = "llm 엔진의 결과를 rule 엔진의 결과와 대조하지 않는다")
     private boolean noCrossCheck;
@@ -226,11 +232,13 @@ public class ConvertCommand implements Callable<Integer> {
             ProviderResolver.Resolution.UseLlm resolved = (ProviderResolver.Resolution.UseLlm)
                     new ProviderResolver(providers, env).resolve(ProviderResolver.Engine.LLM, provider);
             LlmProviderFactory chosen = resolved.provider();
-            LlmSettings settings = LlmSettings.of(modelOf(chosen, env), chosen.defaultEffort(), resolved.apiKey());
+            LlmSettings settings = LlmSettings.of(modelOf(chosen, env), effortOf(chosen, env), resolved.apiKey())
+                    .withWorkspaceId(workspaceOf(chosen, env));
             specParser = llmParsers.create(chosen, settings, llmOptions());
             llmTokens = TokenUsage.NONE;
             // 문서를 외부로 보내는 것은 사용자가 켠 일이지만, 무엇을 어디로 보내는지는 실행마다 한 번 알린다 (설계 10장)
-            err("문서 내용을 " + chosen.id() + "(" + settings.model() + ")로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.");
+            err("문서 내용을 " + chosen.id() + "(" + settings.model() + ", 추론 깊이 " + settings.effort()
+                    + ")로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.");
             return true;
         } catch (IllegalArgumentException e) {
             // 회사를 정하지 못했거나(ProviderResolutionException) 키·모델이 설정에 맞지 않을 때다. 어느 메시지에도 키 값은 없다
@@ -246,6 +254,42 @@ public class ConvertCommand implements Callable<Integer> {
         }
         String fromEnvironment = env.get(MODEL_ENVIRONMENT_VARIABLE);
         return fromEnvironment != null && !fromEnvironment.isBlank() ? fromEnvironment.strip() : chosen.defaultModel();
+    }
+
+    /**
+     * --effort, H2SPEC_LLM_EFFORT, 회사별 기본값 순으로 정한다. 빈 값은 주지 않은 것으로 보고, 대소문자는 가리지 않는다.
+     * 회사가 받는 값을 알려 주면 부르기 전에 확인한다. 틀린 값으로 문서마다 호출이 거절되는 것보다 먼저 알리는 편이 낫다.
+     *
+     * @throws IllegalArgumentException 회사가 받지 않는 값일 때
+     */
+    private String effortOf(LlmProviderFactory chosen, Map<String, String> env) {
+        String source = "--effort";
+        String value = effort;
+        if (value == null || value.isBlank()) {
+            source = EFFORT_ENVIRONMENT_VARIABLE;
+            value = env.get(EFFORT_ENVIRONMENT_VARIABLE);
+        }
+        if (value == null || value.isBlank()) {
+            return chosen.defaultEffort();
+        }
+        String level = value.strip().toLowerCase(Locale.ROOT);
+        List<String> levels = chosen.effortLevels();
+        if (!levels.isEmpty() && !levels.contains(level)) {
+            throw new IllegalArgumentException(source + " 값 '" + value.strip() + "'은 " + chosen.id()
+                    + "가 받는 추론 깊이가 아닙니다. 쓸 수 있는 값: " + String.join(", ", levels));
+        }
+        return level;
+    }
+
+    /** 회사의 워크스페이스 환경변수 중 값이 있는 첫 것. 없으면 null이라 보내지 않는다 (한 워크스페이스에 묶인 키는 필요 없다) */
+    private static String workspaceOf(LlmProviderFactory chosen, Map<String, String> env) {
+        for (String name : chosen.workspaceEnvironmentVariables()) {
+            String value = env.get(name);
+            if (value != null && !value.isBlank()) {
+                return value.strip();
+            }
+        }
+        return null;
     }
 
     /** 캐시·교차검증 옵션을 llm 엔진 설정에 옮긴다. 경고는 라이브러리가 기본으로 버리므로 표준 오류로 받는다 */
@@ -323,7 +367,8 @@ public class ConvertCommand implements Callable<Integer> {
             return;
         }
         llmTokens = plus(llmTokens == null ? TokenUsage.NONE : llmTokens, used.tokenUsage());
-        spec.commandLine().getOut().println("엔진: " + used.name() + " (" + used.provider() + " / " + used.model() + "), "
+        spec.commandLine().getOut().println("엔진: " + used.name() + " (" + used.provider() + " / " + used.model()
+                + ", 추론 깊이 " + used.effort() + "), "
                 + (used.cacheUsed() ? "캐시 사용" : "캐시 없음") + ", 토큰 " + tokens(used.tokenUsage()) + " (thinking 포함)");
     }
 
@@ -331,10 +376,12 @@ public class ConvertCommand implements Callable<Integer> {
      * 토큰 사용량을 "입력 N / 출력 M"으로 적는다. N은 보낸 입력 전체로, 캐시와 상관없는 입력에 회사의 프롬프트 캐시에서 읽은 입력과
      * 캐시에 쓴 입력을 더한 값이다. 프롬프트 캐시가 맞았는지에 따라 값이 흔들리지 않고 같은 문서면 같은 크기로 보인다.
      * 어댑터가 회사마다 다른 집계(설계 6.2)를 이 세 칸으로 나눠 두므로 회사와 상관없이 같은 뜻이다.
+     * 프롬프트 캐시에서 읽은 입력은 단가가 입력의 10분의 1이라 따로도 적는다.
      * M은 출력 단가로 과금되는 출력 전부라 thinking을 포함한다.
      */
     private static String tokens(TokenUsage usage) {
-        return "입력 " + (usage.input() + usage.cacheRead() + usage.cacheWrite()) + " / 출력 " + usage.output();
+        String cacheRead = usage.cacheRead() == 0 ? "" : " (프롬프트 캐시 읽기 " + usage.cacheRead() + ")";
+        return "입력 " + (usage.input() + usage.cacheRead() + usage.cacheWrite()) + cacheRead + " / 출력 " + usage.output();
     }
 
     private static TokenUsage plus(TokenUsage total, TokenUsage usage) {
@@ -470,7 +517,18 @@ public class ConvertCommand implements Callable<Integer> {
                 new ApiSpec(api.apiId(), api.apiName(), api.description(), api.baseUrl(),
                         api.endpoint(), api.httpMethod(), responseFormat,
                         api.requestParameters(), api.responseFields(), api.errorSpec()),
-                ir.generatorHints());
+                withFormatValue(ir.generatorHints(), api.responseFormat(), responseFormat));
+    }
+
+    /** 포맷 파라미터 힌트의 값이 이전 응답 형식이면 같은 대소문자로 새 형식을 넣는다 */
+    private static GeneratorHints withFormatValue(GeneratorHints hints, String previous, String responseFormat) {
+        GeneratorHints.ResponseFormatParameter hint = hints.responseFormatParameter();
+        if (hint == null || hint.value() == null || !hint.value().equalsIgnoreCase(previous)) {
+            return hints;
+        }
+        String value = hint.value().equals(hint.value().toUpperCase(Locale.ROOT))
+                ? responseFormat.toUpperCase(Locale.ROOT) : responseFormat.toLowerCase(Locale.ROOT);
+        return new GeneratorHints(hints.targetPackage(), new GeneratorHints.ResponseFormatParameter(hint.name(), value));
     }
 
     /** 성공코드만 바꾼다. 결과코드 위치 후보까지 지우면 생성 클라이언트가 문서에 적힌 결과코드 이름을 인터셉터에 넘기지 못한다 */
@@ -485,7 +543,8 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     private IrSpec withTargetPackage(IrSpec ir, String basePackage) {
-        return new IrSpec(ir.api(), new GeneratorHints(operationPackage(basePackage, ir.api().apiId())));
+        return new IrSpec(ir.api(), new GeneratorHints(operationPackage(basePackage, ir.api().apiId()),
+                ir.generatorHints().responseFormatParameter()));
     }
 
     /**

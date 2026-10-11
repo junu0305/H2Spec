@@ -193,7 +193,7 @@ class ExtractionValidatorTest {
         LlmOperation empty = new LlmOperation(null, null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null);
 
-        ValidatedOperation operation = validator.validate(new LlmExtraction(null, null, List.of(empty), null),
+        ValidatedOperation operation = validator.validate(new LlmExtraction(null, null, null, List.of(empty), null),
                 SampleDocument.standard()).operations().get(0);
 
         assertTrue(operation.dropped());

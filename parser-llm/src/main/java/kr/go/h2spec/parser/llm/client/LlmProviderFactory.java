@@ -20,10 +20,26 @@ public interface LlmProviderFactory {
     String defaultEffort();
 
     /**
+     * @return 이 회사가 받는 추론 깊이 값(소문자). CLI가 부르기 전에 {@code --effort}를 확인한다.
+     *         비어 있으면 확인하지 않고 회사에 그대로 보낸다
+     */
+    default List<String> effortLevels() {
+        return List.of();
+    }
+
+    /**
      * @return API 키를 읽는 환경변수 이름. 둘 이상이면 앞의 이름이 우선한다(Gemini는 {@code GOOGLE_API_KEY}가 {@code GEMINI_API_KEY}보다 먼저).
      *         회사 결정(설계 7.2)은 이 이름들을 한 회사로 센다
      */
     List<String> apiKeyEnvironmentVariables();
+
+    /**
+     * @return 요청을 실행할 워크스페이스 ID를 읽는 환경변수 이름. 한 워크스페이스에 묶이지 않은 키는 요청마다 워크스페이스를 밝혀야 한다.
+     *         그런 개념이 없는 회사는 빈 목록이다
+     */
+    default List<String> workspaceEnvironmentVariables() {
+        return List.of();
+    }
 
     /**
      * @param settings 모델, 추론 깊이, 키, 대기 시간, 재시도 횟수, 주소
