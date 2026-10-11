@@ -1,15 +1,25 @@
 package kr.go.h2spec.cli;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.generator.CodeGenerator;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.ErrorSpec;
 import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
-import kr.go.h2spec.parser.DocxSpecParser;
-import kr.go.h2spec.parser.HwpSpecParser;
-import kr.go.h2spec.parser.HwpxSpecParser;
+import kr.go.h2spec.parser.DocumentReaders;
 import kr.go.h2spec.parser.ParsedApi;
+import kr.go.h2spec.parser.RuleSpecParser;
+import kr.go.h2spec.parser.SpecParseException;
+import kr.go.h2spec.parser.SpecParseResult;
+import kr.go.h2spec.parser.SpecParseResult.TokenUsage;
+import kr.go.h2spec.parser.SpecParser;
+import kr.go.h2spec.parser.llm.ExtractionCache;
+import kr.go.h2spec.parser.llm.LlmSpecParser;
+import kr.go.h2spec.parser.llm.client.LlmProviderFactory;
+import kr.go.h2spec.parser.llm.client.LlmProviders;
+import kr.go.h2spec.parser.llm.client.LlmSettings;
+import kr.go.h2spec.parser.llm.client.ProviderResolver;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -18,11 +28,14 @@ import picocli.CommandLine.Spec;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
 /** 명세 파일을 OpenAPI/클라이언트/DTO 산출물로 변환하는 서브커맨드. */
 @Command(
@@ -31,12 +44,30 @@ import java.util.concurrent.Callable;
         mixinStandardHelpOptions = true)
 public class ConvertCommand implements Callable<Integer> {
 
-    private static final String DOCX_EXTENSION = ".docx";
-    private static final String HWP_EXTENSION = ".hwp";
-    private static final String HWPX_EXTENSION = ".hwpx";
     private static final String JSON_EXTENSION = ".json";
     private static final String XML_FORMAT = "XML";
     private static final String JSON_FORMAT = "JSON";
+    /** 덮어쓰기 옵션으로 바꾼 값을 IR의 reviewNotes에 남길 때 붙이는 머리말 */
+    private static final String CLI_NOTE_PREFIX = "[CLI] ";
+    /** 기본 엔진. 범용 API 키가 환경에 있다는 것만으로 문서를 외부로 보내고 과금하지 않도록 모든 단계에서 rule이다 (설계 원칙 6) */
+    private static final String RULE_ENGINE = "rule";
+    private static final String LLM_ENGINE = "llm";
+    /** h2spec 전용 설정이 있을 때만 llm을 쓰는 엔진. 실패한 문서를 rule로 대신 변환하는 경로와 함께 2단계(2-4)에서 들어온다 */
+    private static final String AUTO_ENGINE = "auto";
+    /** --model이 없을 때 읽는 모델 환경변수 (설계 7.1). 회사는 ProviderResolver가 H2SPEC_LLM_PROVIDER로 정한다 */
+    private static final String MODEL_ENVIRONMENT_VARIABLE = "H2SPEC_LLM_MODEL";
+
+    /** 환경변수. llm 엔진으로 변환할 문서가 있을 때만 읽는다. rule 엔진은 회사를 정하지 않고 키 환경변수도 읽지 않는다 (설계 7.1) */
+    private final Supplier<Map<String, String>> environment;
+    /** llm 엔진에 쓸 수 있는 회사 */
+    private final List<LlmProviderFactory> providers;
+    /** 정한 회사와 설정으로 llm 엔진을 만든다 */
+    private final LlmParserFactory llmParsers;
+
+    /** 명세 문서를 IR로 바꾸는 엔진. 기본은 rule 엔진이고, --engine llm이면 파일을 변환하기 전에 llm 엔진으로 바꾼다 */
+    private SpecParser specParser = new RuleSpecParser();
+    /** llm 엔진으로 변환한 문서의 토큰 사용량 합계. 이번 실행에서 llm 엔진을 쓰지 않으면 null이다 */
+    private TokenUsage llmTokens;
 
     @Spec
     private CommandSpec spec;
@@ -48,7 +79,7 @@ public class ConvertCommand implements Callable<Integer> {
     @Option(names = {"-o", "--output"}, description = "출력 디렉터리 (기본: ./generated)")
     private Path output = Path.of("generated");
 
-    /** 배치에서 이미 산출물을 낸 apiId. 뒤 문서가 앞 문서를 덮어쓰는 것을 알리기 위해 추적한다 */
+    /** 이번 실행에서 이미 IR이나 코드를 낸 apiId. 뒤 문서가 앞 문서의 산출물을 덮어쓰는 것을 알리기 위해 추적한다 */
     private final Map<String, Path> writtenApiIds = new LinkedHashMap<>();
 
     @Option(names = "--success-code", description = "정상 처리로 간주할 resultCode (IR의 errorSpec 값을 덮어씀)")
@@ -61,6 +92,47 @@ public class ConvertCommand implements Callable<Integer> {
             + "오퍼레이션별로 apiId를 소문자화한 하위 패키지가 자동으로 붙는다 (예: com.example.publicdata → com.example.publicdata.msrstnlist)")
     private String targetPackage;
 
+    @Option(names = "--engine", description = "명세 문서를 해석할 엔진 rule 또는 llm (기본: rule). "
+            + "llm은 문서 내용을 LLM 회사로 보내며 그 회사의 API 키를 환경변수로 받는다. IR JSON 입력은 엔진과 무관하게 바로 생성한다")
+    private String engine = RULE_ENGINE;
+
+    @Option(names = "--provider", completionCandidates = ProviderIds.class,
+            description = "llm 엔진에 쓸 LLM 회사 (${COMPLETION-CANDIDATES}). 없으면 H2SPEC_LLM_PROVIDER, "
+                    + "그것도 없으면 키 환경변수가 있는 회사가 하나일 때 그 회사")
+    private String provider;
+
+    @Option(names = "--model", description = "llm 엔진의 모델 ID (기본: H2SPEC_LLM_MODEL, 없으면 회사별 기본 모델)")
+    private String model;
+
+    @Option(names = "--no-cross-check", description = "llm 엔진의 결과를 rule 엔진의 결과와 대조하지 않는다")
+    private boolean noCrossCheck;
+
+    @Option(names = "--no-cache", description = "llm 엔진의 결과 캐시를 쓰지 않는다. 같은 문서도 LLM을 다시 부른다")
+    private boolean noCache;
+
+    @Option(names = "--cache-dir", description = "llm 엔진의 결과 캐시 디렉터리 "
+            + "(기본: XDG_CACHE_HOME 또는 ~/.cache 아래 h2spec/llm, Windows는 LOCALAPPDATA 아래 h2spec\\llm)")
+    private Path cacheDir;
+
+    /** 실제 환경변수와 회사 목록을 쓴다. picocli가 서브커맨드를 만들 때 부른다 */
+    public ConvertCommand() {
+        this(System::getenv, LlmProviders.ALL, LlmSpecParser::of);
+    }
+
+    /**
+     * 테스트가 실제 환경변수·키·네트워크 없이 가짜 환경과 가짜 엔진으로 바꿀 때 쓴다.
+     *
+     * @param environment 환경변수를 읽는 곳. llm 엔진으로 변환할 문서가 있을 때만 부른다
+     * @param providers   llm 엔진에 쓸 수 있는 회사
+     * @param llmParsers  정한 회사와 설정으로 llm 엔진을 만드는 곳
+     */
+    ConvertCommand(Supplier<Map<String, String>> environment, List<LlmProviderFactory> providers,
+                   LlmParserFactory llmParsers) {
+        this.environment = Objects.requireNonNull(environment, "environment");
+        this.providers = List.copyOf(providers);
+        this.llmParsers = Objects.requireNonNull(llmParsers, "llmParsers");
+    }
+
     @Override
     public Integer call() {
         if (!Files.exists(input)) {
@@ -71,7 +143,28 @@ public class ConvertCommand implements Callable<Integer> {
             err("--format 값은 xml 또는 json 이어야 합니다: " + format);
             return 1;
         }
-        return Files.isDirectory(input) ? convertDirectory() : (convertFile(input) ? 0 : 1);
+        if (AUTO_ENGINE.equalsIgnoreCase(engine)) {
+            // 실패한 문서를 rule로 대신 변환하는 경로(설계 7.3)가 아직 없어, 받아 두면 rule이나 llm 한쪽으로 사용자가 모르게 바뀐다
+            err("--engine auto는 아직 지원하지 않습니다. rule 또는 llm을 쓰세요");
+            return 1;
+        }
+        if (!RULE_ENGINE.equalsIgnoreCase(engine) && !LLM_ENGINE.equalsIgnoreCase(engine)) {
+            err("--engine 값은 rule 또는 llm 이어야 합니다: " + engine);
+            return 1;
+        }
+        return Files.isDirectory(input) ? convertDirectory() : convertSingleFile();
+    }
+
+    /** 파일 하나를 변환한다. 디렉터리와 같은 종료 코드 규칙을 따른다 */
+    private int convertSingleFile() {
+        if (!prepareEngine(List.of(input))) {
+            return 1;
+        }
+        try {
+            return convertFile(input) ? 0 : 1;
+        } catch (SpecParseException e) {
+            return abort(e, 0);
+        }
     }
 
     /** 디렉터리 안의 모든 명세 파일(DOCX, IR JSON)을 찾아 각각 변환한다. */
@@ -91,45 +184,125 @@ public class ConvertCommand implements Callable<Integer> {
             err("디렉터리에서 변환할 명세 파일(.docx, .hwp, .hwpx, .json)을 찾지 못했습니다: " + input);
             return 1;
         }
+        if (!prepareEngine(targets)) {
+            return 1;
+        }
 
         int failureCount = 0;
-        for (Path target : targets) {
+        for (int i = 0; i < targets.size(); i++) {
+            Path target = targets.get(i);
             spec.commandLine().getOut().println("=== " + input.relativize(target) + " ===");
-            if (!convertFile(target)) {
-                failureCount++;
+            try {
+                if (!convertFile(target)) {
+                    failureCount++;
+                }
+            } catch (SpecParseException e) {
+                return abort(e, targets.size() - i - 1);
             }
         }
+        // llm 엔진은 배치 전체에 쓴 토큰도 알린다 (설계 7.4). LLM이 답한 뒤에 실패한 문서의 토큰도 과금되므로 합계에 든다
         spec.commandLine().getOut().println(
-                String.format("%d개 중 %d개 변환 성공, %d개 실패", targets.size(), targets.size() - failureCount, failureCount));
+                String.format("%d개 중 %d개 변환 성공, %d개 실패", targets.size(), targets.size() - failureCount, failureCount)
+                        + (llmTokens == null ? "" : " · LLM 토큰 합계 " + tokens(llmTokens)));
         return failureCount == 0 ? 0 : 1;
     }
 
-    private boolean isSupportedSpecFile(Path path) {
-        String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
-        return fileName.endsWith(DOCX_EXTENSION) || fileName.endsWith(HWP_EXTENSION)
-                || fileName.endsWith(HWPX_EXTENSION) || fileName.endsWith(JSON_EXTENSION);
+    /**
+     * 명세 문서를 변환할 엔진을 정한다. llm 엔진은 파일을 하나라도 변환하기 전에 회사와 키를 정한다(설계 7.2).
+     * 키가 없다는 것을 첫 문서에서야 알면 그 앞의 파일만 변환된 채 끝나기 때문이다.
+     * rule 엔진과, 변환할 명세 문서 없이 IR JSON만 있는 실행은 회사를 정하지 않고 환경변수도 읽지 않는다.
+     * IR JSON은 엔진과 무관하게 바로 생성하므로(설계 7.1) LLM 키가 없어도 지금처럼 변환돼야 한다.
+     *
+     * @param targets 이번 실행에서 변환할 파일
+     * @return 변환을 시작해도 되면 true. 회사를 정하지 못했으면 이유를 알리고 false
+     */
+    private boolean prepareEngine(List<Path> targets) {
+        if (!LLM_ENGINE.equalsIgnoreCase(engine) || targets.stream().noneMatch(DocumentReaders::isDocument)) {
+            return true;
+        }
+        Map<String, String> env = environment.get();
+        try {
+            // llm은 회사를 정하지 못하면 rule로 가지 않고 예외로 끝나므로(설계 7.2의 5번) 결과는 늘 UseLlm이다
+            ProviderResolver.Resolution.UseLlm resolved = (ProviderResolver.Resolution.UseLlm)
+                    new ProviderResolver(providers, env).resolve(ProviderResolver.Engine.LLM, provider);
+            LlmProviderFactory chosen = resolved.provider();
+            LlmSettings settings = LlmSettings.of(modelOf(chosen, env), chosen.defaultEffort(), resolved.apiKey());
+            specParser = llmParsers.create(chosen, settings, llmOptions());
+            llmTokens = TokenUsage.NONE;
+            // 문서를 외부로 보내는 것은 사용자가 켠 일이지만, 무엇을 어디로 보내는지는 실행마다 한 번 알린다 (설계 10장)
+            err("문서 내용을 " + chosen.id() + "(" + settings.model() + ")로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.");
+            return true;
+        } catch (IllegalArgumentException e) {
+            // 회사를 정하지 못했거나(ProviderResolutionException) 키·모델이 설정에 맞지 않을 때다. 어느 메시지에도 키 값은 없다
+            err(e.getMessage());
+            return false;
+        }
     }
 
-    /** 파일 하나(명세 문서 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다. */
-    private boolean convertFile(Path file) {
-        String fileName = file.getFileName().toString().toLowerCase(Locale.ROOT);
+    /** --model, H2SPEC_LLM_MODEL, 회사별 기본 모델 순으로 정한다 (설계 7.1). 빈 값은 주지 않은 것으로 본다 */
+    private String modelOf(LlmProviderFactory chosen, Map<String, String> env) {
+        if (model != null && !model.isBlank()) {
+            return model.strip();
+        }
+        String fromEnvironment = env.get(MODEL_ENVIRONMENT_VARIABLE);
+        return fromEnvironment != null && !fromEnvironment.isBlank() ? fromEnvironment.strip() : chosen.defaultModel();
+    }
+
+    /** 캐시·교차검증 옵션을 llm 엔진 설정에 옮긴다. 경고는 라이브러리가 기본으로 버리므로 표준 오류로 받는다 */
+    private LlmSpecParser.Options llmOptions() {
+        LlmSpecParser.Options options = LlmSpecParser.Options.defaults()
+                .withCrossCheck(!noCrossCheck)
+                .withWarnings(this::err);
+        if (noCache) {
+            // 끄라는 뜻이 위치를 바꾸라는 뜻보다 분명하므로 --cache-dir과 함께 와도 끈다
+            return options.withCache(ExtractionCache.disabled());
+        }
+        return cacheDir == null ? options : options.withCache(ExtractionCache.at(cacheDir));
+    }
+
+    /**
+     * 키 오류(AUTH)로 실행을 멈춘다. 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다 (설계 7.3).
+     * 변환 요약을 내지 않으므로 남은 파일을 변환하지 않았다는 것을 따로 알린다.
+     */
+    private int abort(SpecParseException e, int remaining) {
+        e.engine().ifPresent(this::reportEngine);
+        err(e.getMessage());
+        if (remaining > 0) {
+            err("API 키 오류라 남은 파일 " + remaining + "개는 변환하지 않고 멈춥니다");
+        }
+        return 1;
+    }
+
+    private boolean isSupportedSpecFile(Path path) {
+        return DocumentReaders.isDocument(path)
+                || path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(JSON_EXTENSION);
+    }
+
+    /**
+     * 파일 하나(명세 문서 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다.
+     *
+     * @throws SpecParseException 키 오류({@link SpecParseException.Kind#AUTH})일 때만. 부르는 쪽이 실행 전체를 멈춘다
+     */
+    private boolean convertFile(Path file) throws SpecParseException {
         try {
-            if (fileName.endsWith(DOCX_EXTENSION)) {
-                DocxSpecParser parser = new DocxSpecParser();
-                convertDocument(parser.parse(file), file);
-                warnSkipped(parser.skipped(), file);
-            } else if (fileName.endsWith(HWPX_EXTENSION)) {
-                HwpxSpecParser parser = new HwpxSpecParser();
-                convertDocument(parser.parse(file), file);
-                warnSkipped(parser.skipped(), file);
-            } else if (fileName.endsWith(HWP_EXTENSION)) {
-                HwpSpecParser parser = new HwpSpecParser();
-                convertDocument(parser.parse(file), file);
-                warnSkipped(parser.skipped(), file);
+            if (DocumentReaders.isDocument(file)) {
+                SpecParseResult parsed = specParser.parse(file);
+                reportEngine(parsed.engine());
+                return convertDocument(parsed.apis(), parsed.skipped(), file);
             } else {
-                generateFrom(file, file);
+                // 명세 문서가 아닌 파일은 모두 IR JSON으로 본다
+                generateFromInputIr(file);
+                return true;
             }
-            return true;
+        } catch (SpecParseException e) {
+            if (e.kind() == SpecParseException.Kind.AUTH) {
+                throw e;
+            }
+            // 429·5xx·네트워크(RETRYABLE)와 그 밖의 실패는 그 문서만 실패다. --engine llm을 고른 사용자의 뜻과 다르므로
+            // rule 엔진으로 대신 변환하지 않는다 (설계 7.3). rule 엔진은 FAILED만 낸다
+            e.engine().ifPresent(this::reportEngine);
+            err(e.getMessage());
+            return false;
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             err(e.getMessage());
             return false;
@@ -139,20 +312,87 @@ public class ConvertCommand implements Callable<Integer> {
         }
     }
 
-    /** 문서에서 추출한 오퍼레이션별 IR JSON을 저장한 뒤 각각 코드 생성 */
-    private void convertDocument(List<ParsedApi> apis, Path sourceFile) throws IOException {
-        Path irDir = Files.createDirectories(output.resolve("ir"));
-        for (ParsedApi parsed : apis) {
-            Path irFile = irDir.resolve(parsed.apiId() + ".json");
-            Files.writeString(irFile, parsed.ir().toPrettyString());
-            spec.commandLine().getOut().println("IR 추출: " + irFile);
-            generateFrom(irFile, sourceFile);
+    /**
+     * llm 엔진으로 변환한 문서마다 쓴 회사·모델과 토큰 사용량을 알리고 실행 합계에 더한다 (설계 7.4).
+     * 변환에 실패한 문서도 LLM이 답한 뒤였으면(출력 잘림, 거절 등) 그 호출이 과금되므로 똑같이 알린다.
+     * 토큰 사용량은 실행마다 달라 IR에 넣지 않으므로 여기에만 남는다. rule 엔진의 출력은 지금과 같게 둔다.
+     * "캐시 사용"은 h2spec 결과 캐시(설계 5.4)에서 꺼냈다는 뜻이고, 그때는 LLM을 부르지 않아 토큰이 0이다.
+     */
+    private void reportEngine(SpecParseResult.Engine used) {
+        if (!LLM_ENGINE.equals(used.name())) {
+            return;
         }
+        llmTokens = plus(llmTokens == null ? TokenUsage.NONE : llmTokens, used.tokenUsage());
+        spec.commandLine().getOut().println("엔진: " + used.name() + " (" + used.provider() + " / " + used.model() + "), "
+                + (used.cacheUsed() ? "캐시 사용" : "캐시 없음") + ", 토큰 " + tokens(used.tokenUsage()) + " (thinking 포함)");
     }
 
-    private void generateFrom(Path irJson, Path source) throws IOException {
+    /**
+     * 토큰 사용량을 "입력 N / 출력 M"으로 적는다. N은 보낸 입력 전체로, 캐시와 상관없는 입력에 회사의 프롬프트 캐시에서 읽은 입력과
+     * 캐시에 쓴 입력을 더한 값이다. 프롬프트 캐시가 맞았는지에 따라 값이 흔들리지 않고 같은 문서면 같은 크기로 보인다.
+     * 어댑터가 회사마다 다른 집계(설계 6.2)를 이 세 칸으로 나눠 두므로 회사와 상관없이 같은 뜻이다.
+     * M은 출력 단가로 과금되는 출력 전부라 thinking을 포함한다.
+     */
+    private static String tokens(TokenUsage usage) {
+        return "입력 " + (usage.input() + usage.cacheRead() + usage.cacheWrite()) + " / 출력 " + usage.output();
+    }
+
+    private static TokenUsage plus(TokenUsage total, TokenUsage usage) {
+        return new TokenUsage(total.input() + usage.input(), total.cacheRead() + usage.cacheRead(),
+                total.cacheWrite() + usage.cacheWrite(), total.output() + usage.output());
+    }
+
+    /**
+     * 문서의 IR을 모두 쓴 뒤 오퍼레이션마다 따로 코드를 생성한다. 한 오퍼레이션의 생성 실패로 나머지 IR과 코드를 잃지 않기 위해서다.
+     * 생성에 실패한 오퍼레이션은 파서가 건너뛴 오퍼레이션(skipped)과 같은 형식으로 알리고, IR은 검수하도록 남긴다.
+     * 코드를 생성한 오퍼레이션이 하나도 없을 때만 문서를 실패로 센다.
+     */
+    boolean convertDocument(List<ParsedApi> apis, List<String> skipped, Path sourceFile) throws IOException {
+        // 뒤 단계에서 무엇이 실패하든 빠지지 않도록 가장 먼저 알린다
+        warnSkipped(skipped, sourceFile);
+        Map<String, Path> irFiles = writeIrFiles(apis, sourceFile);
+        int generated = 0;
+        for (Map.Entry<String, Path> irFile : irFiles.entrySet()) {
+            try {
+                // 덮어쓰기 옵션은 쓴 IR에 이미 들어 있다
+                generate(new IrLoader().load(irFile.getValue()));
+                generated++;
+            } catch (IllegalArgumentException | UnsupportedOperationException | IOException e) {
+                warnSkipped(List.of(irFile.getKey() + ": " + e.getMessage()), sourceFile);
+            }
+        }
+        if (generated == 0) {
+            err("변환 실패 (" + sourceFile + "): 코드를 생성한 오퍼레이션이 없습니다");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 문서의 IR을 오퍼레이션마다 쓰고, 쓴 파일을 apiId별로 문서 순서대로 돌려준다.
+     * 한 문서 안에서 apiId가 겹치면 뒤 오퍼레이션의 IR만 남으므로 그 파일에서 코드를 두 번 만들지 않게 한 번만 담는다.
+     */
+    private Map<String, Path> writeIrFiles(List<ParsedApi> apis, Path sourceFile) throws IOException {
+        Path irDir = Files.createDirectories(output.resolve("ir"));
+        Map<String, Path> irFiles = new LinkedHashMap<>();
+        for (ParsedApi parsed : apis) {
+            Path irFile = irDir.resolve(parsed.apiId() + ".json");
+            // 쓰고 난 뒤에 알리면 앞서 쓴 IR은 이미 사라진 뒤다
+            warnOnApiIdOverwrite(parsed.apiId(), sourceFile);
+            Files.writeString(irFile, withOverrides(parsed.ir()).toPrettyString());
+            spec.commandLine().getOut().println("IR 추출: " + irFile);
+            irFiles.put(parsed.apiId(), irFile);
+        }
+        return irFiles;
+    }
+
+    /**
+     * 입력으로 받은 IR JSON에서 코드를 생성한다. 빌드가 커밋된 IR을 바꾸면 안 되므로 파일은 고치지 않고
+     * 덮어쓰기 옵션은 생성할 때만 적용한다.
+     */
+    private void generateFromInputIr(Path irJson) throws IOException {
         IrSpec ir = new IrLoader().load(irJson);
-        warnOnApiIdOverwrite(ir.api().apiId(), source);
+        warnOnApiIdOverwrite(ir.api().apiId(), irJson);
         if (successCode != null) {
             ir = withSuccessCode(ir, successCode);
         }
@@ -162,8 +402,47 @@ public class ConvertCommand implements Callable<Integer> {
         if (targetPackage != null) {
             ir = withTargetPackage(ir, targetPackage);
         }
+        generate(ir);
+    }
+
+    private void generate(IrSpec ir) throws IOException {
         List<Path> written = new CodeGenerator().generate(ir, output);
         written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
+    }
+
+    /**
+     * 덮어쓰기 옵션을 명세 문서에서 새로 쓰는 IR에도 반영한다. IR이 검수 단위라 생성 코드와 어긋나면 안 된다.
+     * generator의 IrSpec으로 다시 쓰면 generator가 모르는 필드(metadata, knownErrorCodes 등)가 사라지므로
+     * JSON 트리에서 해당 값만 바꾼다.
+     */
+    private ObjectNode withOverrides(ObjectNode parsedIr) {
+        ObjectNode ir = parsedIr.deepCopy();
+        if (successCode != null) {
+            override(ir, "/api/errorSpec", "successResultCode", successCode, "--success-code로 성공코드를");
+        }
+        if (format != null) {
+            override(ir, "/api", "responseFormat", format.toUpperCase(Locale.ROOT), "--format으로 응답 포맷을");
+        }
+        if (targetPackage != null) {
+            String apiPackage = operationPackage(targetPackage, ir.at("/api/apiId").asText());
+            override(ir, "/generatorHints", "targetPackage", apiPackage, "--package로 생성 패키지를");
+        }
+        return ir;
+    }
+
+    /**
+     * 값이 문서가 아니라 옵션에서 왔음을 검수자가 알 수 있게 원래 값과 함께 노트를 남긴다.
+     * 원래 값과 같으면 바꿀 것도 알릴 것도 없다.
+     */
+    private void override(ObjectNode ir, String parentPointer, String field, String value, String noteLabel) {
+        ObjectNode parent = ir.withObject(parentPointer);
+        String previous = parent.path(field).asText();
+        if (value.equals(previous)) {
+            return;
+        }
+        parent.put(field, value);
+        ir.withArray("/metadata/reviewNotes").add(CLI_NOTE_PREFIX + noteLabel + " 바꿈: " + previous + " → " + value);
+        ir.withObject("/metadata").put("manualReviewRequired", true);
     }
 
     /** 문서의 일부 오퍼레이션만 변환됐으면 빠진 오퍼레이션과 이유를 알린다. 성공으로 집계돼 놓치기 쉽다 */
@@ -175,7 +454,7 @@ public class ConvertCommand implements Callable<Integer> {
 
     /**
      * 배치는 모든 문서를 한 출력 디렉터리에 쏟으므로 apiId가 겹치면 앞선 산출물이 조용히 사라진다.
-     * 성공으로 집계되기 때문에 알리지 않으면 알아채기 어렵다.
+     * 성공으로 집계되기 때문에 알리지 않으면 알아채기 어렵다. 명세 문서는 IR을 쓰기 전에, IR JSON 입력은 생성하기 전에 부른다.
      */
     private void warnOnApiIdOverwrite(String apiId, Path source) {
         Path previous = writtenApiIds.put(apiId, source);
@@ -194,21 +473,52 @@ public class ConvertCommand implements Callable<Integer> {
                 ir.generatorHints());
     }
 
+    /** 성공코드만 바꾼다. 결과코드 위치 후보까지 지우면 생성 클라이언트가 문서에 적힌 결과코드 이름을 인터셉터에 넘기지 못한다 */
     private IrSpec withSuccessCode(IrSpec ir, String code) {
         ApiSpec api = ir.api();
+        ErrorSpec errorSpec = new ErrorSpec(code, api.errorSpec().resultCodeFieldCandidates());
         return new IrSpec(
                 new ApiSpec(api.apiId(), api.apiName(), api.description(), api.baseUrl(),
                         api.endpoint(), api.httpMethod(), api.responseFormat(),
-                        api.requestParameters(), api.responseFields(), new ErrorSpec(code)),
+                        api.requestParameters(), api.responseFields(), errorSpec),
                 ir.generatorHints());
     }
 
     private IrSpec withTargetPackage(IrSpec ir, String basePackage) {
-        String subPackage = ir.api().apiId().toLowerCase(Locale.ROOT);
-        return new IrSpec(ir.api(), new GeneratorHints(basePackage + "." + subPackage));
+        return new IrSpec(ir.api(), new GeneratorHints(operationPackage(basePackage, ir.api().apiId())));
+    }
+
+    /**
+     * 오퍼레이션마다 apiId를 소문자화한 하위 패키지를 붙인다.
+     * 문서에서 쓰는 IR과 IR JSON 입력의 생성 코드가 같은 값을 쓰도록 한 곳에서 만든다.
+     */
+    private String operationPackage(String basePackage, String apiId) {
+        return basePackage + "." + apiId.toLowerCase(Locale.ROOT);
     }
 
     private void err(String message) {
         spec.commandLine().getErr().println(message);
+    }
+
+    /** 정한 회사와 설정으로 llm 엔진을 만든다. 실제로는 {@link LlmSpecParser#of}이고, 테스트는 네트워크를 쓰지 않는 가짜 엔진을 돌려준다 */
+    @FunctionalInterface
+    interface LlmParserFactory {
+
+        /**
+         * @param provider ProviderResolver가 정한 회사
+         * @param settings 모델, 추론 깊이, 키
+         * @param options  결과 캐시, 교차검증, 경고를 받을 곳
+         * @return 명세 문서를 변환할 llm 엔진
+         */
+        SpecParser create(LlmProviderFactory provider, LlmSettings settings, LlmSpecParser.Options options);
+    }
+
+    /** --provider 도움말에 고를 수 있는 회사를 적는다. 회사를 더하면(LlmProviders.ALL) 도움말도 따라 바뀐다 */
+    static final class ProviderIds implements Iterable<String> {
+
+        @Override
+        public Iterator<String> iterator() {
+            return LlmProviders.ids().iterator();
+        }
     }
 }

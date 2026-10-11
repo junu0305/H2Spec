@@ -16,6 +16,10 @@ public final class JavaNames {
             return "";
         }
         String[] parts = SEPARATOR.split(name);
+        if (parts.length == 0) {
+            // 구분자로만 된 이름("_", "-")은 나눈 결과가 비어 있다. 빈 이름처럼 다뤄 검사가 거부하게 둔다
+            return "";
+        }
         if (parts.length == 1) {
             return Character.toLowerCase(name.charAt(0)) + name.substring(1);
         }

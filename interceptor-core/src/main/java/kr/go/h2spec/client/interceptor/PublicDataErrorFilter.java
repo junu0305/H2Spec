@@ -11,6 +11,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /** WebClient에서 공공데이터 API의 HTTP 200 위장 에러를 감지하는 필터. */
 public class PublicDataErrorFilter implements ExchangeFilterFunction {
@@ -22,6 +23,17 @@ public class PublicDataErrorFilter implements ExchangeFilterFunction {
 
     public PublicDataErrorFilter(String successCode) {
         this.detector = new PublicDataErrorDetector(successCode);
+    }
+
+    /**
+     * 기본으로 찾는 이름(resultCode, RESULT_CODE, returnReasonCode, errorCode, ERROR_CODE)이 아닌 이름으로
+     * 결과코드를 주는 API에 쓴다. 주어진 이름을 기본 이름보다 먼저 찾고, 없으면 기본 이름으로 찾는다.
+     *
+     * @param successCode 정상 처리를 뜻하는 결과코드
+     * @param resultCodeKeys 결과코드가 담기는 XML 요소나 JSON 키의 이름(예: {@code resultCd}). 경로가 아니라 이름만 준다
+     */
+    public PublicDataErrorFilter(String successCode, List<String> resultCodeKeys) {
+        this.detector = new PublicDataErrorDetector(successCode, resultCodeKeys);
     }
 
     @Override

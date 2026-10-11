@@ -1,0 +1,69 @@
+{
+  "serviceName": "중기예보 조회서비스",
+  "provider": "기상청",
+  "operations": [
+    {
+      "operationName": "",
+      "title": "중기전망조회",
+      "description": "지점번호, 발표시각의 조회조건으로 기상전망정보를 조회하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidFcst",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService/getMidFcst?serviceKey=인증키&numOfRows=10&pageNo=1&stnId=133&tmFc=201404080600",
+        "serviceUrl": "http://apis.data.go.kr/1360000/MidFcstInfoService"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "dataType",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "requestParameters": [
+        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "공공데이터포털에서 발급받은 인증키", "example": "인증키 (URL Encode)", "defaultValue": "", "common": false},
+        {"name": "numOfRows", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "한 페이지 결과 수 Default: 10", "example": "10", "defaultValue": "10", "common": false},
+        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "페이지 번호 Default: 1", "example": "1", "defaultValue": "1", "common": false},
+        {"name": "dataType", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "요청자료형식(XML/JSON) Default: XML", "example": "XML", "defaultValue": "XML", "common": false},
+        {"name": "stnId", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "하단 참고자료 참조", "example": "108", "defaultValue": "", "common": false},
+        {"name": "tmFc", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "-일 2회(06:00,18:00)회 생성 되며 발표시각을 입력 -최근 24시간 자료만 제공", "example": "201310170600",
+         "defaultValue": "", "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {"path": "response.header.resultCode", "type": "STRING", "description": "응답 메시지코드",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.header.resultMsg", "type": "STRING", "description": "응답 메시지 설명",
+         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.dataType", "type": "STRING", "description": "응답자료형식 (XML/JSON)",
+         "sample": "XML", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].wfSv", "type": "STRING", "description": "기상전망 정보",
+         "sample": "예제 참고", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.numOfRows", "type": "INTEGER", "description": "한 페이지당 표출 데이터 수",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지 수",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.totalCount", "type": "INTEGER", "description": "데이터 총 개수",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "FIELD_TABLE"},
+        {"code": "0", "source": "RESPONSE_EXAMPLE"}
+      ]},
+      "errorCodes": [
+        {"code": "01", "message": "APPLICATION_ERROR"},
+        {"code": "03", "message": "NODATA_ERROR"},
+        {"code": "30", "message": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"}
+      ],
+      "evidence": ["T23", "T25", "T28", "T31", "T85"],
+      "uncertain": ["응답 필드 표의 결과코드 샘플은 00, 응답 예제는 0이다"],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": []
+}

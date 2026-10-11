@@ -10,7 +10,9 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** 공공데이터 응답 바디에서 성공/실패 여부와 오류 정보를 판정한다. */
 final class PublicDataErrorDetector {
@@ -63,14 +65,34 @@ final class PublicDataErrorDetector {
     }
 
     private final String successCode;
+    /** 숫자로만 된 성공코드의 앞자리 0을 뗀 꼴. 숫자로만 되어 있지 않으면 null이고 글자 그대로 비교한다 */
+    private final String numericSuccessCode;
+    /** 결과코드를 찾을 이름. 호출자가 준 이름을 기본 이름({@link #RESULT_CODE_KEYS})보다 먼저 찾는다 */
+    private final List<String> resultCodeKeys;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    PublicDataErrorDetector(String successCode) { this.successCode = successCode; }
+    PublicDataErrorDetector(String successCode) { this(successCode, List.of()); }
+
+    PublicDataErrorDetector(String successCode, List<String> extraResultCodeKeys) {
+        this.successCode = successCode;
+        this.numericSuccessCode = isDigitsOnly(successCode) ? stripLeadingZeros(successCode) : null;
+        this.resultCodeKeys = resultCodeKeys(extraResultCodeKeys);
+    }
+
+    /**
+     * 문서에 적힌 이름이 그 API의 결과코드를 가장 잘 가리키므로 기본 이름보다 앞에 둔다.
+     * 기본 이름을 다시 주면 앞으로 옮겨 한 번만 찾는다.
+     */
+    private static List<String> resultCodeKeys(List<String> extraKeys) {
+        Set<String> keys = new LinkedHashSet<>(extraKeys);
+        keys.addAll(RESULT_CODE_KEYS);
+        return List.copyOf(keys);
+    }
 
     DetectionResult detect(String content) {
         ResultInfo result = content.startsWith("<") ? parseXml(content) : parseJson(content);
         if (result.code != null) {
-            return new DetectionResult(!successCode.equals(result.code), result.code, result.message);
+            return new DetectionResult(!isSuccessCode(result.code), result.code, result.message);
         }
         // 결과코드가 없으면 본문의 에러 키워드로 판정한다. 어떤 키워드가 걸렸는지도
         // 남겨야 호출자가 원인을 알 수 있다.
@@ -79,12 +101,39 @@ final class PublicDataErrorDetector {
         return new DetectionResult(keyword != null, null, message);
     }
 
+    /**
+     * 숫자로만 된 두 코드는 앞자리 0을 떼고 비교해 0, 00, 000을 같은 코드로 본다.
+     * 문서에는 성공코드가 00인데 실제 응답은 0이나 JSON 숫자 0({@code "resultCode": 0})으로 오는 기관이 있다.
+     * 앞자리 0만 다른 숫자 코드는 같은 수를 뜻하므로 오류 코드를 성공으로 잘못 볼 일이 없다.
+     * 사전({@link PublicDataErrorCatalog#find})도 같은 이유로 자릿수를 무시한다.
+     * IR의 성공코드 정책(설계 문서 5.2)은 문서마다 엇갈리는 0·00·000을 00으로 적고, 이 비교를 안전장치로 삼는다.
+     * 숫자가 아닌 코드(INFO-00 등)는 대소문자까지 같아야 성공이다.
+     */
+    private boolean isSuccessCode(String code) {
+        if (successCode.equals(code)) return true;
+        return numericSuccessCode != null && isDigitsOnly(code) && numericSuccessCode.equals(stripLeadingZeros(code));
+    }
+
+    /** 결과코드는 ASCII 숫자만 쓰므로 다른 문자 체계의 숫자는 숫자 코드로 보지 않는다 */
+    private static boolean isDigitsOnly(String code) {
+        return code != null && !code.isEmpty() && code.chars().allMatch(c -> c >= '0' && c <= '9');
+    }
+
+    /** 수로 바꾸지 않고 글로 다룬다. 자릿수가 긴 코드에서 넘치거나 예외가 나지 않게 한다. 0으로만 된 코드는 0이 된다 */
+    private static String stripLeadingZeros(String digits) {
+        int start = 0;
+        while (start < digits.length() - 1 && digits.charAt(start) == '0') {
+            start++;
+        }
+        return digits.substring(start);
+    }
+
     private ResultInfo parseXml(String content) {
         try {
             var builder = XML_FACTORY.newDocumentBuilder();
             try (InputStream input = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
                 var document = builder.parse(input);
-                return new ResultInfo(firstTagText(document, RESULT_CODE_KEYS), firstTagText(document, RESULT_MSG_KEYS));
+                return new ResultInfo(firstTagText(document, resultCodeKeys), firstTagText(document, RESULT_MSG_KEYS));
             }
         } catch (Exception ignored) {
             return new ResultInfo(null, null);
@@ -105,7 +154,7 @@ final class PublicDataErrorDetector {
     private ResultInfo parseJson(String content) {
         try {
             JsonNode root = objectMapper.readTree(content);
-            return new ResultInfo(findByKeys(root, RESULT_CODE_KEYS), findByKeys(root, RESULT_MSG_KEYS));
+            return new ResultInfo(findByKeys(root, resultCodeKeys), findByKeys(root, RESULT_MSG_KEYS));
         } catch (JsonProcessingException ignored) {
             return new ResultInfo(null, null);
         }

@@ -15,8 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** DOCX 파일을 읽어 문단/표를 문서 순서 그대로 {@link Block} 목록으로 변환한다. */
-public class DocxSpecReader {
+public class DocxSpecReader implements DocumentReader {
 
+    @Override
     public List<Block> read(Path docx) throws IOException {
         try (InputStream is = Files.newInputStream(docx);
              XWPFDocument doc = new XWPFDocument(is)) {

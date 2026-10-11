@@ -1,0 +1,26 @@
+plugins {
+    id 'java-library'
+}
+
+description = '명세 문서를 LLM(GPT·Gemini·Claude)으로 해석해 중간 규격(IR) JSON으로 변환하는 llm 엔진'
+
+dependencies {
+    // Block·ParsedApi를 주고받는 공개 API라 api다. Jackson도 parser의 api로 함께 온다
+    api project(':parser')
+    // 파라미터·필드 이름을 generator의 Java 이름 규칙과 같은 코드로 검사한다 (설계 5.1의 V4·V6·V12).
+    // 의존 방향은 parser-llm → parser, generator로만 둔다. parser가 LLM 쪽을 모르게 하기 위해서다
+    implementation project(':generator')
+
+    // 전체 흐름 테스트(설계 9.3)는 생성 코드를 javac로 컴파일한다. 그 classpath는 테스트 classpath라서
+    // generator 테스트가 컴파일에 쓰는 구성(generator/build.gradle)을 그대로 넣는다
+    testImplementation project(':interceptor-core')
+    testImplementation 'org.springframework:spring-web:6.1.6'
+    testImplementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
+}
+
+tasks.named('test') {
+    // 테스트 문서는 parser 테스트 리소스와 docs/sample의 원본 그 자체라 복사하지 않고 저장소 루트에서 읽는다
+    systemProperty 'h2spec.repoRoot', rootProject.projectDir.absolutePath
+    inputs.dir("$rootDir/parser/src/test/resources/docs").withPropertyName('parserDocuments')
+    inputs.dir("$rootDir/docs/sample").withPropertyName('sampleDocuments')
+}

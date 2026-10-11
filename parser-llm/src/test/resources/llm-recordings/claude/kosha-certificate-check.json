@@ -1,0 +1,63 @@
+{
+  "serviceName": "한국산업안전보건공단_방호장치 자율안전확인신고서 발급문서 진위확인 조회서비스",
+  "provider": "한국산업안전보건공단",
+  "operations": [
+    {
+      "operationName": "",
+      "title": "방호장치 자율안전확인신고서 발급문서 조회",
+      "description": "인증번호 조건을 이용하여 문서 진위확인 여부 정보를 조회하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "portal.kosha.or.kr/openapi/v1/koshagw",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "https://portal.kosha.or.kr/openapi/v1/koshagw?SG_APIM=인증키&certNo=원본문서확인번호&callApiId=api호출아이디&numOfRows=10&pageNo=1",
+        "serviceUrl": ""
+      },
+      "httpMethod": "GET",
+      "responseFormat": "JSON",
+      "defaultResponseFormat": "JSON",
+      "formatParameter": "",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "requestParameters": [
+        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "UNKNOWN",
+         "description": "시스템에서 발급받은 인증키", "example": "인증키", "defaultValue": "", "common": false},
+        {"name": "callApiId", "location": "QUERY", "type": "INTEGER", "required": "UNKNOWN",
+         "description": "api 호출 아이디", "example": "1150", "defaultValue": "", "common": false},
+        {"name": "certNo", "location": "QUERY", "type": "STRING", "required": "UNKNOWN",
+         "description": "인증번호", "example": "24-AV3FH-0027", "defaultValue": "", "common": false},
+        {"name": "numOfRows", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "한 페이지 결과수 Default : 10", "example": "10", "defaultValue": "10", "common": false},
+        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "페이지 번호 Default : 1", "example": "1", "defaultValue": "1", "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "JSON",
+      "responseFields": [
+        {"path": "header.resultCode", "type": "STRING", "description": "API호출 결과 코드",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "header.resultMsg", "type": "STRING", "description": "API호출 결과 메시지",
+         "sample": "NORMAL_CODE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "body.pageNo", "type": "INTEGER", "description": "페이지 번호",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "body.totalCount", "type": "INTEGER", "description": "검색결과 총건수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "body.numOfRows", "type": "INTEGER", "description": "한 페이지당 표출 데이터 수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "body.items.item[].crtdcIssuYmd", "type": "STRING", "description": "인증서 발급일자",
+         "sample": "20241018", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "body.items.item[].docAuthYn", "type": "STRING", "description": "문서 진위여부",
+         "sample": "Y", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "FIELD_TABLE"},
+        {"code": "00", "source": "RESPONSE_EXAMPLE"}
+      ]},
+      "errorCodes": [],
+      "evidence": ["T16", "T22", "T24", "T29", "T32"],
+      "uncertain": ["요청 예제는 serviceKey 대신 SG_APIM으로 인증키를 보낸다",
+                    "요청 표의 항목구분 칸에 필수 여부 대신 자료형이 적혀 있다"],
+      "unsupported": ["응답 JSON의 최상위 키가 여럿이다 (header, body)"]
+    }
+  ],
+  "documentNotes": []
+}

@@ -1,29 +1,22 @@
 package kr.go.h2spec.parser;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** 상세기능정보/요청/응답 표를 IR JSON(ObjectNode)으로 조립한다. */
 public class IrAssembler {
 
-    private static final String PARSER_VERSION = "0.1.0";
-    private static final String OPERATION_PREFIX = "get";
     private static final Pattern INTEGER_SAMPLE = Pattern.compile("^\\d+$");
     private static final Pattern NUMBER_SAMPLE = Pattern.compile("^\\d+\\.\\d+$");
-    /** 선행 0이 붙은 정수 샘플(0311 등)은 숫자로 만들면 값이 바뀐다 */
-    private static final Pattern LEADING_ZERO_SAMPLE = Pattern.compile("^0\\d+$");
     /**
      * 항목구분 칸의 카디널리티 표기(0..n, 1..1). 컨테이너 행 판정의 필요조건이지만
      * 충분조건은 아니다 — 반복 데이터 필드마다 이 표기를 붙이는 기관이 있다.
@@ -62,12 +55,6 @@ public class IrAssembler {
     /** 산술 대상이 아님을 드러내는 항목설명 키워드 */
     private static final List<String> NON_NUMERIC_DESCRIPTION_KEYWORDS =
             List.of("코드", "번호", "일자", "년월일", "시각", "일시");
-    /**
-     * 공공데이터 표준 응답에서 response.header 바로 아래에 오는 필드.
-     * RESULT_CODE처럼 대문자·밑줄로 적는 기관이 있어 {@link #metaKey}로 맞춘 꼴로 비교한다.
-     */
-    private static final Set<String> HEADER_FIELDS = Set.of("resultcode", "resultmsg", "resultmessage");
-    private static final String RESULT_CODE_KEY = "resultcode";
     /** 공공데이터 표준 응답에서 response.body 바로 아래에 오는 페이징 메타 필드 */
     private static final Set<String> BODY_META_FIELDS = Set.of("numofrows", "pageno", "totalcount");
     /**
@@ -78,75 +65,68 @@ public class IrAssembler {
     /** 페이징 메타로 볼 만한 이름꼴. 이름만으로는 부족해 요청 파라미터 존재 여부와 함께 본다 */
     private static final Pattern PAGING_NAME = Pattern.compile("(cnt|count|rows)$|^page(No|Index)$|^currentPage$",
             Pattern.CASE_INSENSITIVE);
-    /**
-     * 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다.
-     * generator의 ClientEmitter가 포맷 값을 채워 보내는 이름과 같아야 한다. 여기서만 넓히면
-     * 클라이언트는 포맷 파라미터를 보내지 않는데 DTO는 JSON을 기대해 응답을 읽지 못한다.
-     */
-    private static final Set<String> RESPONSE_FORMAT_PARAMS = Set.of("returnType", "dataType", "resultType");
     private static final String XML_FORMAT = "XML";
     private static final String JSON_FORMAT = "JSON";
-    private static final String SUCCESS_RESULT_CODE = "00";
-    /** 숫자로 시작하는 오퍼레이션 경로로 만든 apiId 앞에 붙이는 접두사 */
-    private static final String API_ID_PREFIX = "Api";
-    /** 엔드포인트의 경로 변수 */
-    private static final Pattern PATH_TEMPLATE = Pattern.compile("\\{([A-Za-z_][A-Za-z0-9_]*)}");
-    /** Call Back URL 칸을 비워두는 대신 적어두는 값 */
-    private static final String NOT_AVAILABLE = "N/A";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ParsedApi assemble(String sourceFile, String sourceFormat, Map<String, String> info,
                               List<List<String>> requestRows, List<List<String>> responseRows) {
-        String url = callBackUrl(info);
-        int lastSlash = url.lastIndexOf('/');
-        if (lastSlash < 0 || lastSlash == url.length() - 1) {
-            throw new IllegalArgumentException(
-                    "Call Back URL에서 오퍼레이션 경로를 찾을 수 없습니다: " + url);
+        IrConventions.UrlParts url = splitCallBackUrl(info);
+        if (!url.ok()) {
+            throw new IllegalArgumentException(url.error());
         }
-        // "…/proxy/<id>/{your_appkey}"처럼 주소 끝에 경로 변수가 오면 그 앞 칸이 오퍼레이션이다
-        int operationSlash = lastSlash;
-        while (isTemplateSegment(url.substring(operationSlash + 1).split("/")[0]) && operationSlash > 0) {
-            int previous = url.lastIndexOf('/', operationSlash - 1);
-            if (previous < 0 || url.substring(0, previous).endsWith("/")) {
-                break;
-            }
-            operationSlash = previous;
-        }
-        String segment = url.substring(operationSlash + 1);
-        String baseUrl = url.substring(0, operationSlash);
-        String apiId = toApiId(segment.split("/")[0]);
+        String apiId = url.apiId();
 
-        List<String> reviewNotes = new ArrayList<>();
+        ReviewNotes reviewNotes = new ReviewNotes();
         String assemblyNote = info.get(SpecBlockAssembler.REVIEW_NOTE_KEY);
         if (assemblyNote != null) {
-            reviewNotes.addAll(List.of(assemblyNote.split("\n")));
+            for (String note : assemblyNote.split("\n")) {
+                reviewNotes.add(note);
+            }
         }
         List<List<String>> requests = dataRows(requestRows);
         List<List<String>> responses = dataRows(responseRows);
         Set<String> requestParamNames = namesOf(requests);
 
         ObjectNode api = objectMapper.createObjectNode();
+        String description = infoValue(info, SpecLabels.operationDescriptionKeys());
         api.put("apiId", apiId);
-        api.put("apiName", oneLine(infoValue(info, SpecLabels.operationTitleKeys(), apiId)));
+        api.put("apiName", IrConventions.apiName(infoValue(info, SpecLabels.operationTitleKeys()), apiId));
         api.put("provider", "");
-        api.put("baseUrl", baseUrl);
-        api.put("endpoint", "/" + segment);
+        api.put("baseUrl", url.baseUrl());
+        api.put("endpoint", url.endpoint());
         api.put("httpMethod", "GET");
-        api.put("description", oneLine(infoValue(info, SpecLabels.operationDescriptionKeys(), "")));
+        api.put("description", IrText.oneLine(description == null ? "" : description));
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
         api.put("responseFormat", responseFormat(requests));
         ArrayNode parameters = requestParameters(requests, requestParamNames, reviewNotes);
-        addPathParameters(parameters, segment);
+        if (info.containsKey(SpecBlockAssembler.GATEWAY_SERVICE_KEY_FLAG)) {
+            // 경로 변수 파라미터보다 먼저 넣어야 경로 변수 다음 자리가 된다
+            IrConventions.insertGatewayServiceKey(parameters);
+        }
+        IrConventions.addPathParameters(parameters, url.endpoint());
         api.set("requestParameters", parameters);
         api.set("responseFields", responseFields(responses, requestParamNames, reviewNotes));
-        api.set("errorSpec", errorSpec());
+        api.set("errorSpec", IrConventions.errorSpec());
 
         ObjectNode ir = objectMapper.createObjectNode();
-        ir.set("metadata", metadata(sourceFile, sourceFormat, reviewNotes));
+        ir.set("metadata", IrConventions.metadata(sourceFile, sourceFormat, reviewNotes.lines()));
         ir.set("api", api);
-        ir.set("generatorHints", generatorHints(apiId));
+        ir.set("generatorHints", IrConventions.generatorHints(apiId));
         return new ParsedApi(apiId, ir);
+    }
+
+    /**
+     * SpecBlockAssembler가 정한 주소를 나눈다. 정한 주소 없이 정보 표만 넘긴 직접 호출은 정보 표의
+     * 주소 칸을 그대로 나눈다. 이때는 끝 슬래시를 지우지 않고 오퍼레이션 경로가 없는 주소로 알린다(이전 동작).
+     */
+    private IrConventions.UrlParts splitCallBackUrl(Map<String, String> info) {
+        String resolved = info.get(SpecBlockAssembler.ENDPOINT_URL_KEY);
+        if (resolved != null && !resolved.isBlank()) {
+            return IrConventions.splitUrl(resolved);
+        }
+        return IrConventions.splitUntrimmed(callBackUrl(info));
     }
 
     /**
@@ -155,14 +135,10 @@ public class IrAssembler {
      * N/A로 비워두고 주소를 별도 표에 적는 문서가 있다.
      */
     private String callBackUrl(Map<String, String> info) {
-        String resolved = info.get(SpecBlockAssembler.ENDPOINT_URL_KEY);
-        if (resolved != null && !resolved.isBlank()) {
-            return resolved.replaceAll("/+$", "");
-        }
         String callBack = info.entrySet().stream()
                 .filter(entry -> entry.getKey().contains("Call Back"))
                 .map(entry -> entry.getValue().replaceAll("\\s+", ""))
-                .filter(value -> !value.isBlank() && !NOT_AVAILABLE.equalsIgnoreCase(value))
+                .filter(value -> !value.isBlank() && !IrConventions.NOT_AVAILABLE.equalsIgnoreCase(value))
                 .findFirst()
                 .orElse(null);
         if (callBack != null) {
@@ -182,87 +158,32 @@ public class IrAssembler {
     }
 
     /**
-     * 정보 표에서 키 후보 순서대로 첫 값을 찾는다. 키는 공백을 뺀 꼴로 비교한다
+     * 정보 표에서 키 후보 순서대로 국문명·설명 자리에 쓸 수 있는 첫 값을 찾는다. 키는 공백을 뺀 꼴로 비교한다
      * ("상세기능 설명"과 "상세기능설명", "오퍼레이션 설명"을 같은 자리로 본다).
-     * 영문 식별자만 담긴 값(getXxx)은 국문명 자리에 맞지 않아 건너뛴다.
+     * 영문 식별자만 담긴 값(getXxx)은 국문명 자리에 맞지 않아 건너뛴다({@link IrConventions#isDisplayText}).
+     *
+     * @return 앞뒤 공백을 지운 값. 없으면 null
      */
-    private String infoValue(Map<String, String> info, List<String> keys, String fallback) {
+    static String infoValue(Map<String, String> info, List<String> keys) {
         for (String key : keys) {
             for (Map.Entry<String, String> entry : info.entrySet()) {
-                String value = entry.getValue().strip();
-                if (SpecLabels.normalize(entry.getKey()).equals(key) && !value.isEmpty()
-                        && !NOT_AVAILABLE.equalsIgnoreCase(value) && !value.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-                    return value;
+                if (SpecLabels.normalize(entry.getKey()).equals(key) && IrConventions.isDisplayText(entry.getValue())) {
+                    return entry.getValue().strip();
                 }
             }
         }
-        return fallback;
-    }
-
-    /**
-     * getMsrstnList → MsrstnList (get 접두사 제거, 첫 글자 대문자).
-     * 떼고 나면 숫자로 시작하는 이름(get24DivisionsInfo)은 자바 클래스명으로 쓸 수 없어
-     * 접두사를 남긴다 → Get24DivisionsInfo.
-     */
-    private String toApiId(String segment) {
-        String name = segment.startsWith(OPERATION_PREFIX)
-                ? segment.substring(OPERATION_PREFIX.length())
-                : segment;
-        if (name.isEmpty() || Character.isDigit(name.charAt(0))) {
-            name = segment;
-        }
-        // 클래스명으로 쓰이므로 식별자에 못 쓰는 글자(".do", "-")는 밑줄로 바꾸고,
-        // 숫자로 시작하는 경로("2058570a…")는 접두사를 붙인다
-        name = name.replaceAll("[^A-Za-z0-9_]", "_");
-        if (!Character.isLetter(name.charAt(0))) {
-            name = API_ID_PREFIX + name;
-        }
-        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
-    }
-
-    private boolean isTemplateSegment(String segment) {
-        return segment.startsWith("{") && segment.endsWith("}");
-    }
-
-    /**
-     * 엔드포인트의 경로 변수({your_appkey})가 요청 명세 표에 없으면 필수 path 파라미터로 채운다.
-     * 표에 같은 이름의 query 파라미터로 적혀 있으면 path로 바꾼다.
-     */
-    private void addPathParameters(ArrayNode parameters, String endpoint) {
-        Matcher template = PATH_TEMPLATE.matcher(endpoint);
-        int insertAt = 0;
-        while (template.find()) {
-            String name = template.group(1);
-            ObjectNode existing = null;
-            for (JsonNode param : parameters) {
-                if (name.equals(param.get("name").asText())) {
-                    existing = (ObjectNode) param;
-                }
-            }
-            if (existing != null) {
-                existing.put("in", "path");
-                existing.put("required", true);
-                continue;
-            }
-            ObjectNode param = objectMapper.createObjectNode();
-            param.put("name", name);
-            param.put("in", "path");
-            param.put("type", "string");
-            param.put("required", true);
-            param.put("description", "주소의 {" + name + "} 자리에 넣는 값");
-            parameters.insert(insertAt++, param);
-        }
+        return null;
     }
 
     private ArrayNode requestParameters(List<List<String>> rows, Set<String> requestParamNames,
-                                        List<String> reviewNotes) {
+                                        ReviewNotes reviewNotes) {
         ArrayNode parameters = objectMapper.createArrayNode();
         for (List<String> cells : rows) {
             String name = cells.get(0);
             String korName = cells.get(1);
             String gubun = cells.get(3);
             String sample = cells.get(4);
-            String description = describe(cells.get(5), korName);
+            String description = IrConventions.description(cells.get(5), korName);
 
             ObjectNode param = parameters.addObject();
             boolean settled = isBodyMeta(name, requestParamNames);
@@ -272,7 +193,7 @@ public class IrAssembler {
             param.put("required", isRequired(gubun));
             param.put("description", description);
             if (!sample.isBlank() && !"-".equals(sample)) {
-                param.put("example", oneLine(sample));
+                param.put("example", IrText.oneLine(sample));
             }
         }
         return parameters;
@@ -287,23 +208,23 @@ public class IrAssembler {
     }
 
     private ArrayNode responseFields(List<List<String>> rows, Set<String> requestParamNames,
-                                     List<String> reviewNotes) {
+                                     ReviewNotes reviewNotes) {
         ArrayNode fields = objectMapper.createArrayNode();
         for (List<String> cells : rows) {
             String name = cells.get(0);
             String korName = cells.get(1);
             String sample = cells.get(4);
-            String description = describe(cells.get(5), korName);
+            String description = IrConventions.description(cells.get(5), korName);
 
             ObjectNode field = fields.addObject();
             field.put("path", pathFor(name, requestParamNames));
             // 결과코드/메시지는 샘플이 숫자("00")여도 선행 0 보존을 위해 항상 문자열
             boolean settled = isBodyMeta(name, requestParamNames);
-            field.put("type", HEADER_FIELDS.contains(metaKey(name))
+            field.put("type", IrConventions.isResultCodeOrMessageField(name)
                     ? "string"
                     : inferType(sample, name, description, declaredType(cells), settled ? null : reviewNotes));
             field.put("description", description);
-            if (RESULT_CODE_KEY.equals(metaKey(name))) {
+            if (IrConventions.isResultCodeField(name)) {
                 field.put("isResultIndicator", true);
             }
         }
@@ -316,28 +237,17 @@ public class IrAssembler {
      */
     private String responseFormat(List<List<String>> requestRows) {
         for (List<String> cells : requestRows) {
-            if (RESPONSE_FORMAT_PARAMS.contains(cells.get(0)) && JSON_FORMAT.equalsIgnoreCase(cells.get(4).strip())) {
+            if (IrConventions.responseFormatParameters().contains(cells.get(0))
+                    && JSON_FORMAT.equalsIgnoreCase(cells.get(4).strip())) {
                 return JSON_FORMAT;
             }
         }
         return XML_FORMAT;
     }
 
-    /**
-     * 항목설명이 비어 있으면 국문 항목명을 설명으로 쓴다. 셀 안의 여러 줄은 한 줄로 잇는다.
-     * 생성 코드의 Javadoc 한 줄 주석에 그대로 들어가기 때문이다.
-     */
-    private String describe(String description, String korName) {
-        return oneLine(description.isBlank() ? korName : description);
-    }
-
-    private String oneLine(String text) {
-        return text.replaceAll("\\s*\\n\\s*", " ").strip();
-    }
-
     /** 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다. */
     private String pathFor(String name, Set<String> requestParamNames) {
-        if (HEADER_FIELDS.contains(metaKey(name))) {
+        if (IrConventions.isResultCodeOrMessageField(name)) {
             return "response.header." + name;
         }
         if (isBodyMeta(name, requestParamNames)) {
@@ -352,7 +262,7 @@ public class IrAssembler {
      * 있을 때만 메타로 본다. 조회 조건으로 넘긴 값을 응답이 되돌려주는 것이 페이징 필드다.
      */
     private boolean isBodyMeta(String name, Set<String> requestParamNames) {
-        String key = metaKey(name);
+        String key = IrConventions.metaKey(name);
         if (BODY_META_FIELDS.contains(key) || RESPONSE_ONLY_META_FIELDS.contains(key)) {
             return true;
         }
@@ -443,11 +353,6 @@ public class IrAssembler {
         return cells.size() > FieldColumns.TYPE ? SpecLabels.normalize(cells.get(FieldColumns.TYPE)) : "";
     }
 
-    /** resultCode·RESULT_CODE·result_code를 같은 이름으로 본다 */
-    private String metaKey(String name) {
-        return name.replace("_", "").toLowerCase(Locale.ROOT);
-    }
-
     private boolean isEmptyCell(String value) {
         String trimmed = value.strip();
         return trimmed.isEmpty() || EMPTY_CELL.equals(trimmed);
@@ -459,17 +364,17 @@ public class IrAssembler {
      * 문자열로 둔다. "number"처럼 정수·실수를 가리지 않는 선언은 샘플로 정한다.
      */
     private String inferType(String sample, String name, String description, String declared,
-                             List<String> reviewNotes) {
+                             ReviewNotes reviewNotes) {
         if (STRING_TYPE.matcher(declared).find()) {
             return "string";
         }
         if (BOOLEAN_TYPE.matcher(declared).matches()) {
             return "boolean";
         }
-        if (INTEGER_TYPE.matcher(declared).find() && !LEADING_ZERO_SAMPLE.matcher(sample).matches()) {
+        if (INTEGER_TYPE.matcher(declared).find() && !IrConventions.hasLeadingZero(sample)) {
             return "integer";
         }
-        if (DECIMAL_TYPE.matcher(declared).find() && !LEADING_ZERO_SAMPLE.matcher(sample).matches()) {
+        if (DECIMAL_TYPE.matcher(declared).find() && !IrConventions.hasLeadingZero(sample)) {
             return "number";
         }
         if (isNonNumeric(name, description, sample)) {
@@ -478,11 +383,11 @@ public class IrAssembler {
         return inferSample(sample, name, reviewNotes);
     }
 
-    private String inferSample(String sample, String name, List<String> reviewNotes) {
+    private String inferSample(String sample, String name, ReviewNotes reviewNotes) {
         if (INTEGER_SAMPLE.matcher(sample).matches()) {
             // 규칙으로 확정한 필드까지 노트를 남기면 노트가 검토 신호 역할을 못 한다
-            if (reviewNotes != null && !BODY_META_FIELDS.contains(metaKey(name))) {
-                reviewNotes.add("샘플데이터 기반 integer 추론: " + name + " (코드형 문자열일 수 있음)");
+            if (reviewNotes != null && !BODY_META_FIELDS.contains(IrConventions.metaKey(name))) {
+                reviewNotes.addField(ReviewNotes.FieldNote.SAMPLE_INTEGER, name);
             }
             return "integer";
         }
@@ -498,45 +403,12 @@ public class IrAssembler {
      * 페이징 메타 필드는 이름 접미사 규칙(pageNo)에 걸리므로 먼저 제외한다.
      */
     private boolean isNonNumeric(String name, String description, String sample) {
-        if (BODY_META_FIELDS.contains(metaKey(name))) {
+        if (BODY_META_FIELDS.contains(IrConventions.metaKey(name))) {
             return false;
         }
         String lowerName = name.toLowerCase(Locale.ROOT);
         return NON_NUMERIC_NAME_SUFFIXES.stream().anyMatch(lowerName::endsWith)
                 || NON_NUMERIC_DESCRIPTION_KEYWORDS.stream().anyMatch(description::contains)
-                || LEADING_ZERO_SAMPLE.matcher(sample).matches();
-    }
-
-    private ObjectNode errorSpec() {
-        ObjectNode errorSpec = objectMapper.createObjectNode();
-        errorSpec.put("successResultCode", SUCCESS_RESULT_CODE);
-        ArrayNode candidates = errorSpec.putArray("resultCodeFieldCandidates");
-        candidates.add("response.header.resultCode");
-        candidates.add("resultCode");
-        candidates.add("RESULT_CODE");
-        candidates.add("cmmMsgHeader.returnReasonCode");
-        return errorSpec;
-    }
-
-    private ObjectNode generatorHints(String apiId) {
-        ObjectNode hints = objectMapper.createObjectNode();
-        hints.put("targetClientType", "RestTemplate");
-        hints.put("targetPackage", "kr.go.h2spec.client." + apiId.toLowerCase());
-        hints.put("generateInterceptor", true);
-        hints.put("generateDto", true);
-        hints.put("dtoNamingStrategy", "PascalCase");
-        return hints;
-    }
-
-    private ObjectNode metadata(String sourceFile, String sourceFormat, List<String> reviewNotes) {
-        ObjectNode metadata = objectMapper.createObjectNode();
-        metadata.put("sourceFile", sourceFile);
-        metadata.put("sourceFormat", sourceFormat);
-        metadata.put("parsedAt", OffsetDateTime.now().toString());
-        metadata.put("parserVersion", PARSER_VERSION);
-        metadata.put("manualReviewRequired", !reviewNotes.isEmpty());
-        ArrayNode notes = metadata.putArray("reviewNotes");
-        reviewNotes.forEach(notes::add);
-        return metadata;
+                || IrConventions.hasLeadingZero(sample);
     }
 }

@@ -2,7 +2,6 @@ package kr.go.h2spec.parser;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -40,10 +39,6 @@ final class SpecLabels {
     private static final Pattern NOTE_WORDS = Pattern.compile("참고|참조|동일한|경우|그대로|입니다|바랍니다");
     /** 목차 항목: 제목 뒤에 탭이나 점선, 쪽 번호가 붙는다 ("다. 요청 메시지 명세\t5") */
     private static final Pattern TOC_ENTRY = Pattern.compile("(?s).*(\\t|\\.{3,}|·{3,}|…+)\\s*\\d+\\s*$");
-    private static final Pattern URL = Pattern.compile("https?://[^\\s가-힣ㄱ-ㅎ()<>\"'\\[\\]|]+",
-            Pattern.CASE_INSENSITIVE);
-    /** 산문 속 URL 뒤에 붙어 나오는 문장부호 */
-    private static final Pattern URL_TRAILER = Pattern.compile("[/.,;:]+$");
 
     private static final List<String> EXAMPLE_MARKERS = List.of("예제", "예시", "샘플", "sample", "example");
     private static final List<String> ERROR_MARKERS = List.of("에러코드", "오류코드", "에러메시지", "에러메세지",
@@ -238,27 +233,12 @@ final class SpecLabels {
         if (http <= 0) {
             return null;
         }
-        return isUrlLabel(text.substring(0, http)) ? firstUrl(text) : null;
+        return isUrlLabel(text.substring(0, http)) ? IrConventions.firstUrl(text) : null;
     }
 
-    /**
-     * 칸이나 문단에서 첫 http(s) 주소를 꺼낸다. 질의 문자열은 버린다.
-     * 칸 폭 때문에 주소가 여러 줄로 꺾여 있으면 줄바꿈을 지우고 이어 붙인다.
-     */
+    /** 칸이나 문단에서 첫 http(s) 주소를 꺼낸다. 두 엔진이 같이 쓰는 규칙이라 {@link IrConventions#firstUrl}에 있다 */
     static String firstUrl(String text) {
-        if (text == null) {
-            return null;
-        }
-        Matcher matcher = URL.matcher(text.replaceAll("(?<=[/\\w.-])[\\r\\n]+(?=[/\\w.-])", ""));
-        if (!matcher.find()) {
-            return null;
-        }
-        String url = matcher.group();
-        int query = url.indexOf('?');
-        if (query >= 0) {
-            url = url.substring(0, query);
-        }
-        return URL_TRAILER.matcher(url).replaceAll("");
+        return IrConventions.firstUrl(text);
     }
 
     private static boolean containsAny(String key, List<String> markers) {

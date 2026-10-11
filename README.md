@@ -73,7 +73,9 @@ flowchart LR
 | `parser` | 공공데이터포털 표준 기술문서(DOCX/HWP/HWPX)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
 | `generator` | IR JSON → OpenAPI 3.0 JSON, Spring 클라이언트 코드, DTO 생성 | 동일하게 IR JSON 샘플만으로 개발 시작 가능 |
 | `interceptor-core` | `PublicDataErrorInterceptor`(RestTemplate), `PublicDataErrorFilter`(WebClient), `PublicDataApiException` 등 런타임 라이브러리 | Parser/Generator와 무관하게 독립 배포 가능 (별도 jar) |
+| `parser-llm` | (실험적) 명세 문서의 해석을 LLM에 맡기는 llm 엔진. 결과를 원문과 대조·검증하고 rule 엔진과 교차검증한 뒤 같은 IR로 만든다 | 기본 엔진은 rule이고, llm 엔진은 `--engine llm`으로 켤 때만 쓴다 |
 | `cli` | `h2spec convert` 명령 — parser와 generator를 잇는 진입점 | |
+| `llm-eval` | 엔진 결과를 정답 파일과 비교해 지표를 내는 평가 도구 (배포하지 않음) | `./gradlew :llm-eval:run` |
 | `web` (선택) | 업로드 → 변환 → 다운로드 웹 UI | REST API 계약만 맞으면 병렬 개발 가능 |
 
 ## 빠른 시작
@@ -88,11 +90,15 @@ flowchart LR
 
 ```
 IR 추출: generated/ir/MsrstnList.json
+IR 추출: generated/ir/NearbyMsrstnList.json
+IR 추출: generated/ir/TMStdrCrdnt.json
 생성: generated/kr/go/h2spec/client/msrstnlist/dto/MsrstnListResponse.java
 생성: generated/kr/go/h2spec/client/msrstnlist/MsrstnListClient.java
 생성: generated/openapi/MsrstnList.json
-...(문서의 상세기능마다 반복)
+...(상세기능마다 반복)
 ```
+
+문서의 IR을 모두 먼저 쓰고, 그다음 상세기능마다 코드를 생성합니다.
 
 HWP 명세서(`.hwp`), HWPX 명세서(`.hwpx`), IR JSON도 같은 방식으로 넣을 수 있습니다.
 
@@ -104,6 +110,8 @@ HWP 명세서(`.hwp`), HWPX 명세서(`.hwpx`), IR JSON도 같은 방식으로 �
 `--input`에 디렉터리를 주면 그 안의 모든 명세 파일(`.docx`, `.hwp`, IR `.json`)을 한 번에 변환합니다.
 디렉터리를 재귀적으로 탐색하지는 않고, 명세 파일이 아닌 다른 파일(예: pdf, xlsx)은 무시합니다.
 일부 파일이 변환에 실패해도 나머지 파일은 계속 변환되며, 실패가 하나라도 있으면 종료 코드는 1입니다.
+한 문서에서 일부 상세기능만 코드 생성에 실패하면 그 상세기능만 건너뛰고(IR은 검수하도록 남깁니다) 나머지를 생성하며,
+그 문서는 성공으로 셉니다. 코드를 하나도 만들지 못한 문서만 실패로 셉니다.
 
 ```bash
 ./h2spec convert --input ./docs/sample --output ./generated
@@ -121,7 +129,8 @@ HWP 명세서(`.hwp`), HWPX 명세서(`.hwpx`), IR JSON도 같은 방식으로 �
 - 응답 필드 표 없이 JSON 응답 예제만 둔 문서는 예제의 키로 응답 필드를 만들고, 공통 파라미터 구간은 각 오퍼레이션에 붙입니다
 
 문서가 직접 적지 않아 파서가 채우거나 고친 값(게이트웨이 `serviceKey`, 예제에서 가져온 주소 등)은
-IR의 `metadata.reviewNotes`에 남습니다. 주소나 응답 필드를 찾지 못한 오퍼레이션은 건너뛰고 나머지는 변환하며,
+IR의 `metadata.reviewNotes`에 남습니다. 같은 종류의 노트(샘플값으로 추론한 타입 등)는 한 줄로 묶습니다.
+주소나 응답 필드를 찾지 못한 오퍼레이션, 생성 코드를 만들 수 없는 오퍼레이션은 건너뛰고 나머지는 변환하며,
 건너뛴 오퍼레이션과 이유를 표준 오류로 알립니다.
 
 ### 옵션
@@ -134,10 +143,56 @@ IR의 `metadata.reviewNotes`에 남습니다. 주소나 응답 필드를 찾지 
 | `--format` | 응답 포맷 `xml` 또는 `json`. 문서에서 판별한 값을 덮어씁니다 |
 | `--success-code` | 정상 처리로 간주할 `resultCode` (기본: 문서의 값 또는 `00`) |
 
+`--package`·`--format`·`--success-code`로 바꾼 값은 명세 문서에서 뽑은 IR에도 반영되고 `reviewNotes`에 `[CLI]` 노트가 남습니다.
+IR이 검수 단위라 생성 코드와 어긋나지 않게 하기 위해서입니다. `--input`으로 넣은 IR JSON 파일은 고치지 않고, 생성할 때만 적용합니다.
+
 ```bash
 ./h2spec convert --input ./docs/sample --output ./generated \
   --package com.example.publicdata --format json
 ```
+
+### LLM 엔진 (실험적)
+
+기본 엔진은 규칙 기반 `rule`입니다. `--engine llm`을 주면 명세 문서의 해석을 LLM에 맡깁니다. 지금은 Claude만 지원합니다.
+
+```bash
+export ANTHROPIC_API_KEY=...
+./h2spec convert --engine llm --input "명세서.hwp" --output ./build/h2spec-review
+```
+
+- **문서 내용이 LLM 회사로 전송되고 사용자의 키로 과금됩니다.** 비공개 문서는 기본 엔진(`rule`)으로 변환하세요.
+  `rule` 엔진은 아무것도 전송하지 않고 키 환경변수도 읽지 않습니다.
+- API 키는 환경변수로만 받습니다(Claude는 `ANTHROPIC_API_KEY`). 출력, IR, 캐시 어디에도 키를 남기지 않습니다.
+- LLM이 낸 값은 원문과 대조해 문서에 없는 값을 버립니다. 주소와 성공코드는 LLM이 고르지 않고, LLM이 찾은 후보에서 rule 엔진과 같은 규칙으로 고릅니다.
+  같은 문서를 rule 엔진으로도 돌려 비교하고, 차이는 `reviewNotes`에 `[교차검증]` 노트로 남깁니다.
+- 생성 코드가 아직 지원하지 않는 API(serviceKey가 아닌 인증키, 최상위 키가 여럿인 JSON 응답 등)는 이유를 알리고 건너뜁니다.
+- 결과는 `${XDG_CACHE_HOME:-~/.cache}/h2spec/llm/`에 캐시해, 같은 문서를 같은 설정으로 다시 변환하면 LLM을 다시 부르지 않습니다.
+- 정확도 평가를 아직 하지 않은 실험적 기능입니다. 만든 IR과 `reviewNotes`를 검수해 IR을 저장소에 커밋하고,
+  빌드에서는 그 IR로 코드를 생성하세요(`--input <IR 디렉터리>`). 그래야 빌드가 LLM을 부르지 않고, 누가 빌드해도 같은 코드가 나옵니다.
+
+| 옵션 | 설명 |
+|---|---|
+| `--engine` | `rule`(기본) 또는 `llm` |
+| `--provider` | LLM 회사. 지금은 `claude`만 있습니다. 주지 않으면 환경변수 `H2SPEC_LLM_PROVIDER`, 그것도 없으면 키 환경변수가 있는 회사를 씁니다(여러 회사의 키가 있으면 오류) |
+| `--model` | 모델 ID. 주지 않으면 환경변수 `H2SPEC_LLM_MODEL`, 그것도 없으면 회사별 기본값(Claude는 `claude-opus-5-5`) |
+| `--no-cross-check` | rule 엔진과의 교차검증을 끕니다 |
+| `--no-cache` | 결과 캐시를 쓰지 않습니다 |
+| `--cache-dir` | 결과 캐시 디렉터리 |
+
+실행마다 한 번 표준 오류에 외부 전송 안내를 내고, 문서마다 쓴 회사·모델과 토큰 사용량을 출력합니다.
+디렉터리를 변환하면 요약 줄에 토큰 합계가 붙습니다. 입력 토큰은 프롬프트 캐시에서 읽고 쓴 입력까지 더한 보낸 입력 전체이고, 출력 토큰은 thinking을 포함합니다.
+
+```
+문서 내용을 claude(claude-opus-5-5)로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.
+=== 명세서.hwp ===
+엔진: llm (claude / claude-opus-5-5), 캐시 없음, 토큰 입력 17500 / 출력 4200 (thinking 포함)
+...
+3개 중 3개 변환 성공, 0개 실패 · LLM 토큰 합계 입력 41200 / 출력 9800
+```
+
+API 키 오류면 남은 파일을 변환하지 않고 멈춥니다. 호출 한도·서버·네트워크 오류는 재시도한 뒤에도 실패하면 그 문서만 실패로 세고,
+출력이 잘리거나 거절된 문서도 그 문서만 실패로 셉니다. llm 엔진이 실패한 문서를 rule 엔진으로 대신 변환하지는 않습니다.
+IR JSON 입력은 엔진과 상관없이 바로 코드를 만들므로 키가 없어도 됩니다.
 
 ### 2. 생성 결과물
 
@@ -169,6 +224,13 @@ RestTemplate restTemplate = new RestTemplate(
     new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory())
 );
 restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
+```
+
+결과코드는 숫자로만 되어 있으면 앞자리 0을 빼고 비교합니다. 성공코드가 `00`일 때 응답의 `0`, `000`, JSON 숫자 `0`도 정상으로 봅니다.
+숫자가 아닌 코드(`INFO-00` 등)는 글자 그대로 비교합니다. 기관마다 다른 결과코드 이름은 두 번째 인자로 줄 수 있고, 기본 이름보다 먼저 찾습니다.
+
+```java
+restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00", List.of("resultCd")));
 ```
 
 > `BufferingClientHttpRequestFactory`로 감싸지 않으면 Interceptor가 바디를 먼저 읽은 뒤
@@ -398,6 +460,9 @@ main              ← 최종 병합 (PR 필수)
 - [x] HWPX(신형식, OWPML) 파싱 지원 (`hwpxlib` 기반)
 - [x] 공공데이터포털 기관 문서의 비표준 구간·표 서식 대응 (구간 제목·머리행 변형, 주소 출처 다변화, 세로 병합 셀 위치 보정)
 - [x] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
+- [x] 생성 코드 안전장치 (IR 문자열 escape, apiId·패키지·Java 이름 검사)
+- [ ] LLM 파싱 엔진 (`--engine llm`, 실험적): Claude 어댑터까지 구현. 정확도 평가, OpenAI·Gemini 어댑터, `--engine auto`는 예정
+- [ ] serviceKey가 아닌 인증키, 최상위 키가 여럿인 JSON 응답의 코드 생성
 
 ## 라이선스
 

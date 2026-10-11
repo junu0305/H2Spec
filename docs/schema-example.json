@@ -5,6 +5,7 @@
     "sourceFormat": "HWP",
     "parsedAt": "2026-08-10T09:00:00+09:00",
     "parserVersion": "0.3.0",
+    "engine": "rule",
     "confidence": 0.92,
     "manualReviewRequired": true,
     "reviewNotes": [

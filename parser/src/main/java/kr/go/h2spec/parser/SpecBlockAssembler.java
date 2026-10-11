@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -28,7 +27,8 @@ import java.util.regex.Pattern;
  *       요청 표. "데이터 공통 사항" 구간의 필드는 오퍼레이션이 아니라 뒤따르는 오퍼레이션마다 붙인다.</li>
  *   <li>주소: Call Back URL → 표 안의 END POINT URL → 오퍼레이션명을 담은 요청 예제 주소 → 서비스 URL +
  *       오퍼레이션 영문명 → "요청 URL" 문단 → 요청 예제 주소 → 스킴 없는 Call Back URL → 서비스 URL 순으로 찾는다.
- *       요청 예제는 문서가 적은 주소가 틀렸을 때(앞 오퍼레이션 주소를 베낀 Call Back URL 등) 바로잡는 데도 쓴다.</li>
+ *       요청 예제는 문서가 적은 주소가 틀렸을 때(앞 오퍼레이션 주소를 베낀 Call Back URL 등) 바로잡는 데도 쓴다.
+ *       llm 엔진도 같은 규칙으로 고르도록 규칙 자체는 {@link IrConventions}에 두고, 여기서는 후보를 모은다.</li>
  *   <li>필드: 응답 필드 표가 없으면 JSON 응답 예제의 키로, 요청 명세에 serviceKey가 없는 게이트웨이 주소는
  *       인증키 파라미터를 채워 만든다. 문서가 직접 적지 않은 값에는 reviewNotes를 남긴다.</li>
  * </ul>
@@ -43,8 +43,8 @@ class SpecBlockAssembler {
     static final String ENDPOINT_URL_KEY = "__endpointUrl";
     /** 조립 과정에서 사람이 확인해야 할 점을 IrAssembler의 reviewNotes로 넘기는 키 */
     static final String REVIEW_NOTE_KEY = "__reviewNote";
-    /** 값이 비어 있음을 뜻하는 표기 */
-    private static final String NOT_AVAILABLE = "N/A";
+    /** 게이트웨이 serviceKey를 보충할 오퍼레이션임을 IrAssembler로 넘기는 키 */
+    static final String GATEWAY_SERVICE_KEY_FLAG = "__gatewayServiceKey";
     /** 요청 예제 표의 첫 칸 ("요청메시지", "REST(URI)") */
     private static final Pattern EXAMPLE_REQUEST_LABEL =
             Pattern.compile("^(요청메시지|요청메세지|요청url|요청예제|rest\\(ur[il]\\)|호출url|호출예제|requesturl)$");
@@ -53,9 +53,6 @@ class SpecBlockAssembler {
     /** 응답 예제(JSON)의 "키": 값 쌍. 예제는 말줄임(…)과 둥근 따옴표가 섞여 JSON 파서로 읽히지 않는다 */
     private static final Pattern JSON_MEMBER = Pattern.compile(
             "\"([A-Za-z_$][\\w$]*)\"\\s*:\\s*(\"(?:[^\"\\\\]|\\\\.)*\"|“[^”]*”|-?[\\d.]+(?:[eE][-+]?\\d+)?|true|false|null|\\{|\\[)");
-    /** 공공데이터포털 게이트웨이 주소 */
-    private static final Pattern GATEWAY_URL = Pattern.compile("(?i)^https?://apis\\.data\\.go\\.kr/");
-    private static final String SERVICE_KEY = "serviceKey";
     /** 공통 사항 구간 제목 ("데이터 공통 사항"). "공통코드"처럼 참고 표를 여는 제목과 구분한다 */
     private static final Pattern COMMON_TITLE = Pattern.compile("공통(사항|파라미터|요청|응답|항목|변수)");
     private static final int MAX_COMMON_TITLE_LENGTH = 30;
@@ -64,9 +61,12 @@ class SpecBlockAssembler {
 
     private final IrAssembler assembler = new IrAssembler();
     private final List<String> skipped = new ArrayList<>();
+    /** 찾은 오퍼레이션 (문서 순서). 주소까지 정한 것은 자리만 잡아 두고 finish에서 결과로 채운다 */
+    private final List<RuleEngine.OperationResult> operations = new ArrayList<>();
 
     List<ParsedApi> parse(List<Block> blocks, String sourceFile, String sourceFormat) {
         skipped.clear();
+        operations.clear();
         Run run = new Run(sourceFile, sourceFormat);
         for (Block block : blocks) {
             if (block instanceof Block.Heading heading) {
@@ -82,6 +82,11 @@ class SpecBlockAssembler {
     /** 마지막 parse에서 건너뛴 오퍼레이션과 그 이유 */
     List<String> skipped() {
         return List.copyOf(skipped);
+    }
+
+    /** 마지막 parse에서 찾은 오퍼레이션마다의 결과 (문서 순서). 공통 사항 구간은 담지 않는다 */
+    List<RuleEngine.OperationResult> operations() {
+        return List.copyOf(operations);
     }
 
     /** 오퍼레이션을 하나도 못 찾았을 때의 안내. 건너뛴 이유가 있으면 함께 알린다 */
@@ -121,12 +126,14 @@ class SpecBlockAssembler {
         private final Map<String, String> info;
         private final List<List<String>> request;
         private final List<List<String>> response;
+        private final String url;
         private final String exampleUrl;
         private final List<String> notes;
-        private String url;
+        /** operations에서 이 오퍼레이션의 자리 */
+        private final int position;
 
         private Prepared(String label, Map<String, String> info, List<List<String>> request,
-                         List<List<String>> response, String url, String exampleUrl, List<String> notes) {
+                         List<List<String>> response, String url, String exampleUrl, List<String> notes, int position) {
             this.label = label;
             this.info = info;
             this.request = request;
@@ -134,6 +141,7 @@ class SpecBlockAssembler {
             this.url = url;
             this.exampleUrl = exampleUrl;
             this.notes = notes;
+            this.position = position;
         }
     }
 
@@ -170,7 +178,7 @@ class SpecBlockAssembler {
             }
             String labeledUrl = SpecLabels.labeledUrl(text);
             if (labeledUrl == null && urlLabelPending) {
-                labeledUrl = SpecLabels.firstUrl(text);
+                labeledUrl = IrConventions.firstUrl(text);
             }
             if (labeledUrl != null) {
                 urlLabelPending = false;
@@ -193,7 +201,7 @@ class SpecBlockAssembler {
             Section next = SpecLabels.headingSection(text);
             if (next == null) {
                 if (section == Section.EXAMPLE && operation.exampleUrl == null) {
-                    operation.exampleUrl = SpecLabels.firstUrl(text);
+                    operation.exampleUrl = IrConventions.firstUrl(text);
                 }
                 return;
             }
@@ -445,7 +453,7 @@ class SpecBlockAssembler {
             }
             String cell = cells.get(key);
             if (SpecLabels.isEndpointKey(cell)) {
-                String url = SpecLabels.firstUrl(valueAfter(cells, key));
+                String url = IrConventions.firstUrl(valueAfter(cells, key));
                 if (url != null && operation.tableUrl == null) {
                     operation.tableUrl = url;
                 }
@@ -489,7 +497,7 @@ class SpecBlockAssembler {
 
         private boolean isRequestContent(List<List<String>> rows) {
             boolean serviceKey = rows.stream().flatMap(List::stream)
-                    .anyMatch(cell -> SERVICE_KEY.equalsIgnoreCase(cell.strip()));
+                    .anyMatch(cell -> IrConventions.SERVICE_KEY.equalsIgnoreCase(cell.strip()));
             boolean resultCode = rows.stream().flatMap(List::stream)
                     .anyMatch(cell -> RESULT_CODE_NAME.matcher(cell.strip()).matches());
             return serviceKey && !resultCode;
@@ -519,7 +527,7 @@ class SpecBlockAssembler {
             // 요청 표지 행 다음에 주소가 오며, "ServiceKey=…https://…"처럼 칸 중간에 주소가 있기도 하다
             for (List<String> cells : rows) {
                 for (String cell : cells) {
-                    String url = SpecLabels.firstUrl(cell);
+                    String url = IrConventions.firstUrl(cell);
                     if (url != null) {
                         operation.exampleUrl = url;
                         return;
@@ -546,7 +554,7 @@ class SpecBlockAssembler {
             }
             String label = describe(done);
             List<String> notes = new ArrayList<>();
-            String url = endpointUrl(done, notes);
+            String url = IrConventions.endpointUrl(candidates(done), notes);
             if (done.common && url == null) {
                 // 공통 사항 구간: 그 자체는 오퍼레이션이 아니고 뒤 오퍼레이션에 붙는다
                 commonRequest.addAll(done.request);
@@ -564,69 +572,62 @@ class SpecBlockAssembler {
             }
             if (response.isEmpty()) {
                 if (done.hasFields() || !done.info.isEmpty()) {
-                    skipped.add(label + ": 응답 필드 표를 찾지 못했습니다");
+                    skip(done, label, "응답 필드 표를 찾지 못했습니다");
                 }
                 return;
             }
             if (url == null) {
-                skipped.add(label + ": 오퍼레이션 주소(Call Back URL 등)를 찾지 못했습니다");
+                skip(done, label, "오퍼레이션 주소(Call Back URL 등)를 찾지 못했습니다");
                 return;
             }
             List<List<String>> request = withCommon(commonRequest, done.request);
-            if (GATEWAY_URL.matcher(url).find() && request.stream()
-                    .noneMatch(row -> SERVICE_KEY.equalsIgnoreCase(row.get(FieldColumns.NAME)))) {
-                request = new ArrayList<>(request);
-                request.add(0, serviceKeyRow());
-                notes.add("요청 명세 표에 serviceKey가 없어 공공데이터포털 게이트웨이 인증키 파라미터를 추가함");
-            }
             Map<String, String> info = new LinkedHashMap<>(done.info);
             if (serviceUrl != null) {
                 info.put(SERVICE_URL_KEY, serviceUrl);
             }
+            List<String> requestNames = request.stream().map(row -> row.get(FieldColumns.NAME)).toList();
+            if (IrConventions.needsGatewayServiceKey(url, requestNames)) {
+                // 파라미터는 IrAssembler가 경로 변수 다음 자리에 넣는다. 노트는 여기서 남겨야
+                // 주소를 고른 노트 다음, 겹치는 주소를 바로잡은 노트 앞에 온다
+                info.put(GATEWAY_SERVICE_KEY_FLAG, "true");
+                notes.add(IrConventions.GATEWAY_SERVICE_KEY_NOTE);
+            }
+            operations.add(new RuleEngine.OperationResult(operationName(done.info), title(done.info), null, null));
             prepared.add(new Prepared(label, info, distinctByName(request), distinctByName(response), url,
-                    done.exampleUrl, notes));
+                    done.exampleUrl, notes, operations.size() - 1));
         }
 
-        /**
-         * 주소가 겹치는 오퍼레이션을 바로잡은 뒤 IR로 조립한다. 두 기능이 같은 주소를 가질 수는 없으므로,
-         * 앞뒤 기능의 Call Back URL을 베껴 두고 고치지 않은 문서로 보고 자기 요청 예제가 다른 주소를 부르는
-         * 오퍼레이션은 예제 주소를 쓴다(전통식품정보 getFoodHistoryList, TourAPI areaIntlDivList).
-         */
+        /** 오퍼레이션을 건너뛴다. 건너뛴 것도 교차검증에서 짝을 지을 수 있게 오퍼레이션 결과로 남긴다 */
+        private void skip(Operation done, String label, String reason) {
+            skipped.add(label + ": " + reason);
+            operations.add(new RuleEngine.OperationResult(operationName(done.info), title(done.info), null, reason));
+        }
+
+        /** 주소가 겹치는 오퍼레이션을 바로잡은 뒤({@link IrConventions#correctSharedUrls}) IR로 조립한다 */
         List<ParsedApi> finish() {
-            // 바로잡기 전 주소로 겹침을 판정한다. 앞 것을 고친 뒤 다시 보면 뒤 것은 더 이상 겹치지 않는다
-            List<String> documented = prepared.stream().map(op -> op.url).toList();
-            for (Prepared op : prepared) {
-                long sharing = documented.stream().filter(url -> sameUrl(url, op.url)).count();
-                if (sharing > 1 && op.exampleUrl != null && !sameUrl(op.exampleUrl, op.url) && sameHost(op.exampleUrl, op.url)) {
-                    op.notes.add("Call Back URL이 다른 오퍼레이션과 같아 요청 예제의 주소를 씀: " + op.url);
-                    op.url = op.exampleUrl;
-                }
-            }
-            for (Prepared op : prepared) {
-                op.info.put(ENDPOINT_URL_KEY, op.url);
+            List<String> urls = IrConventions.correctSharedUrls(
+                    prepared.stream().map(op -> op.url).toList(),
+                    prepared.stream().map(op -> op.exampleUrl).toList(),
+                    prepared.stream().map(op -> op.notes).toList());
+            for (int i = 0; i < prepared.size(); i++) {
+                Prepared op = prepared.get(i);
+                op.info.put(ENDPOINT_URL_KEY, urls.get(i));
                 if (!op.notes.isEmpty()) {
                     op.info.put(REVIEW_NOTE_KEY, String.join("\n", op.notes));
                 }
+                RuleEngine.OperationResult found = operations.get(op.position);
                 try {
-                    result.add(assembler.assemble(sourceFile, sourceFormat, op.info, op.request, op.response));
+                    ParsedApi api = assembler.assemble(sourceFile, sourceFormat, op.info, op.request, op.response);
+                    result.add(api);
+                    operations.set(op.position, new RuleEngine.OperationResult(found.operationName(), found.title(),
+                            api, null));
                 } catch (IllegalArgumentException e) {
                     skipped.add(op.label + ": " + e.getMessage());
+                    operations.set(op.position, new RuleEngine.OperationResult(found.operationName(), found.title(),
+                            null, e.getMessage()));
                 }
             }
             return result;
-        }
-
-        /**
-         * 공공데이터포털 게이트웨이(apis.data.go.kr)는 모든 호출에 serviceKey를 요구하지만, 요청 명세 표에서
-         * 이를 빼고 본문 설명으로만 적는 기관이 있다. 게이트웨이가 아닌 기관 서버는 인증 방식이 제각각이라 채우지 않는다.
-         */
-        private List<String> serviceKeyRow() {
-            List<String> row = new ArrayList<>(Collections.nCopies(FieldColumns.COUNT, ""));
-            row.set(FieldColumns.NAME, SERVICE_KEY);
-            row.set(FieldColumns.KOR_NAME, "인증키");
-            row.set(FieldColumns.REQUIRED, "1");
-            row.set(FieldColumns.DESCRIPTION, "공공데이터포털에서 발급받은 인증키");
-            return row;
         }
 
         /**
@@ -698,129 +699,52 @@ class SpecBlockAssembler {
             return name != null ? name : "오퍼레이션 " + (prepared.size() + skipped.size() + 1);
         }
 
-        /**
-         * 오퍼레이션 주소를 정한다. Call Back URL이 서비스 주소와 같아도 그대로 쓴다 —
-         * 국립해양조사원 문서처럼 서비스 주소 자체가 호출 주소이고 요청 예제도 그 주소를 쓰는 기관이 있다.
-         */
-        private String endpointUrl(Operation done, List<String> notes) {
-            String name = operationName(done.info);
-            String callBack = infoUrl(done.info);
-            if (callBack != null) {
-                if (done.exampleUrl != null && serviceUrl != null && !isUnder(callBack, serviceUrl)
-                        && isUnder(done.exampleUrl, serviceUrl) && lastSegment(done.exampleUrl).equals(lastSegment(callBack))) {
-                    // Call Back URL의 서비스 경로를 잘못 적은 문서(…/wellnessTursmSyncList/wellnessTursmSyncList):
-                    // 요청 예제가 문서의 서비스 주소 아래에서 같은 오퍼레이션을 부르면 예제가 맞다
-                    notes.add("Call Back URL이 서비스 URL 밖을 가리켜 요청 예제의 주소를 씀: " + callBack);
-                    return done.exampleUrl;
-                }
-                if (done.exampleUrl != null && normalizeUrl(done.exampleUrl).startsWith(normalizeUrl(callBack) + "/")) {
-                    // Call Back URL에 서비스 주소만 적고 오퍼레이션 경로를 빠뜨린 문서: 요청 예제가 그 아래 경로를 부른다
-                    return done.exampleUrl;
-                }
-                return callBack;
-            }
-            if (done.tableUrl != null) {
-                return done.tableUrl;
-            }
-            if (done.exampleUrl != null && name != null && lastSegment(done.exampleUrl).contains(name.toLowerCase(Locale.ROOT))) {
-                // Call Back URL이 비었거나 "서비스URL/getX" 같은 자리표시면 요청 예제의 실제 주소가 가장 정확하다
-                // (trafficLightList → …/trafficLightList4, 기관 서버 주소 대신 게이트웨이 주소)
-                return done.exampleUrl;
-            }
-            if (serviceUrl != null && name != null) {
-                // 서비스 URL에 오퍼레이션 경로까지 적은 문서는 이름을 다시 붙이지 않는다 (…/getSumperfuel5m)
-                String joined = lastSegment(serviceUrl).equals(name.toLowerCase(Locale.ROOT))
-                        ? serviceUrl.replaceAll("/+$", "")
-                        : serviceUrl.replaceAll("/+$", "") + "/" + name;
-                // 서비스 주소 자체가 호출 주소인 기관이 있다. 요청 예제가 그렇게 부르면 예제를 따른다
-                if (done.exampleUrl != null && sameUrl(done.exampleUrl, serviceUrl) && !sameUrl(joined, serviceUrl)) {
-                    return done.exampleUrl;
-                }
-                return joined;
-            }
-            if (done.lineUrl != null) {
-                return done.lineUrl;
-            }
-            if (done.exampleUrl != null) {
-                return done.exampleUrl;
-            }
-            String schemeless = schemelessUrl(done.info);
-            if (schemeless != null) {
-                notes.add("Call Back URL에 스킴이 없어 https://를 붙임: " + schemeless);
-                return "https://" + schemeless;
-            }
-            if (serviceUrl != null && !done.common) {
-                notes.add("오퍼레이션 주소가 없어 서비스 URL을 그대로 오퍼레이션 주소로 씀");
-                return serviceUrl;
-            }
-            return null;
+        /** 오퍼레이션이 모은 칸에서 꺼낸 주소 후보. 서비스 URL은 이 오퍼레이션이 속한 서비스 구간의 것이다 */
+        private UrlCandidates candidates(Operation done) {
+            return new UrlCandidates(infoUrl(done.info), schemelessUrl(done.info), done.tableUrl, done.lineUrl,
+                    done.exampleUrl, serviceUrl, operationName(done.info), done.common);
         }
 
-        /** "portal.kosha.or.kr/openapi/v1/koshagw"처럼 스킴 없이 적은 Call Back URL */
-        private String schemelessUrl(Map<String, String> info) {
-            for (Map.Entry<String, String> entry : info.entrySet()) {
-                String value = entry.getValue().strip();
-                if (SpecLabels.isEndpointKey(entry.getKey())
-                        && value.matches("(?i)[a-z0-9-]+(\\.[a-z0-9-]+)+(:\\d+)?/[\\w./{}-]*")) {
-                    return value.replaceAll("/+$", "");
-                }
-            }
-            return null;
+        /** 정보 표의 국문 기능명. IR의 apiName과 같은 값이며 교차검증이 오퍼레이션을 짝짓는 데 쓴다 */
+        private String title(Map<String, String> info) {
+            String title = IrAssembler.infoValue(info, SpecLabels.operationTitleKeys());
+            return title == null ? null : IrText.oneLine(title);
         }
 
-        private String lastSegment(String url) {
-            String trimmed = url.replaceAll("/+$", "");
-            return trimmed.substring(trimmed.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
-        }
-
-        /** url이 base 주소 아래 경로인지 (스킴·대소문자 무시) */
-        private boolean isUnder(String url, String base) {
-            return normalizeUrl(url).startsWith(normalizeUrl(base) + "/");
-        }
-
-        private boolean sameHost(String a, String b) {
-            return normalizeUrl(a).split("/")[0].equals(normalizeUrl(b).split("/")[0]);
-        }
-
-        /** 스킴(http/https)과 끝 슬래시, 대소문자를 무시하고 비교한다 */
-        private boolean sameUrl(String a, String b) {
-            return normalizeUrl(a).equals(normalizeUrl(b));
-        }
-
-        private String normalizeUrl(String url) {
-            return url.replaceFirst("(?i)^https?://", "").replaceAll("/+$", "").toLowerCase(Locale.ROOT);
-        }
-
+        /** 정보 표의 주소 키 칸 가운데 처음으로 주소를 담은 칸의 주소 */
         private String infoUrl(Map<String, String> info) {
             for (Map.Entry<String, String> entry : info.entrySet()) {
-                if (!SpecLabels.isEndpointKey(entry.getKey())) {
-                    continue;
-                }
-                String value = entry.getValue().strip();
-                if (value.isEmpty() || NOT_AVAILABLE.equalsIgnoreCase(value)) {
-                    continue;
-                }
-                String url = SpecLabels.firstUrl(joinWrapped(value));
-                if (url != null) {
-                    return url;
+                if (SpecLabels.isEndpointKey(entry.getKey())) {
+                    String url = IrConventions.callBackUrl(entry.getValue());
+                    if (url != null) {
+                        return url;
+                    }
                 }
             }
             return null;
         }
 
-        /** 칸 폭 때문에 공백·줄바꿈으로 꺾인 주소를 잇는다. 주소 뒤에 한글 설명이 붙은 칸은 그대로 둔다 */
-        private String joinWrapped(String value) {
-            return value.matches("[\\x21-\\x7e\\s]+") ? value.replaceAll("\\s+", "") : value;
+        /** 정보 표의 주소 키 칸에 "portal.kosha.or.kr/openapi/v1/koshagw"처럼 스킴 없이 적은 주소 */
+        private String schemelessUrl(Map<String, String> info) {
+            for (Map.Entry<String, String> entry : info.entrySet()) {
+                if (SpecLabels.isEndpointKey(entry.getKey())) {
+                    String url = IrConventions.schemelessUrl(entry.getValue());
+                    if (url != null) {
+                        return url;
+                    }
+                }
+            }
+            return null;
         }
 
-        /** 정보 표의 영문 오퍼레이션명. 이름 키에 영문 식별자가 들어 있을 때만 쓴다 */
+        /** 정보 표의 영문 오퍼레이션명. 이름 키의 우선순위대로 보고, 칸 글이 영문 식별자일 때만 쓴다 */
         private String operationName(Map<String, String> info) {
             for (String key : SpecLabels.operationNameKeys()) {
                 for (Map.Entry<String, String> entry : info.entrySet()) {
                     if (SpecLabels.normalize(entry.getKey()).equals(key)) {
-                        String value = entry.getValue().strip();
-                        if (value.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-                            return value;
+                        String name = IrConventions.operationName(entry.getValue());
+                        if (name != null) {
+                            return name;
                         }
                     }
                 }
@@ -856,8 +780,7 @@ class SpecBlockAssembler {
                     continue;
                 }
                 for (int i = from; i < cells.size(); i++) {
-                    String url = cells.get(i).strip().toLowerCase(Locale.ROOT).startsWith("http")
-                            ? SpecLabels.firstUrl(joinWrapped(cells.get(i).strip())) : null;
+                    String url = IrConventions.serviceUrl(cells.get(i));
                     if (url != null) {
                         found = url;
                         if (cells.subList(0, i).stream().anyMatch(SpecLabels::isProductionLabel)) {

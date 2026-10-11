@@ -1,0 +1,68 @@
+{
+  "serviceName": "특일 정보제공 서비스",
+  "provider": "한국천문연구원",
+  "operations": [
+    {
+      "operationName": "getHoliDeInfo",
+      "title": "국경일 정보조회",
+      "description": "연, 월별로 구분(국경일), 요일, 공휴일 여부 등의 정보를 제공한다. 국경일에 대한 정보 조회로 제헌절은 해당 오퍼레이션에 포함되나 isHoliday=N 으로 출력된다.",
+      "urlCandidates": {
+        "callBackUrl": "",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getHoliDeInfo?solYear=2019&solMonth=03&ServiceKey=서비스키",
+        "serviceUrl": "http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "_type",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "ServiceKey"},
+      "requestParameters": [
+        {"name": "solYear", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "연", "example": "2019", "defaultValue": "", "common": false},
+        {"name": "solMonth", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "월", "example": "03", "defaultValue": "", "common": false},
+        {"name": "ServiceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "발급받은 서비스키", "example": "", "defaultValue": "", "common": false},
+        {"name": "_type", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "json 타입으로 활용시 추가", "example": "json", "defaultValue": "", "common": false},
+        {"name": "numOfRows", "location": "QUERY", "type": "INTEGER", "required": "OPTIONAL",
+         "description": "한페이지에 모든 결과를 확인할 때 추가(디폴트 10)", "example": "20", "defaultValue": "10", "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {"path": "response.header.resultCode", "type": "STRING", "description": "00:성공",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.header.resultMsg", "type": "STRING", "description": "결과메시지",
+         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].locdate", "type": "STRING", "description": "날짜",
+         "sample": "20190301", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].seq", "type": "INTEGER", "description": "순번",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].dateKind", "type": "STRING", "description": "종류",
+         "sample": "01", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].isHoliday", "type": "STRING", "description": "공공기관 휴일여부",
+         "sample": "Y", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].dateName", "type": "STRING", "description": "명칭",
+         "sample": "삼일절", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.numOfRows", "type": "INTEGER", "description": "페이지당항목수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.totalCount", "type": "INTEGER", "description": "모든항목수",
+         "sample": "17", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "FIELD_TABLE"},
+        {"code": "00", "source": "RESPONSE_EXAMPLE"}
+      ]},
+      "errorCodes": [],
+      "evidence": ["T30", "T34", "T36", "T39", "T42"],
+      "uncertain": [],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": ["문서에 에러코드 표가 없다"]
+}

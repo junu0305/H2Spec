@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -26,7 +27,22 @@ class IrLoaderTest {
         assertEquals(5, ir.api().requestParameters().size());
         assertEquals(6, ir.api().responseFields().size());
         assertEquals("00", ir.api().errorSpec().successResultCode());
+        assertEquals(List.of("response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode"),
+                ir.api().errorSpec().resultCodeFieldCandidates());
         assertEquals("kr.go.h2spec.client.landmolit", ir.generatorHints().targetPackage());
+    }
+
+    @Test
+    void 결과코드_위치_후보가_없는_IR도_읽고_빈_목록으로_둔다() throws Exception {
+        // 후보는 선택 필드다. 후보가 없는 IR(손으로 쓴 IR 등)도 지금처럼 생성할 수 있어야 한다
+        ObjectNode tree = schemaExampleTree();
+        ((ObjectNode) tree.path("api").path("errorSpec")).remove("resultCodeFieldCandidates");
+        Path file = writeVariant(tree, "missing-result-code-candidates.json");
+
+        IrSpec ir = new IrLoader().load(file);
+
+        assertEquals("00", ir.api().errorSpec().successResultCode());
+        assertEquals(List.of(), ir.api().errorSpec().resultCodeFieldCandidates());
     }
 
     @Test

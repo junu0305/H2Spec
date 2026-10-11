@@ -1,5 +1,9 @@
 package kr.go.h2spec.generator.emit;
 
+import kr.go.h2spec.client.interceptor.PublicDataApiException;
+import kr.go.h2spec.client.interceptor.PublicDataErrorInterceptor;
+import kr.go.h2spec.generator.InterceptorProbe;
+import kr.go.h2spec.generator.ir.ErrorSpec;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.IrSpec;
@@ -8,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -181,6 +186,58 @@ class ClientEmitterTest {
 
         assertTrue(source.contains("byte[] body = restTemplate.getForObject(uri, byte[].class);"));
         assertFalse(source.contains("String body = restTemplate.getForObject(uri, String.class);"));
+    }
+
+    @Test
+    void 결과코드_후보가_기본_이름뿐이거나_없으면_성공코드만_넘긴다() throws Exception {
+        // rule 엔진의 IR은 모두 기본 이름만 후보로 적는다. 골든 IR도 그렇다
+        IrSpec defaultCandidates = new IrLoader().load(resource("/ir/schema-example.json"));
+        IrSpec noCandidates = withErrorSpec(new ErrorSpec("00"));
+
+        assertFalse(defaultCandidates.api().errorSpec().resultCodeFieldCandidates().isEmpty());
+        for (IrSpec ir : List.of(defaultCandidates, noCandidates)) {
+            String source = new ClientEmitter().emit(ir);
+
+            assertTrue(source.contains("restTemplate.getInterceptors().add(new PublicDataErrorInterceptor(SUCCESS_CODE));"),
+                    source);
+            assertFalse(source.contains("import java.util.List;"), source);
+        }
+    }
+
+    @Test
+    void 기본_이름에_없는_결과코드_후보는_경로의_마지막_마디를_차례대로_한_번씩_넘긴다() throws Exception {
+        // 인터셉터는 위치가 아니라 이름으로 찾는다. 빈 후보와 기본 이름(resultCode, returnReasonCode)은 넘기지 않는다
+        IrSpec ir = withErrorSpec(new ErrorSpec("00", Arrays.asList(
+                "response.header.resultCd", "result.status[]", "resultCd", "response.header.resultCode",
+                "cmmMsgHeader.returnReasonCode", "", null, "response.")));
+
+        String source = new ClientEmitter().emit(ir);
+
+        assertTrue(source.contains("import java.util.List;"), source);
+        assertTrue(source.contains(
+                "restTemplate.getInterceptors().add(new PublicDataErrorInterceptor(SUCCESS_CODE, List.of(\"resultCd\", \"status\")));"),
+                source);
+    }
+
+    @Test
+    void 생성기가_넘기지_않는_기본_이름은_인터셉터가_기본으로_찾는다() {
+        // generator는 interceptor-core에 기대지 않아 기본 이름 목록을 따로 둔다. 인터셉터가 찾지 않는 이름을 빼면 결과코드를 놓친다
+        PublicDataErrorInterceptor defaultInterceptor = new PublicDataErrorInterceptor("00");
+
+        for (String key : ClientEmitter.BUILT_IN_RESULT_CODE_KEYS) {
+            PublicDataApiException e = assertThrows(PublicDataApiException.class,
+                    () -> InterceptorProbe.respond(defaultInterceptor, "{\"result\":{\"" + key + "\":\"30\"}}"), key);
+            assertEquals("30", e.getResultCode(), key);
+        }
+    }
+
+    private IrSpec withErrorSpec(ErrorSpec errorSpec) throws Exception {
+        IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
+        ApiSpec a = base.api();
+        return new IrSpec(
+                new ApiSpec(a.apiId(), a.apiName(), a.description(), a.baseUrl(), a.endpoint(), a.httpMethod(),
+                        a.responseFormat(), a.requestParameters(), a.responseFields(), errorSpec),
+                base.generatorHints());
     }
 
     @Test

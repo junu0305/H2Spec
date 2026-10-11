@@ -1,2 +1,5 @@
 # 골든파일은 생성 결과와 바이트 단위로 비교하므로 OS와 무관하게 LF로 고정한다
 generator/src/test/resources/golden/** text eol=lf
+# parser-llm: 직렬화 골든파일은 바이트 단위로 비교하고, 프롬프트·스키마는 파일 내용의 해시가 결과 캐시 키가 되므로 OS와 무관하게 LF로 고정한다
+parser-llm/src/test/resources/golden/** text eol=lf
+parser-llm/src/main/resources/** text eol=lf

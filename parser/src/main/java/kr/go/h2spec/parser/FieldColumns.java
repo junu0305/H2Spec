@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -63,16 +62,8 @@ final class FieldColumns {
             "응답변수", SpecLabels.Section.RESPONSE, "응답변수명", SpecLabels.Section.RESPONSE,
             "출력변수", SpecLabels.Section.RESPONSE, "출력변수명", SpecLabels.Section.RESPONSE,
             "응답파라미터", SpecLabels.Section.RESPONSE);
-    /** 하위 항목을 들여쓰는 표지 (└ name, ㄴname, - name, + name) */
-    private static final Pattern TREE_MARKER = Pattern.compile("^[\\s└ㄴ\\-‐–+·ㆍ•▶>*\\u2514\\u251c\\u2502]+");
 
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_.\\-]*");
-    /** 낙타 표기 이름이 공백으로 갈라진 꼴: 소문자·숫자 뒤 공백 다음에 대문자가 온다 */
-    private static final Pattern SPLIT_CAMEL_CASE = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*[a-z0-9]( [A-Z][A-Za-z0-9_]*)+");
-    /** 이름 앞뒤에 붙은 꺾쇠·구두점 */
-    private static final Pattern NAME_PUNCTUATION = Pattern.compile("^[<(\"'`]+|[>)\"'`,;:.]+$");
-    /** 영문 이름 뒤에 국문 설명을 괄호로 붙인 칸 ("numOfRows(한 페이지 결과 수)") */
-    private static final Pattern NAME_WITH_NOTE = Pattern.compile("^([A-Za-z_$][A-Za-z0-9_.$\\-]*)\\s*[(（].*$");
 
     /**
      * 요청·응답을 한 표에 담고 "구분" 열에 In/Out을 적는 표에서 영문명을 담는 라벨
@@ -281,7 +272,7 @@ final class FieldColumns {
             row.add(column >= 0 && column < cells.size() ? cells.get(column).strip() : "");
         }
         int nameColumn = nameColumn(cells);
-        String name = cleanName(nameColumn < 0 ? "" : cells.get(nameColumn));
+        String name = IrConventions.cleanName(nameColumn < 0 ? "" : cells.get(nameColumn));
         if (name.isEmpty()) {
             return null;
         }
@@ -313,7 +304,7 @@ final class FieldColumns {
             if (first < 0) {
                 first = i;
             }
-            if (IDENTIFIER.matcher(cleanName(cells.get(i))).matches()) {
+            if (IDENTIFIER.matcher(IrConventions.cleanName(cells.get(i))).matches()) {
                 identifier = i;
             }
         }
@@ -331,52 +322,14 @@ final class FieldColumns {
             return 0;
         }
         if (column == index[NAME]) {
-            return TREE_MARKER.matcher(cells.get(column)).lookingAt() ? 1 : 0;
+            return IrConventions.startsWithTreeMarker(cells.get(column)) ? 1 : 0;
         }
         return column - index[NAME];
     }
 
-    /**
-     * 트리 표지와 이름 뒤에 덧붙인 설명("numOfRows\n(한 페이지 결과 수)"),
-     * 오타로 남은 꺾쇠·구두점("mnab3Mnud4DlpnCnt>")을 떼어 낸다.
-     */
+    /** 이름 칸의 원래 글을 이름으로 다듬는다. 두 엔진이 같이 쓰는 규칙이라 {@link IrConventions#cleanName}에 있다 */
     static String cleanName(String raw) {
-        String name = TREE_MARKER.matcher(raw.strip()).replaceAll("");
-        // 칸 폭 때문에 식별자가 여러 줄로 꺾인 칸("TEST_EVAL_IS\nUE_DD", "pm\n25Value")은 잇고,
-        // 그 밖의 다음 줄은 덧붙인 설명("(한 페이지 결과 수)")이라 버린다
-        name = joinWrappedIdentifier(name);
-        int lineBreak = name.indexOf('\n');
-        if (lineBreak > 0) {
-            name = name.substring(0, lineBreak);
-        }
-        name = NAME_PUNCTUATION.matcher(name.strip()).replaceAll("");
-        Matcher withNote = NAME_WITH_NOTE.matcher(name);
-        name = withNote.matches() ? withNote.group(1) : name;
-        // 칸 폭 때문에 낙타 표기 이름 가운데가 공백으로 꺾인 칸("data Type", "ndrgItmIcsn TpCd")은 잇는다.
-        // "relevant departments"처럼 소문자로 이어지는 이름은 문서가 적은 그대로 둔다
-        return SPLIT_CAMEL_CASE.matcher(name).matches() ? name.replace(" ", "") : name;
-    }
-
-    /**
-     * 첫 줄부터 식별자 조각만 담은 줄들을 잇는다. 숫자만 있는 줄은 이름이 아니라 값이라 잇지 않는다.
-     */
-    private static String joinWrappedIdentifier(String name) {
-        String[] lines = name.split("\\s*\\n\\s*");
-        if (lines.length < 2 || !lines[0].matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            return name;
-        }
-        StringBuilder joined = new StringBuilder(lines[0]);
-        int used = 1;
-        while (used < lines.length && lines[used].matches("[A-Za-z0-9_]+") && !lines[used].matches("\\d+")) {
-            joined.append(lines[used++]);
-        }
-        if (used == 1) {
-            return name;
-        }
-        for (int i = used; i < lines.length; i++) {
-            joined.append('\n').append(lines[i]);
-        }
-        return joined.toString();
+        return IrConventions.cleanName(raw);
     }
 
     /** 다른 표의 열 위치를 이어받을 수 있는지 볼 때 쓰는 열 수 */

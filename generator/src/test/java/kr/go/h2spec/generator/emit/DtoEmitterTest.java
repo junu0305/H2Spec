@@ -16,7 +16,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static kr.go.h2spec.generator.GoldenFileAssertions.assertEqualsIgnoringLineEndings;
 
@@ -119,48 +118,83 @@ class DtoEmitterTest {
     }
 
     @Test
-    void 서로_다른_경로의_클래스명이_겹치면_예외를_던진다() {
-        List<ResponseField> fields = List.of(
-                new ResponseField("response.header.items.b", "string", null, null),
-                new ResponseField("response.body.items.item[].x", "string", null, null));
-        DtoNode root = new DtoTreeBuilder().build(fields);
-        IrSpec ir = irWithApiId("SampleApi", fields);
+    void 서로_다른_경로의_클래스명이_겹치면_뒤_클래스에_부모_클래스명을_붙인다() {
+        // 내부 노드는 모두 루트 클래스 바로 아래 형제 중첩 클래스가 되어 이름이 같으면 "already defined"로 컴파일되지 않는다
+        String source = emit("SampleApi",
+                field("response.header.items.b"),
+                field("response.body.items.item[].x"));
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new DtoEmitter().emit(ir, root));
-
-        assertTrue(e.getMessage().contains("충돌"));
-        assertTrue(e.getMessage().contains("Items"));
-        assertTrue(e.getMessage().contains("response.header.items"));
-        assertTrue(e.getMessage().contains("response.body.items"));
+        assertTrue(source.contains("public static class Items {"), source);
+        assertTrue(source.contains("public static class BodyItems {"), source);
+        // 필드 이름은 그대로라 두 곳 모두 items 키로 읽는다
+        assertTrue(source.contains("private Items items;"), source);
+        assertTrue(source.contains("private BodyItems items;"), source);
+        assertTrue(source.contains("private List<Item> item;"), source);
     }
 
     @Test
-    void 내부노드_클래스명이_루트클래스명과_겹치면_예외를_던진다() {
-        List<ResponseField> fields = List.of(
-                new ResponseField("response.sampleApiResponse.a", "string", null, null));
-        DtoNode root = new DtoTreeBuilder().build(fields);
-        IrSpec ir = irWithApiId("SampleApi", fields);
+    void 내부노드_클래스명이_루트클래스명과_겹치면_루트_요소_이름을_붙인다() {
+        // 중첩 클래스는 감싸는 클래스와 이름이 같을 수 없다
+        String source = emit("SampleApi", field("response.sampleApiResponse.a"));
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new DtoEmitter().emit(ir, root));
-
-        assertTrue(e.getMessage().contains("충돌"));
-        assertTrue(e.getMessage().contains("SampleApiResponse"));
+        assertTrue(source.contains("public static class ResponseSampleApiResponse {"), source);
+        assertTrue(source.contains("private ResponseSampleApiResponse sampleApiResponse;"), source);
     }
 
     @Test
-    void 내부노드_클래스명이_예약된_타입이름과_겹치면_예외를_던진다() {
-        List<ResponseField> fields = List.of(
-                new ResponseField("response.list.a", "string", null, null));
-        DtoNode root = new DtoTreeBuilder().build(fields);
-        IrSpec ir = irWithApiId("SampleApi", fields);
+    void 내부노드_클래스명이_예약된_타입이름과_겹치면_이름을_바꾼다() {
+        // List라는 중첩 클래스가 있으면 List 필드 타입이 java.util.List 대신 그 클래스를 가리킨다
+        String source = emit("SampleApi", field("response.list.a"), field("response.items.item[].b"));
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new DtoEmitter().emit(ir, root));
+        assertFalse(source.contains("public static class List {"), source);
+        assertTrue(source.contains("public static class ResponseList {"), source);
+        assertTrue(source.contains("private ResponseList list;"), source);
+        assertTrue(source.contains("private List<Item> item;"), source);
+    }
 
-        assertTrue(e.getMessage().contains("충돌"));
-        assertTrue(e.getMessage().contains("List"));
+    @Test
+    void 부모_클래스명을_붙여도_겹치면_번호를_붙인다() {
+        // list는 ResponseList가 되어야 하는데 앞의 responseList가 그 이름을 이미 쓴다
+        String source = emit("SampleApi", field("response.responseList.a"), field("response.list.b"));
+
+        assertTrue(source.contains("public static class ResponseList {"), source);
+        assertTrue(source.contains("public static class List2 {"), source);
+        assertTrue(source.contains("private List2 list;"), source);
+    }
+
+    @Test
+    void 루트_요소_이름을_붙인_이름이_식별자가_아니면_번호를_붙인다() {
+        // 루트 요소 이름은 어노테이션에만 들어가 Java 이름으로 검사하지 않는다. 숫자로 시작하면 앞에 붙일 수 없다
+        String source = emit("SampleApi", field("1st.list.a"));
+
+        assertTrue(source.contains("public static class List2 {"), source);
+    }
+
+    @Test
+    void 대소문자만_다른_클래스명도_겹침으로_본다() {
+        // Items와 ITEMS는 컴파일되지만 대소문자를 가리지 않는 파일 시스템에서 class 파일 하나를 함께 쓴다
+        String source = emit("SampleApi", field("response.header.items.a"), field("response.body.ITEMS.b"));
+
+        assertTrue(source.contains("public static class Items {"), source);
+        assertTrue(source.contains("public static class BodyITEMS {"), source);
+    }
+
+    @Test
+    void javac가_무시하는_글자만_다른_클래스명도_겹침으로_본다() {
+        // javac는 soft hyphen(U+00AD) 같은 무시 가능 문자를 빼고 읽어 두 이름을 같은 클래스로 본다
+        String source = emit("SampleApi", field("response.header.items.a"), field("response.body.ite\u00ADms.b"));
+
+        assertTrue(source.contains("public static class Items {"), source);
+        assertTrue(source.contains("public static class BodyIte\u00ADms {"), source);
+    }
+
+    private String emit(String apiId, ResponseField... fields) {
+        List<ResponseField> fieldList = List.of(fields);
+        return new DtoEmitter().emit(irWithApiId(apiId, fieldList), new DtoTreeBuilder().build(fieldList));
+    }
+
+    private static ResponseField field(String path) {
+        return new ResponseField(path, "string", null, null);
     }
 
     private IrSpec irWithApiId(String apiId, List<ResponseField> fields) {

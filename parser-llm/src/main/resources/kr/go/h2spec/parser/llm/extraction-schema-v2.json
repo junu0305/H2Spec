@@ -1,0 +1,126 @@
+{
+  "type": "object",
+  "properties": {
+    "serviceName": {"type": "string"},
+    "provider": {"type": "string"},
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "operationName": {"type": "string"},
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "urlCandidates": {
+            "type": "object",
+            "properties": {
+              "callBackUrl": {"type": "string"},
+              "tableUrl": {"type": "string"},
+              "urlLine": {"type": "string"},
+              "requestExampleUrl": {"type": "string"},
+              "serviceUrl": {"type": "string"}
+            },
+            "required": ["callBackUrl", "tableUrl", "urlLine", "requestExampleUrl", "serviceUrl"],
+            "additionalProperties": false
+          },
+          "httpMethod": {"type": "string", "enum": ["GET", "POST", "OTHER", "UNKNOWN"]},
+          "responseFormat": {"type": "string", "enum": ["XML", "JSON", "BOTH", "UNKNOWN"]},
+          "defaultResponseFormat": {"type": "string", "enum": ["XML", "JSON", "UNKNOWN"]},
+          "formatParameter": {"type": "string"},
+          "auth": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["SERVICE_KEY_QUERY", "PATH_KEY", "HEADER_KEY", "NONE", "OTHER", "UNKNOWN"]
+              },
+              "parameterName": {"type": "string"}
+            },
+            "required": ["kind", "parameterName"],
+            "additionalProperties": false
+          },
+          "requestParameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "location": {"type": "string", "enum": ["QUERY", "PATH", "HEADER", "BODY"]},
+                "type": {"type": "string", "enum": ["STRING", "INTEGER", "NUMBER", "BOOLEAN"]},
+                "required": {"type": "string", "enum": ["REQUIRED", "OPTIONAL", "UNKNOWN"]},
+                "description": {"type": "string"},
+                "example": {"type": "string"},
+                "defaultValue": {"type": "string"},
+                "common": {"type": "boolean"}
+              },
+              "required": ["name", "location", "type", "required", "description", "example", "defaultValue", "common"],
+              "additionalProperties": false
+            }
+          },
+          "responseStructure": {"type": "string", "enum": ["EXAMPLE", "TABLE", "STANDARD_ASSUMED"]},
+          "responseExampleFormat": {"type": "string", "enum": ["XML", "JSON", "NONE"]},
+          "responseFields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {"type": "string"},
+                "type": {"type": "string", "enum": ["STRING", "INTEGER", "NUMBER", "BOOLEAN"]},
+                "description": {"type": "string"},
+                "sample": {"type": "string"},
+                "pathSource": {"type": "string", "enum": ["FIELD_TABLE", "RESPONSE_EXAMPLE"]},
+                "common": {"type": "boolean"}
+              },
+              "required": ["path", "type", "description", "sample", "pathSource", "common"],
+              "additionalProperties": false
+            }
+          },
+          "resultCode": {
+            "type": "object",
+            "properties": {
+              "fieldName": {"type": "string"},
+              "successCodes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {"type": "string"},
+                    "source": {"type": "string", "enum": ["FIELD_TABLE", "RESPONSE_EXAMPLE", "ERROR_TABLE"]}
+                  },
+                  "required": ["code", "source"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["fieldName", "successCodes"],
+            "additionalProperties": false
+          },
+          "errorCodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {"type": "string"},
+                "message": {"type": "string"}
+              },
+              "required": ["code", "message"],
+              "additionalProperties": false
+            }
+          },
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "uncertain": {"type": "array", "items": {"type": "string"}},
+          "unsupported": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": [
+          "operationName", "title", "description", "urlCandidates", "httpMethod", "responseFormat",
+          "defaultResponseFormat", "formatParameter", "auth", "requestParameters", "responseStructure",
+          "responseExampleFormat", "responseFields", "resultCode", "errorCodes", "evidence", "uncertain", "unsupported"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "documentNotes": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["serviceName", "provider", "operations", "documentNotes"],
+  "additionalProperties": false
+}

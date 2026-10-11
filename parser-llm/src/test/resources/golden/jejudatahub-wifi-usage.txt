@@ -1,0 +1,66 @@
+[P1] 디지털 참여 플랫폼 및 사회혁신을 위한 데이터 구축
+[P2] 데이터셋 API 가이드 문서
+[P3] 2020. 12.
+[P4] 개 정 이 력
+[T5] 표 19행 5열
+| 버전 | 변경일 | 변경사유 | 변경내용 | 작성자 |
+| V 1.0 |  | 신규 |  | 김성율 |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+|  |  |  |  |  |
+[P6] 1. 데이터 공통 사항
+[P7] OpenAPI 사용 방법
+[P8] 1) 제주데이터허브 로그인
+[P9] 2) 사용할 데이터 프로젝트에 담기
+[P10] 3) 다음 경로의 프로젝트키를 사용하여 API를 호출
+[P11] - 마이페이지 > 프로젝트 관리 > 해당 프로젝트
+[P12] ※ 자세한 이용가이드는 제주데이터허브의 이용안내를 참고해주세요.
+[P13] Request Parameters
+[T14] 표 3행 4열
+| Name | Description | Type | Etc |
+| number | 페이지 번호 | integer | default=1 |
+| limit | 페이지별 컨텐츠 수 | integer | default=10, max=100 |
+[P15] Response
+[P16] 아래와 같은 규칙을 따른다.
+[P17] • JSON 포맷의 데이터이며, 필드명은 소문자로 시작하는 camel notation을 사용.
+[P18] • 다음 json object type 으로 응답.
+[T19] 표 1행 1열
+| {<br>  "totCnt": 13702,<br>  "hasMore": true,<br>  "data": [<br>    {<br>      "contents": “value”<br>       …<br>    },<br>    {<br>      "contents": “value”<br>       …<br>    },<br>    …<br>  ]<br>} |
+[T20] 표 4행 4열
+| Name | Description | Type | Note |
+| totCnt | 요청 컨텐츠 총 개수 | long |  |
+| hasMore | 이후 페이지 데이터 유무 | boolean |  |
+| data | 요청 컨텐츠 | json array | limit 개수만큼 응답 |
+[P21] 2. 읍면동별 와이파이 사용량 API
+[P22] 읍면동별 와이파이 사용량 통계 데이터 제공
+[P23] 요청 URL
+[P24] https://open.jejudatahub.net/api/proxy/7tttaDaD5ataaba75a57ttDtaDb6tb7t/{your_appkey}?{params(key=value)}
+[P25] ex>https://open.jejudatahub.net/api/proxy/7tttaDaD5ataaba75a57ttDtaDb6tb7t/{your_appkey}?searchDate=20190704&emd=이호1동&category=해변
+[P26] Request Parameters
+[T27] 표 7행 4열
+| Name | Description | Type | Note |
+| searchDate | 분석일(필수) | string | YYYYMMDD |
+| city | 시군구 | string | 제주시,서귀포시 |
+| emd | 읍면동 | string | 연동,노형동,아라동,삼양동 등 |
+| category | 카테고리 | string | 공공기관,공영관광지,사설관광지,올레코스,테마거리 등 |
+| gender | 성별 | string | 남,여 |
+| ageGroup | 연령대 | string | 10,20,30,40 등 |
+[P28] ex> 특정일(2019/7/4)의 이호1동 해변 와이파이 사용량 정보를 보고 싶은 경우
+[P29] https://open.jejudatahub.net/api/proxy/7tttaDaD5ataaba75a57ttDtaDb6tb7t/{your_appkey}?searchDate=20190704&emd=이호1동&category=해변
+[P30] Response Body
+[T31] 표 1행 1열
+| {<br>  "totCnt": 13,<br>  "hasMore": true,<br>  "data": [<br>    {<br>      "baseDate": "20190704",<br>      "uploadBytes": "46645463",<br>      "downloadBytes": "1163358166",<br>      "sessionTime": "33128",<br>      "userCount": "4",<br>      "city": "제주시",<br>      "emd": "이호1동",<br>      "category": "해변",<br>      "gender": "여",<br>      "ageGroup": "60"<br>    },<br>    {<br>      "baseDate": "20190704",<br>      "uploadBytes": "24387181",<br>      "downloadBytes": "253939224",<br>      "sessionTime": "50379",<br>      "userCount": "17",<br>      "city": "제주시",<br>      "emd": "이호1동",<br>      "category": "해변",<br>      "gender": "남",<br>      "ageGroup": "40"<br>    },<br>    …<br>  ]<br>} |

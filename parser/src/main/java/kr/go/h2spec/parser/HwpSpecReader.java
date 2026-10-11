@@ -29,11 +29,12 @@ import java.util.List;
  * 글자열 속 자리에서 꺼낸다. "{표}b) 요청 메시지 명세"처럼 정보 표를 다음 제목 문단 맨 앞에 붙여 제목 위에
  * 그린 문서가 있어, 글을 먼저 내보내면 표가 다음 구간 제목 뒤로 밀린다. 그 밖의 표는 문단 글 뒤에 둔다.
  */
-public class HwpSpecReader {
+public class HwpSpecReader implements DocumentReader {
 
     /** 줄 높이 정보가 없는 문단의 첫 줄 높이 (HWPUNIT, 10pt 글자 한 줄) */
     private static final long DEFAULT_LINE_HEIGHT = 1000;
 
+    @Override
     public List<Block> read(Path hwp) throws IOException {
         HWPFile hwpFile = readFile(hwp);
 

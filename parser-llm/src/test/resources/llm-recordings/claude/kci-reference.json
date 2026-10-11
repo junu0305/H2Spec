@@ -1,0 +1,78 @@
+{
+  "serviceName": "한국연구재단_KCI 참고문헌 서비스",
+  "provider": "한국연구재단",
+  "operations": [
+    {
+      "operationName": "",
+      "title": "OA학술지-참고문헌관리 조회",
+      "description": "OA학술지-참고문헌관리 정보를 조회 하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiD272List",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo/openApiD272List?serviceKey=인증키&pageNo=1&recordCnt=10",
+        "serviceUrl": "http://apis.data.go.kr/B552540/KCIOpenApi/refInfo"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "XML",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "requestParameters": [
+        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "공공데이터포털에서 발급받은 인증키", "example": "인증키 (URL Encode)", "defaultValue": "", "common": false},
+        {"name": "recordCnt", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "한 페이지 결과 수", "example": "10", "defaultValue": "", "common": false},
+        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "페이지 번호", "example": "1", "defaultValue": "", "common": false},
+        {"name": "insiId", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "[한국연구재단_KCI 기관정보 서비스] API의 상세기능[기관정보 조회]에서 기관명으로 조회 시 확인가능",
+         "example": "", "defaultValue": "", "common": false},
+        {"name": "artiId", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "상세기능 [KCI논문 정보 조회]에서 논문명으로 조회 시 확인가능", "example": "", "defaultValue": "",
+         "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {"path": "response.header.resultCode", "type": "STRING", "description": "결과코드",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.header.resultMsg", "type": "STRING", "description": "결과메시지",
+         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].NUM", "type": "INTEGER", "description": "데이터 순번",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].ARTIID", "type": "STRING", "description": "논문ID",
+         "sample": "ART001945795", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].REFSEQ", "type": "STRING", "description": "참고문헌시퀀스",
+         "sample": "00001", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].TITLE", "type": "STRING", "description": "논문명",
+         "sample": "<label>1</label>", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].TITLESUB", "type": "STRING", "description": "논문부제목",
+         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].TRANTITLE", "type": "STRING", "description": "번역제목",
+         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].SOURCE", "type": "STRING", "description": "저널명or표제",
+         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].MONTH", "type": "INTEGER", "description": "발행월",
+         "sample": "05", "pathSource": "FIELD_TABLE", "common": false},
+        {"path": "response.body.items.item[].REFARTIID", "type": "STRING", "description": "KCI참고문헌제어번호",
+         "sample": "", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.recordCnt", "type": "INTEGER", "description": "한 페이지당 표출 데이터 수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지 수",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.totalCount", "type": "INTEGER", "description": "데이터 총 개수",
+         "sample": "116550", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "FIELD_TABLE"},
+        {"code": "00", "source": "RESPONSE_EXAMPLE"}
+      ]},
+      "errorCodes": [],
+      "evidence": ["T16", "T22", "T24", "T27", "T30"],
+      "uncertain": ["응답 예제의 MONTH는 빈 태그라 응답 필드 표의 샘플(05)로 타입을 정했다"],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": ["문서에 에러코드 표가 없다"]
+}

@@ -4,4 +4,4 @@ plugins {
 }
 
 rootProject.name = 'h2spec'
-include 'interceptor-core', 'generator', 'parser', 'cli'
+include 'interceptor-core', 'generator', 'parser', 'parser-llm', 'cli', 'llm-eval'

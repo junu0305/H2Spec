@@ -1,0 +1,86 @@
+{
+  "serviceName": "개표소 정보 조회 서비스",
+  "provider": "중앙선거관리위원회",
+  "operations": [
+    {
+      "operationName": "",
+      "title": "개표소 정보 조회",
+      "description": "실시중인 선거의 개표소명, 주소 등 정보 조회",
+      "urlCandidates": {
+        "callBackUrl": "http://apis.data.go.kr/9760000/CountingSttnInfoInqireService/getCountingSttnInfoInqire",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/9760000/CountingSttnInfoInqireService/getCountingSttnInfoInqire?pageNo=1&numOfRows=10&resultType=xml&sgId=20220309&sdName=전라북도&wiwName=전주시완산구&resultType=xml&serviceKey=서비스키",
+        "serviceUrl": "http://apis.data.go.kr/9760000/CountingSttnInfoInqireService"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "resultType",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "requestParameters": [
+        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "공공데이터포털에서 발급받은 인증키", "example": "공공데이터포털에서 발급받은 인증키", "defaultValue": "",
+         "common": false},
+        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "페이지 번호 (최대값:100000)", "example": "1", "defaultValue": "", "common": false},
+        {"name": "numOfRows", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "목록 건수 (최대값:100)", "example": "10", "defaultValue": "", "common": false},
+        {"name": "resultType", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "xml/json default : xml", "example": "xml", "defaultValue": "xml", "common": false},
+        {"name": "sgId", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "선거ID", "example": "20220309", "defaultValue": "", "common": false},
+        {"name": "sdName", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "시도명", "example": "전라북도", "defaultValue": "", "common": false},
+        {"name": "wiwName", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "구시군명", "example": "전주시완산구", "defaultValue": "", "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {"path": "response.header.resultCode", "type": "STRING", "description": "00:성공",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.header.resultMsg", "type": "STRING", "description": "결과메시지",
+         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].num", "type": "INTEGER", "description": "결과순서",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].sgId", "type": "STRING", "description": "선거ID",
+         "sample": "20220309", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].countingSttnName", "type": "STRING", "description": "개표소명",
+         "sample": "전주시완산구개표소", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].sdName", "type": "STRING", "description": "시도명",
+         "sample": "전라북도", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].wiwName", "type": "STRING", "description": "구시군명",
+         "sample": "전주시완산구", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].countingSttnSeq", "type": "INTEGER", "description": "구시군별 개표소순번",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].placeName", "type": "STRING", "description": "장소명",
+         "sample": "전주시화산체육관", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].placeAddr", "type": "STRING", "description": "장소주소",
+         "sample": "전주시 완산구 백제대로 310(중화산동2가)", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].placeFloor", "type": "STRING", "description": "장소층수 (지하1층 : –1)",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.numOfRows", "type": "INTEGER", "description": "한 페이지 결과 수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지 번호",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.totalCount", "type": "INTEGER", "description": "전체 결과 수",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "FIELD_TABLE"},
+        {"code": "INFO-00", "source": "RESPONSE_EXAMPLE"}
+      ]},
+      "errorCodes": [
+        {"code": "12", "message": "NO_OPENAPI_SERVICE_ERROR"},
+        {"code": "30", "message": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"},
+        {"code": "ERROR-03", "message": "데이터가 정보가 없습니다. 활용문서를 확인해 주시기 바랍니다."},
+        {"code": "ERROR-310", "message": "해당하는 서비스를 찾을 수 없습니다."}
+      ],
+      "evidence": ["T9", "T13", "T15", "T19", "T22", "T25", "T35"],
+      "uncertain": ["응답 필드 표의 결과코드 설명은 00:성공인데 응답 예제의 결과코드는 INFO-00이다"],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": []
+}

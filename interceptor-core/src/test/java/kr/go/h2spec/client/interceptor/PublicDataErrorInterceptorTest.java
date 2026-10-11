@@ -13,6 +13,7 @@ import org.springframework.web.client.RestTemplate;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -197,14 +198,107 @@ class PublicDataErrorInterceptorTest {
         assertFalse(e.getRequestUri().contains("SECRET123"));
     }
 
+    @Test
+    void 숫자로만_된_결과코드는_앞자리_0을_떼고_성공코드와_비교한다() {
+        // 기상청 중기예보는 표에 00, 응답 예제에 0을 적는다. 0, 00, 000은 같은 수다
+        assertDoesNotThrow(() -> intercept(xmlWithResultCode("0")));
+        assertDoesNotThrow(() -> intercept(xmlWithResultCode("000")));
+        assertDoesNotThrow(() -> intercept(new PublicDataErrorInterceptor("0"), xmlWithResultCode("00")));
+    }
+
+    @Test
+    void JSON_숫자_0으로_온_결과코드도_성공코드_00과_같게_본다() {
+        assertDoesNotThrow(() -> intercept("""
+                {"response":{"header":{"resultCode":0,"resultMsg":"NORMAL SERVICE."},"body":{"totalCount":1}}}"""));
+    }
+
+    @Test
+    void 앞자리_0만_다른_오류_코드는_실패이고_받은_코드를_그대로_남긴다() {
+        PublicDataApiException e = assertThrows(PublicDataApiException.class,
+                () -> intercept(xmlWithResultCode("030")));
+
+        assertEquals("030", e.getResultCode());
+    }
+
+    @Test
+    void 숫자가_아닌_결과코드는_글자까지_같아야_성공이다() {
+        // 선관위 개표소 문서는 성공코드가 INFO-00이다. 숫자가 아니므로 앞자리 0을 떼지 않는다
+        PublicDataErrorInterceptor info = new PublicDataErrorInterceptor("INFO-00");
+
+        assertDoesNotThrow(() -> intercept(info, xmlWithResultCode("INFO-00")));
+        assertThrows(PublicDataApiException.class, () -> intercept(info, xmlWithResultCode("INFO-0")));
+        assertThrows(PublicDataApiException.class, () -> intercept(info, xmlWithResultCode("info-00")));
+        assertThrows(PublicDataApiException.class, () -> intercept(info, xmlWithResultCode("00")));
+        assertThrows(PublicDataApiException.class, () -> intercept(xmlWithResultCode("INFO-00")));
+    }
+
+    @Test
+    void 결과코드_이름을_주면_XML에서_그_이름으로_찾는다() {
+        String failure = "<response><header><resultCd>99</resultCd></header><body/></response>";
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of("resultCd"));
+
+        // 기본 이름만 찾으면 결과코드도 에러 키워드도 없어 오류 응답이 정상으로 넘어간다
+        assertDoesNotThrow(() -> intercept(failure));
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(withKey, failure));
+        assertEquals("99", e.getResultCode());
+        assertDoesNotThrow(() -> intercept(withKey, "<response><header><resultCd>00</resultCd></header></response>"));
+    }
+
+    @Test
+    void 결과코드_이름을_주면_JSON에서_그_이름으로_찾는다() {
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of("resultCd"));
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(withKey, """
+                {"result":{"resultCd":"30","resultMsg":"SERVICE_KEY_IS_NOT_REGISTERED_ERROR"}}"""));
+
+        assertEquals("30", e.getResultCode());
+        assertDoesNotThrow(() -> intercept(withKey, """
+                {"result":{"resultCd":0,"resultMsg":"OK"},"list":[{"stationName":"종로구"}]}"""));
+    }
+
+    @Test
+    void 준_결과코드_이름을_기본_이름보다_먼저_찾는다() {
+        // 데이터에 기본 이름인 errorCode가 있어도 문서에 적힌 결과코드가 정상이면 정상이다
+        String body = """
+                {"result":{"resultCd":"00"},"items":{"item":{"errorCode":"E01"}}}""";
+
+        assertThrows(PublicDataApiException.class, () -> intercept(body));
+        assertDoesNotThrow(() -> intercept(new PublicDataErrorInterceptor("00", List.of("resultCd")), body));
+    }
+
+    @Test
+    void 결과코드_이름을_주어도_기본_이름으로_계속_찾는다() {
+        // 게이트웨이의 인증 실패 응답은 기관 문서와 상관없이 cmmMsgHeader/returnReasonCode로 온다
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of("resultCd"));
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(withKey, """
+                <OpenAPI_ServiceResponse><cmmMsgHeader>\
+                <returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg>\
+                <returnReasonCode>30</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>"""));
+
+        assertEquals("30", e.getResultCode());
+    }
+
+    private static String xmlWithResultCode(String resultCode) {
+        return "<response><header><resultCode>" + resultCode + "</resultCode></header><body/></response>";
+    }
+
     private ClientHttpResponse intercept(String body) throws IOException {
-        return intercept(URI.create("http://api.example/test"), body);
+        return intercept(interceptor, body);
     }
 
     private ClientHttpResponse intercept(URI uri, String body) throws IOException {
+        return intercept(interceptor, uri, body);
+    }
+
+    private ClientHttpResponse intercept(PublicDataErrorInterceptor target, String body) throws IOException {
+        return intercept(target, URI.create("http://api.example/test"), body);
+    }
+
+    private ClientHttpResponse intercept(PublicDataErrorInterceptor target, URI uri, String body) throws IOException {
         MockClientHttpRequest request = new MockClientHttpRequest(HttpMethod.GET, uri);
         MockClientHttpResponse response =
                 new MockClientHttpResponse(body.getBytes(StandardCharsets.UTF_8), HttpStatus.OK);
-        return interceptor.intercept(request, new byte[0], (req, requestBody) -> response);
+        return target.intercept(request, new byte[0], (req, requestBody) -> response);
     }
 }

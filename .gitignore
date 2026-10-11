@@ -6,3 +6,5 @@ out/
 generated/
 .superpowers/
 docs/superpowers/
+docs/llm-parser-design.md
+docs/2026-10-10-H2Spec-LLM파서설계검토.md

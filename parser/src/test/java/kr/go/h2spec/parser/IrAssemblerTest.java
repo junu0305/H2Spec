@@ -3,6 +3,7 @@ package kr.go.h2spec.parser;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -248,6 +249,25 @@ class IrAssemblerTest {
 
         JsonNode notes = ir.get("metadata").get("reviewNotes");
         assertEquals(0, notes.size(), "확정한 필드에 노트가 남으면 검토 신호가 희석된다: " + notes);
+    }
+
+    @Test
+    void 샘플데이터_기반_integer_추론_노트는_조립_노트_뒤에_한_줄로_묶는다() {
+        // 기상청 중기예보 MidTa는 기온 필드마다 같은 노트가 붙어 42줄이 됐다. 요청과 응답에 함께 있는 이름은 한 번만 적는다
+        Map<String, String> info = Map.of(
+                "Call Back URL", "http://apis.data.go.kr/1234567/TestSvc/getTestList",
+                SpecBlockAssembler.REVIEW_NOTE_KEY, "조립 단계의 노트");
+        JsonNode ir = new IrAssembler().assemble("test.docx", "DOCX", info,
+                List.of(requestRow("level", "단계", "3", "단계")),
+                List.of(responseRow("taMin4", "최저기온", "7", "4일 후 예상최저기온"),
+                        responseRow("taMax4", "최고기온", "15", "4일 후 예상최고기온"),
+                        responseRow("level", "단계", "3", "단계"))).ir();
+
+        List<String> notes = new ArrayList<>();
+        ir.get("metadata").get("reviewNotes").forEach(note -> notes.add(note.asText()));
+        assertEquals(List.of("조립 단계의 노트",
+                "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 3개): level, taMin4, taMax4"), notes);
+        assertTrue(ir.get("metadata").get("manualReviewRequired").asBoolean());
     }
 
     @Test

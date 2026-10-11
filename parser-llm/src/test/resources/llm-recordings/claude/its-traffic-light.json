@@ -1,0 +1,76 @@
+{
+  "serviceName": "대중교통 신호연계 정보 데이터 조회",
+  "provider": "제주특별자치도청",
+  "operations": [
+    {
+      "operationName": "trafficLightList",
+      "title": "대중교통 신호연계 정보 조회",
+      "description": "대중교통 신호연계 정보를 조회하는 기능",
+      "urlCandidates": {
+        "callBackUrl": "",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/6500000/trafficLightService4/trafficLightList",
+        "serviceUrl": "http://apis.data.go.kr/6500000/trafficLightService4"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "type",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "requestParameters": [
+        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "인증키 (URL Encode)", "example": "1", "defaultValue": "", "common": false},
+        {"name": "page", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "페이지 번호", "example": "10", "defaultValue": "", "common": false},
+        {"name": "countPerPage", "location": "QUERY", "type": "INTEGER", "required": "REQUIRED",
+         "description": "한페이지 결과수", "example": "1", "defaultValue": "", "common": false},
+        {"name": "type", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "출력형식(xml, json)", "example": "xml", "defaultValue": "", "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "XML",
+      "responseFields": [
+        {"path": "response.header.resultMsg", "type": "STRING", "description": "결과메시지",
+         "sample": "NORMAL SERVICE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.header.resultCode", "type": "STRING", "description": "결과코드",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.page.countPerPage", "type": "INTEGER", "description": "한 페이지 결과수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.page.page", "type": "INTEGER", "description": "페이지번호",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].ecallId", "type": "STRING", "description": "비상호출ID",
+         "sample": "EC00A0C6EE4D7A20210108122031", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].gnssLat", "type": "NUMBER", "description": "GNSS위도",
+         "sample": "33.291048255", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].gnssLon", "type": "NUMBER", "description": "GNSS경도",
+         "sample": "126.59343889666667", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].gnssSpd", "type": "NUMBER", "description": "GNSS속도",
+         "sample": "0.007", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].gnssTim", "type": "STRING", "description": "GNSS시간",
+         "sample": "2021-01-08 12:20:31.0", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].no", "type": "STRING", "description": "번호",
+         "sample": "149", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].routeNo", "type": "STRING", "description": "노선번호",
+         "sample": "서귀포온성학교", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].sensorCd", "type": "STRING", "description": "센서코드",
+         "sample": "VLST0", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "FIELD_TABLE"},
+        {"code": "00", "source": "RESPONSE_EXAMPLE"},
+        {"code": "00", "source": "ERROR_TABLE"}
+      ]},
+      "errorCodes": [
+        {"code": "01", "message": "APPLICATION ERROR"},
+        {"code": "10", "message": "INVALID_REQUEST_PARAMETER_ERROR"},
+        {"code": "30", "message": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"},
+        {"code": "99", "message": "UNKNOWN_ERROR"}
+      ],
+      "evidence": ["T7", "T11", "T13", "T15", "T17", "T19"],
+      "uncertain": ["응답 예제의 page 요소가 body 밖에 있어 response.page 아래에 두었다"],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": []
+}

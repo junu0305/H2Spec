@@ -1,0 +1,44 @@
+plugins {
+    id 'application'
+}
+
+description = '추출 엔진의 결과를 정답 파일과 비교해 지표를 내는 평가 도구 (rule 기준선, llm 녹화 응답 재생, 세트 C 대리 지표). 배포하지 않는다'
+
+dependencies {
+    implementation project(':parser')
+    // llm 엔진은 녹화 응답을 재생해 돌린다. 검증·정규화·교차검증은 llm 엔진의 코드 그대로다
+    implementation project(':parser-llm')
+    implementation project(':generator')
+
+    // generator 통과율은 생성 코드를 javac로 컴파일해야 센다. 그 classpath는 이 프로그램의 classpath라서
+    // generator 테스트가 컴파일에 쓰는 구성(generator/build.gradle)을 그대로 넣는다
+    implementation project(':interceptor-core')
+    implementation 'org.springframework:spring-web:6.1.6'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
+}
+
+application {
+    mainClass = 'kr.go.h2spec.eval.LlmEval'
+}
+
+tasks.named('run') {
+    // 세트 A 문서와 기본 출력 위치(llm-eval/build/reports/…)를 저장소 루트에서 찾는다.
+    // --proxy·--out에 준 상대 경로도 ./gradlew를 부른 루트 기준으로 읽힌다
+    workingDir = rootProject.projectDir
+}
+
+tasks.named('test') {
+    // 세트 A는 parser·cli 테스트 리소스의 문서 그 자체라 복사하지 않고 저장소 루트에서 읽는다
+    systemProperty 'h2spec.repoRoot', rootProject.projectDir.absolutePath
+    inputs.dir("$rootDir/parser/src/test/resources/docs").withPropertyName('setADocuments')
+    inputs.dir("$rootDir/cli/src/test/resources/docs").withPropertyName('setACliDocuments')
+    // 재생 엔진 테스트는 parser-llm의 녹화 응답 그 자체를 쓴다
+    inputs.dir("$rootDir/parser-llm/src/test/resources/llm-recordings").withPropertyName('llmRecordings')
+}
+
+// 평가 도구는 저장소 안에서 돌리는 개발용 프로그램이라 배포하지 않는다 (설계 3.3).
+// 루트 build.gradle이 모든 하위 모듈에 maven-publish를 적용하므로 여기서 게시 태스크만 끈다.
+// JitPack도 publishToMavenLocal로 올라온 것만 내보내므로 이 모듈은 빠진다
+tasks.withType(AbstractPublishToMaven).configureEach {
+    enabled = false
+}

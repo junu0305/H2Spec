@@ -27,11 +27,12 @@ import java.util.List;
  * HWPX는 HWP와 마찬가지로 표를 문단에 딸린 개체로 담는다. 문단의 텍스트를 먼저 확인한 뒤
  * 그 문단에 표 개체가 있으면 이어서 꺼내는 방식으로 순서를 맞춘다.
  */
-public class HwpxSpecReader {
+public class HwpxSpecReader implements DocumentReader {
 
     /** 줄 높이 정보가 없는 문단의 첫 줄 높이 (HWPUNIT, 10pt 글자 한 줄) */
     private static final long DEFAULT_LINE_HEIGHT = 1000;
 
+    @Override
     public List<Block> read(Path hwpx) throws IOException {
         HWPXFile file = readFile(hwpx);
 

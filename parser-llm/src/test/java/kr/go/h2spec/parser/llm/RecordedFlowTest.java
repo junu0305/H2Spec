@@ -1,0 +1,216 @@
+package kr.go.h2spec.parser.llm;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import kr.go.h2spec.generator.CodeGenerator;
+import kr.go.h2spec.generator.ir.IrLoader;
+import kr.go.h2spec.parser.ParsedApi;
+import kr.go.h2spec.parser.SpecParseException;
+import kr.go.h2spec.parser.SpecParseResult;
+import kr.go.h2spec.parser.SpecParseResult.Engine;
+import kr.go.h2spec.parser.SpecParseResult.Operation;
+import kr.go.h2spec.parser.SpecParseResult.TokenUsage;
+import kr.go.h2spec.parser.llm.client.LlmResponse;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * 녹화한 LLM 응답으로 llm 엔진의 전체 흐름을 문서마다 끝까지 돌린다 (설계 9.3, 1-9). 키 없이 {@code ./gradlew build}에서 돈다.
+ * <p>
+ * {@link LlmSpecParser}가 문서를 읽어 직렬화 → 녹화 재생({@link RecordedLlmClient}) → 검증 → 정규화 → 교차검증을 거쳐 낸 결과에서,
+ * 변환한 오퍼레이션은 IrLoader → CodeGenerator → 생성 코드 javac 컴파일까지 돌린다. CLI는 생성 코드를 컴파일하지 않으므로
+ * 컴파일되지 않는 IR은 여기서 드러난다. 녹화가 문서의 일부 오퍼레이션만 담은 문서(기상청 등)는 나머지를 rule 엔진만 찾아 경고가 난다.
+ */
+class RecordedFlowTest {
+
+    private static final String MODEL = "claude-opus-5-5";
+    private static final String EFFORT = "medium";
+
+    @TempDir
+    Path tempDir;
+
+    private final List<String> warnings = new ArrayList<>();
+
+    /** 문서, 변환한 apiId, 지원 범위 밖으로 건너뛴 apiId, 교차검증 노트 수, rule 엔진만 찾은 오퍼레이션 수 */
+    static Stream<Arguments> recordings() {
+        return Stream.of(
+                Arguments.of("its-traffic-light.hwp", List.of("TrafficLightList"), List.of(), 1, 0),
+                Arguments.of("jejudatahub-wifi-usage.hwp", List.of(), List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), 3, 0),
+                Arguments.of("kasi-special-day.docx", List.of("HoliDeInfo"), List.of(), 0, 4),
+                Arguments.of("kci-reference.docx", List.of("OpenApiD272List"), List.of(), 1, 5),
+                Arguments.of("kma-mid-forecast.docx", List.of("MidFcst"), List.of(), 0, 3),
+                Arguments.of("kosha-certificate-check.hwp", List.of(), List.of("Koshagw"), 1, 0),
+                Arguments.of("msrstn-info.docx", List.of("MsrstnList", "NearbyMsrstnList", "TMStdrCrdnt"), List.of(), 0, 0),
+                Arguments.of("nec-ballot-counting-place.hwpx", List.of("CountingSttnInfoInqire"), List.of(), 1, 0),
+                // rule JSON, llm XML로 형식이 갈리지만 두 형식을 다 내고 dataType으로 고르므로 형식 차이는 알리지 않는다
+                Arguments.of("nps-disability-review.hwp", List.of("JgmtSttusInfoSearchV2"), List.of(), 1, 0));
+    }
+
+    @Test
+    void 녹화한_모든_문서를_전체_흐름으로_돌린다() {
+        assertEquals(TestDocuments.names(), recordings().map(arguments -> (String) arguments.get()[0]).sorted().toList(),
+                "녹화를 더하면 여기 기대값도 더한다");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("recordings")
+    void 녹화한_응답을_끝까지_돌려_변환한_IR은_generator를_거쳐_컴파일된다(String document, List<String> converted,
+                                                       List<String> outOfScope, int crossCheckNotes,
+                                                       int ruleOnly) throws Exception {
+        RecordedLlmClient client = RecordedLlmClient.of(TestDocuments.PROVIDER, document);
+
+        SpecParseResult result = parser(client).extract(TestDocuments.path(document));
+
+        assertEquals(1, client.requests().size(), "문서당 한 번 부른다");
+        assertEquals(new Engine("llm", TestDocuments.PROVIDER, MODEL, EFFORT, false, tokens(RecordedLlmClient.USAGE)),
+                result.engine());
+        assertEquals(converted, result.apis().stream().map(ParsedApi::apiId).toList());
+        assertEquals(outOfScope, result.operations().stream().filter(Operation::outOfScope)
+                .map(operation -> operation.api().apiId()).toList(), "지원 범위 밖으로 건너뛴 오퍼레이션도 정규화한 IR을 담는다");
+        assertEquals(result.operations().size() - converted.size(), result.skipped().size(),
+                "변환하지 못한 오퍼레이션은 모두 이유와 함께 알린다");
+        for (Operation operation : result.operations()) {
+            if (operation.api() != null) {
+                assertEquals("llm", operation.api().ir().get("metadata").get("engine").asText());
+            }
+        }
+        assertEquals(crossCheckNotes, result.operations().stream()
+                .filter(operation -> operation.api() != null)
+                .mapToLong(operation -> crossCheckNotes(operation.api().ir()).size()).sum());
+        String sourceFile = TestDocuments.path(document).getFileName().toString();
+        assertEquals(ruleOnly, warnings.size(), warnings.toString());
+        warnings.forEach(warning -> assertTrue(warning.startsWith(sourceFile + ": rule 엔진만 찾은 오퍼레이션: "), warning));
+
+        List<Path> written = new ArrayList<>();
+        for (ParsedApi api : result.apis()) {
+            Path ir = Files.writeString(tempDir.resolve(api.apiId() + ".json"), api.ir().toPrettyString());
+            written.addAll(new CodeGenerator().generate(new IrLoader().load(ir), tempDir.resolve("generated")));
+        }
+        if (!written.isEmpty()) {
+            GeneratedSources.assertCompiles(written, tempDir.resolve("classes"));
+        }
+    }
+
+    @Test
+    void 제주_와이파이는_지원_범위_밖으로_건너뛰되_정규화한_IR을_담고_apis에는_넣지_않으며_parse는_실패를_알린다() throws Exception {
+        String document = "jejudatahub-wifi-usage.hwp";
+
+        SpecParseResult result = parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document))
+                .extract(TestDocuments.path(document));
+
+        Operation jeju = result.operations().get(0);
+        assertTrue(jeju.outOfScope());
+        assertTrue(jeju.skipReason().startsWith("인증 방식 미지원 (주소 경로의 {your_appkey})"), jeju.skipReason());
+        assertTrue(jeju.skipReason().contains("응답 루트가 둘 이상 (totCnt, hasMore, data)"), jeju.skipReason());
+        assertEquals("JSON", jeju.api().ir().get("api").get("responseFormat").asText(), "IR은 문서의 의미대로 정규화했다");
+        assertEquals(List.of(), result.apis(), "지원 범위 밖 IR은 파일로 쓰지 않는다");
+        assertEquals(List.of("읍면동별 와이파이 사용량 API: " + jeju.skipReason()), result.skipped(), "설계 7.4의 출력과 같은 꼴");
+
+        SpecParseException e = assertThrows(SpecParseException.class,
+                () -> parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document)).parse(TestDocuments.path(document)));
+        assertEquals(SpecParseException.Kind.FAILED, e.kind());
+        assertEquals("문서에서 상세기능 명세를 찾지 못했습니다: jejudatahub-wifi-usage.hwp (" + result.skipped().get(0) + ")",
+                e.getMessage());
+    }
+
+    @Test
+    void 신호연계는_V1이_버린_주소_후보_때문에_rule_엔진과_주소가_갈린_것을_교차검증_노트로_알린다() throws Exception {
+        SpecParseResult result = parse("its-traffic-light.hwp");
+
+        assertEquals(List.of("[교차검증] 주소가 rule 엔진과 다름: "
+                        + "rule http://apis.data.go.kr/6500000/trafficLightService4/trafficLightList4, "
+                        + "llm http://apis.data.go.kr/6500000/trafficLightService4/trafficLightList"),
+                crossCheckNotes(result.apis().get(0).ir()));
+        assertTrue(result.apis().get(0).ir().get("metadata").get("manualReviewRequired").asBoolean());
+    }
+
+    @Test
+    void 선관위는_예제를_따라_고른_성공코드가_rule_엔진과_다른_것을_교차검증_노트로_알린다() throws Exception {
+        SpecParseResult result = parse("nec-ballot-counting-place.hwpx");
+
+        assertEquals("INFO-00", result.apis().get(0).ir().get("api").get("errorSpec").get("successResultCode").asText());
+        assertEquals(List.of("[교차검증] 성공코드가 rule 엔진과 다름: rule 00, llm INFO-00"),
+                crossCheckNotes(result.apis().get(0).ir()));
+    }
+
+    @Test
+    void 기상청은_녹화가_담지_않은_오퍼레이션을_rule_엔진만_찾았다고_경고한다() throws Exception {
+        String document = "kma-mid-forecast.docx";
+        String sourceFile = TestDocuments.path(document).getFileName().toString();
+
+        parse(document);
+
+        assertEquals(List.of(
+                sourceFile + ": rule 엔진만 찾은 오퍼레이션: 중기육상예보조회 (http://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst)",
+                sourceFile + ": rule 엔진만 찾은 오퍼레이션: 중기기온조회 (http://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa)",
+                sourceFile + ": rule 엔진만 찾은 오퍼레이션: 중기해상예보조회 (http://apis.data.go.kr/1360000/MidFcstInfoService/getMidSeaFcst)"),
+                warnings);
+    }
+
+    @Test
+    void 결과_캐시를_쓰면_두_번째_변환은_부르지_않고_같은_IR을_낸다() throws Exception {
+        String document = "msrstn-info.docx";
+        RecordedLlmClient client = RecordedLlmClient.of(TestDocuments.PROVIDER, document);
+        LlmSpecParser.Options options = options().withCache(ExtractionCache.at(tempDir.resolve("cache")));
+
+        SpecParseResult first = new LlmSpecParser(client, TestDocuments.PROVIDER, MODEL, EFFORT, options)
+                .parse(TestDocuments.path(document));
+        SpecParseResult second = new LlmSpecParser(client, TestDocuments.PROVIDER, MODEL, EFFORT, options)
+                .parse(TestDocuments.path(document));
+
+        assertEquals(1, client.requests().size());
+        assertFalse(first.engine().cacheUsed());
+        assertTrue(second.engine().cacheUsed());
+        assertEquals(TokenUsage.NONE, second.engine().tokenUsage());
+        assertEquals(3, second.apis().size());
+        for (int i = 0; i < first.apis().size(); i++) {
+            assertEquals(withoutParsedAt(first.apis().get(i).ir()), withoutParsedAt(second.apis().get(i).ir()));
+        }
+    }
+
+    private SpecParseResult parse(String document) throws Exception {
+        return parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document)).parse(TestDocuments.path(document));
+    }
+
+    private LlmSpecParser parser(RecordedLlmClient client) {
+        return new LlmSpecParser(client, TestDocuments.PROVIDER, MODEL, EFFORT, options());
+    }
+
+    private LlmSpecParser.Options options() {
+        return LlmSpecParser.Options.defaults().withCache(ExtractionCache.disabled()).withWarnings(warnings::add);
+    }
+
+    private static TokenUsage tokens(LlmResponse.Usage usage) {
+        return new TokenUsage(usage.inputTokens(), usage.cacheReadInputTokens(), usage.cacheWriteInputTokens(),
+                usage.outputTokens());
+    }
+
+    private static List<String> crossCheckNotes(ObjectNode ir) {
+        List<String> notes = new ArrayList<>();
+        ir.get("metadata").get("reviewNotes").forEach(note -> {
+            if (note.asText().startsWith("[교차검증]")) {
+                notes.add(note.asText());
+            }
+        });
+        return notes;
+    }
+
+    private static ObjectNode withoutParsedAt(ObjectNode ir) {
+        ObjectNode copy = ir.deepCopy();
+        ((ObjectNode) copy.get("metadata")).remove("parsedAt");
+        return copy;
+    }
+}

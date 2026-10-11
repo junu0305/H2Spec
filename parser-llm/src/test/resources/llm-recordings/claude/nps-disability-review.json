@@ -1,0 +1,76 @@
+{
+  "serviceName": "장애연금심사현황",
+  "provider": "국민연금공단",
+  "operations": [
+    {
+      "operationName": "getJgmtSttusInfoSearchV2",
+      "title": "심사현황정보조회",
+      "description": "국민연금 지사코드, 자료생성년월을 통해 지사별 장애연금심사 결정 현황 등을 조회하는 심사현황 정보조회 기능",
+      "urlCandidates": {
+        "callBackUrl": "",
+        "tableUrl": "",
+        "urlLine": "",
+        "requestExampleUrl": "http://apis.data.go.kr/B552015/NpsLsnAnntyJgmtInfoInqireServiceV2/getJgmtSttusInfoSearchV2?startDataCrtYm=201710&endDataCrtYm=201711&jgmtAcptBrofCd=1112&dataType=json&pageNo=1&numOfRows=10&serviceKey=서비스인증키",
+        "serviceUrl": "http://apis.data.go.kr/B552015/NpsLsnAnntyJgmtInfoInqireServiceV2"
+      },
+      "httpMethod": "GET",
+      "responseFormat": "BOTH",
+      "defaultResponseFormat": "XML",
+      "formatParameter": "dataType",
+      "auth": {"kind": "SERVICE_KEY_QUERY", "parameterName": "serviceKey"},
+      "requestParameters": [
+        {"name": "startDataCrtYm", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "응답 메시지의 자료생성년월(dataCrtYm) 기준", "example": "201710", "defaultValue": "", "common": false},
+        {"name": "endDataCrtYm", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "응답 메시지의 자료생성년월(dataCrtYm) 기준", "example": "201711", "defaultValue": "", "common": false},
+        {"name": "jgmtAcptBrofCd", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "심사접수지사코드 (※별첨 지사코드 참고)", "example": "1112", "defaultValue": "", "common": false},
+        {"name": "dataType", "location": "QUERY", "type": "STRING", "required": "OPTIONAL",
+         "description": "xml 또는 json 기본값: xml", "example": "json", "defaultValue": "xml", "common": false},
+        {"name": "pageNo", "location": "QUERY", "type": "INTEGER", "required": "OPTIONAL",
+         "description": "페이지번호 기본값: 1", "example": "1", "defaultValue": "1", "common": false},
+        {"name": "numOfRows", "location": "QUERY", "type": "INTEGER", "required": "OPTIONAL",
+         "description": "한 페이지 결과 수 기본값: 10", "example": "10", "defaultValue": "10", "common": false},
+        {"name": "serviceKey", "location": "QUERY", "type": "STRING", "required": "REQUIRED",
+         "description": "공공데이터포털에서 발급받은 인증키", "example": "서비스인증키", "defaultValue": "", "common": false}
+      ],
+      "responseStructure": "EXAMPLE",
+      "responseExampleFormat": "JSON",
+      "responseFields": [
+        {"path": "response.header.resultCode", "type": "STRING", "description": "결과코드",
+         "sample": "00", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.header.resultMsg", "type": "STRING", "description": "결과메시지",
+         "sample": "NORMAL_CODE", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].casRsltRltnCnt", "type": "INTEGER", "description": "인과관계인원수",
+         "sample": "0", "pathSource": "FIELD_TABLE", "common": false},
+        {"path": "response.body.items.item[].casRsltnCnt", "type": "INTEGER", "description": "인과관계인원수",
+         "sample": "0", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].dataCrtYm", "type": "STRING", "description": "자료생성년월",
+         "sample": "201710", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].jgmtAcptBrofCd", "type": "STRING", "description": "심사접수지사코드",
+         "sample": "1123", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].lsnCnfmMpsbCnt", "type": "INTEGER", "description": "확인불가인원수",
+         "sample": "0", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].lsnDg1Cnt", "type": "INTEGER", "description": "1급인원수",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.items.item[].lsnQlfcLackCnt", "type": "INTEGER", "description": "자격미달인원수",
+         "sample": "0", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.pageNo", "type": "INTEGER", "description": "페이지번호",
+         "sample": "1", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.numOfRows", "type": "INTEGER", "description": "한 페이지 결과 수",
+         "sample": "10", "pathSource": "RESPONSE_EXAMPLE", "common": false},
+        {"path": "response.body.totalCount", "type": "INTEGER", "description": "데이터 총 개수",
+         "sample": "2", "pathSource": "RESPONSE_EXAMPLE", "common": false}
+      ],
+      "resultCode": {"fieldName": "resultCode", "successCodes": [
+        {"code": "00", "source": "RESPONSE_EXAMPLE"}
+      ]},
+      "errorCodes": [],
+      "evidence": ["T27", "T31", "T33", "T36", "T39"],
+      "uncertain": ["응답 예제가 JSON뿐이라 IR 응답 형식(XML)이 아닌 JSON 예제의 구조를 따랐다",
+                    "응답 필드 표의 casRsltRltnCnt가 응답 예제에는 casRsltnCnt로 적혀 있다"],
+      "unsupported": []
+    }
+  ],
+  "documentNotes": []
+}
