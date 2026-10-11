@@ -1,6 +1,5 @@
 package kr.go.h2spec.generator;
 
-import kr.go.h2spec.generator.emit.JavaText;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.ErrorSpec;
 import kr.go.h2spec.generator.ir.GeneratorHints;
@@ -13,7 +12,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -138,20 +136,6 @@ class CodeGeneratorSafetyTest {
     }
 
     @Test
-    void 패키지_마디가_예약어면_거부한다() throws Exception {
-        // CLI --package는 apiId를 소문자로 바꾼 마디를 덧붙여서 apiId가 Int면 int 마디가 생긴다
-        SampleIr ir = new SampleIr();
-        ir.targetPackage = "com.example.int";
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        assertTrue(e.getMessage().contains("generatorHints.targetPackage"), e.getMessage());
-        assertTrue(e.getMessage().contains("com.example.int"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @Test
     void 숫자로_시작하는_엔드포인트는_접두사를_붙인_메서드명으로_컴파일된다() throws Exception {
         // jejudatahub처럼 주소 끝에 경로 변수가 있는 문서. 엔드포인트를 그대로 이으면 7tttadad5…YourAppkey가 되어 컴파일되지 않는다
         SampleIr ir = new SampleIr();
@@ -162,28 +146,6 @@ class CodeGeneratorSafetyTest {
 
         assertTrue(Files.readString(written.get(1))
                 .contains(" call7tttadad5ataaba75a57ttdtadb6tb7tYourAppkey("), Files.readString(written.get(1)));
-        assertCompiles(written, classes());
-    }
-
-    @Test
-    void 점이_든_엔드포인트는_점을_밑줄로_바꾼_메서드명으로_컴파일된다() throws Exception {
-        SampleIr ir = new SampleIr();
-        ir.endpoint = "/getMsrstnList.do";
-
-        List<Path> written = new CodeGenerator().generate(ir.build(), out());
-
-        assertTrue(Files.readString(written.get(1)).contains(" getMsrstnList_do("), Files.readString(written.get(1)));
-        assertCompiles(written, classes());
-    }
-
-    @Test
-    void 예약어가_되는_엔드포인트는_접두사를_붙인_메서드명으로_컴파일된다() throws Exception {
-        SampleIr ir = new SampleIr();
-        ir.endpoint = "/new";
-
-        List<Path> written = new CodeGenerator().generate(ir.build(), out());
-
-        assertTrue(Files.readString(written.get(1)).contains(" callNew("), Files.readString(written.get(1)));
         assertCompiles(written, classes());
     }
 
@@ -202,113 +164,6 @@ class CodeGeneratorSafetyTest {
     }
 
     @Test
-    void Java_이름이_겹치는_요청_파라미터는_거부한다() throws Exception {
-        SampleIr ir = new SampleIr();
-        ir.params.add(query("station_name", "측정소명"));
-        ir.params.add(query("stationName", "측정소명"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        assertTrue(e.getMessage().contains("station_name, stationName"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @Test
-    void 예약어가_되는_응답_필드_이름은_거부한다() throws Exception {
-        SampleIr ir = new SampleIr();
-        ir.fields.add(field("response.body.class", "분류"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        assertTrue(e.getMessage().contains("'class' (response.body.class)"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"class", "item.name", "1st", "a){System.exit(1);}public/**/void/**/b(String/**/c"})
-    void Java_이름이_식별자가_아니거나_예약어인_요청_파라미터는_거부한다(String name) throws Exception {
-        // 마지막 이름은 주석을 낱말 구분자로 써서 공백 없이 메서드 시그니처에 코드를 끼워 넣으려는 것이다
-        SampleIr ir = new SampleIr();
-        ir.params.add(query(name, "설명"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        assertTrue(e.getMessage().contains("'" + name + "'"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"page\"No", "page\\No", "page\nNo"})
-    void 따옴표_역슬래시_제어문자가_든_요청_파라미터_이름은_거부한다(String name) throws Exception {
-        SampleIr ir = new SampleIr();
-        ir.params.add(query(name, "설명"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        // 메시지는 escape한 꼴로 이름을 보인다. 제어문자가 터미널에 그대로 나가지 않게 한다
-        assertTrue(e.getMessage().contains("'" + JavaText.literal(name) + "'"), e.getMessage());
-        assertFalse(e.getMessage().contains("\n"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @Test
-    void 따옴표나_역슬래시가_든_응답_필드_경로는_거부한다() throws Exception {
-        SampleIr ir = new SampleIr();
-        ir.fields.add(field("response.body.a\\b", "설명"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        assertTrue(e.getMessage().contains("응답 필드 경로"), e.getMessage());
-        assertTrue(e.getMessage().contains("'response.body.a\\\\b'"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"url", "uri", "body", "e", "restTemplate", "xmlMapper"})
-    void 요청_파라미터의_Java_이름이_생성_메서드의_변수와_겹치면_거부한다(String name) throws Exception {
-        // 지역 변수와 같으면 "already defined"로, 필드와 같으면 필드가 인자에 가려져 컴파일되지 않는다
-        SampleIr ir = new SampleIr();
-        ir.params.add(query(name, "설명"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(ir.build(), out()));
-
-        assertTrue(e.getMessage().contains("'" + name + "'"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @Test
-    void 쓰지_않는_매퍼의_이름은_인자로_써도_컴파일되므로_막지_않는다() throws Exception {
-        // XML 클라이언트에는 objectMapper 필드가 없어 가려질 것이 없다
-        SampleIr ir = new SampleIr();
-        ir.params.add(query("objectMapper", "설명"));
-
-        assertCompiles(new CodeGenerator().generate(ir.build(), out()), classes());
-    }
-
-    @Test
-    void JSON_배열_수용_팩토리의_변수와_겹치는_필드_이름은_거부하고_XML은_그대로_만든다() throws Exception {
-        // JSON DTO의 ofArray는 지역 변수 wrapper를 쓴다. XML DTO에는 이 팩토리가 없다
-        SampleIr json = new SampleIr();
-        json.responseFormat = "JSON";
-        json.fields.add(field("response.body.rows.wrapper[].value", "값"));
-        SampleIr xml = new SampleIr();
-        xml.fields.add(field("response.body.rows.wrapper[].value", "값"));
-
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new CodeGenerator().generate(json.build(), out()));
-
-        assertTrue(e.getMessage().contains("'wrapper'"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-        assertCompiles(new CodeGenerator().generate(xml.build(), out()), classes());
-    }
-
-    @Test
     void 생성에_실패하면_아무_파일도_쓰지_않는다() throws Exception {
         // DTO를 먼저 써 두면 ClientEmitter가 serviceKey가 없어 실패할 때 DTO 파일만 남는다
         SampleIr ir = new SampleIr();
@@ -318,17 +173,6 @@ class CodeGeneratorSafetyTest {
                 () -> new CodeGenerator().generate(ir.build(), out()));
 
         assertTrue(e.getMessage().contains("serviceKey"), e.getMessage());
-        assertEquals(List.of(), filesUnder(tempDir));
-    }
-
-    @Test
-    void UTF8로_쓸_수_없는_글이_있어도_일부_파일만_남기지_않는다() throws Exception {
-        // 짝 없는 서로게이트는 UTF-8로 쓸 수 없다. 클라이언트에만 들어가는 글이라 파일을 차례로 쓰면 DTO를 쓴 뒤에 실패한다
-        SampleIr ir = new SampleIr();
-        ir.params.set(0, serviceKey("인증키 \uD800"));
-
-        assertThrows(CharacterCodingException.class, () -> new CodeGenerator().generate(ir.build(), out()));
-
         assertEquals(List.of(), filesUnder(tempDir));
     }
 

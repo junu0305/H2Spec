@@ -68,8 +68,4 @@ final class ScriptedLlmClient implements LlmClient {
                 new LlmResponse.Usage(USAGE.inputTokens(), 0, 0, outputTokens, 0), LlmResponse.Finish.TRUNCATED);
     }
 
-    /** 회사가 거절한 응답 */
-    static LlmResponse refused() {
-        return new LlmResponse("", MODEL, USAGE, LlmResponse.Finish.REFUSED);
-    }
 }

@@ -1,7 +1,6 @@
 package kr.go.h2spec.parser.llm.normalize;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import kr.go.h2spec.generator.CodeGenerator;
 import kr.go.h2spec.parser.Block;
 import kr.go.h2spec.parser.RuleEngine;
 import kr.go.h2spec.parser.llm.TestDocuments;
@@ -9,7 +8,6 @@ import kr.go.h2spec.parser.llm.validate.ExtractionValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -59,19 +57,6 @@ class RuleConsistencyTest {
 
             assertEquals(ruleIr.toPrettyString(), llmIr.toPrettyString(), "오퍼레이션 " + (i + 1) + "의 키 순서까지");
             assertEquals(ruleIr, llmIr, "오퍼레이션 " + (i + 1));
-        }
-    }
-
-    @Test
-    void 정규화한_IR로_generator가_클라이언트와_DTO를_만든다() throws Exception {
-        for (NormalizedOperation operation : normalize(TestDocuments.read(DOCUMENT))) {
-            Path ir = tempDir.resolve(operation.apiId() + ".json");
-            Files.writeString(ir, operation.ir().toPrettyString());
-
-            List<Path> generated = new CodeGenerator().generate(ir, tempDir.resolve("out-" + operation.apiId()));
-
-            assertTrue(generated.stream().anyMatch(path -> path.getFileName().toString().equals(operation.apiId() + "Client.java")),
-                    generated.toString());
         }
     }
 

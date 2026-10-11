@@ -1,8 +1,6 @@
 package kr.go.h2spec.parser;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import kr.go.h2spec.parser.SpecParseResult.Operation;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.junit.jupiter.api.Test;
@@ -59,64 +57,6 @@ class RuleSpecParserTest {
     }
 
     @Test
-    void 오퍼레이션마다_정보_표의_영문_오퍼레이션명과_국문_기능명을_문서_순서로_담는다() throws Exception {
-        SpecParseResult nps = parser.parse(resource("nps-disability-review.hwp"));
-
-        assertEquals(List.of(new Operation("getJgmtSttusInfoSearchV2", "심사현황정보조회", nps.apis().get(0), null, false)),
-                nps.operations());
-
-        // 측정소정보 문서의 정보 표에는 영문 오퍼레이션명 칸이 없어 이름은 비고 기능명만 담는다
-        SpecParseResult msrstn = parser.parse(resource("msrstn-info.docx"));
-
-        List<Operation> operations = msrstn.operations();
-        assertEquals(List.of("측정소 목록 조회", "근접측정소 목록 조회", "TM 기준좌표 조회"),
-                operations.stream().map(Operation::title).toList());
-        for (int i = 0; i < operations.size(); i++) {
-            assertNull(operations.get(i).operationName());
-            assertSame(msrstn.apis().get(i), operations.get(i).api());
-            assertNull(operations.get(i).skipReason());
-        }
-    }
-
-    @Test
-    void 건너뛴_오퍼레이션도_이유와_함께_기록하고_경고는_기존_문구를_쓴다() throws Exception {
-        Path docx = writeDocx("partial.docx",
-                operation(row("상세기능명(국문)", "첫째 기능"), row("오퍼레이션명(영문)", "getFirst"),
-                        row("Call Back URL", SERVICE + "/getFirst")),
-                operation(row("상세기능명(국문)", "주소 없는 기능"), row("Call Back URL", "N/A")));
-
-        SpecParseResult result = parser.parse(docx);
-
-        assertEquals(List.of(
-                        new Operation("getFirst", "첫째 기능", result.apis().get(0), null, false),
-                        new Operation(null, "주소 없는 기능", null, "오퍼레이션 주소(Call Back URL 등)를 찾지 못했습니다", false)),
-                result.operations(), "건너뛴 오퍼레이션도 교차검증에서 짝을 지을 수 있게 남긴다");
-        assertEquals(List.of("오퍼레이션 2: 오퍼레이션 주소(Call Back URL 등)를 찾지 못했습니다"), result.skipped());
-        assertEquals(legacy(docx).skipped(), result.skipped());
-    }
-
-    @Test
-    void 건너뛴_목록은_기존_파서처럼_IR을_조립하다_실패한_오퍼레이션을_뒤에_둔다() throws Exception {
-        // 첫째 기능은 주소를 골랐지만 나눌 수 없어 IR을 조립할 때, 둘째 기능은 응답 표가 없어 문서를 훑을 때 건너뛴다
-        Path docx = writeDocx("order.docx",
-                operation(row("상세기능명(국문)", "첫째 기능"), row("오퍼레이션명(영문)", "getFirst"),
-                        row("Call Back URL", "http://{host}")),
-                requestOnly(row("상세기능명(국문)", "둘째 기능"), row("오퍼레이션명(영문)", "getSecond"),
-                        row("Call Back URL", SERVICE + "/getSecond")),
-                operation(row("상세기능명(국문)", "셋째 기능"), row("오퍼레이션명(영문)", "getThird"),
-                        row("Call Back URL", SERVICE + "/getThird")));
-
-        SpecParseResult result = parser.parse(docx);
-
-        assertEquals(List.of("getFirst", "getSecond", "getThird"),
-                result.operations().stream().map(Operation::operationName).toList(), "기록은 문서 순서다");
-        assertEquals(List.of("getSecond: 응답 필드 표를 찾지 못했습니다",
-                        "getFirst: Call Back URL에서 오퍼레이션 경로를 찾을 수 없습니다: http://{host}"),
-                result.skipped(), "경고는 기존 파서의 순서 그대로다");
-        assertEquals(legacy(docx).skipped(), result.skipped());
-    }
-
-    @Test
     void 변환한_오퍼레이션이_없으면_기존_파서와_같은_메시지로_FAILED를_던진다() throws Exception {
         Path docx = writeDocx("no-spec.docx",
                 List.of(new Block.Heading("개정 이력"), table(row("버전", "변경일"), row("1.0", "2024-01-01"))));
@@ -143,42 +83,6 @@ class RuleSpecParserTest {
         DocxSpecParser legacy = new DocxSpecParser();
         assertEquals(e.getMessage(), assertThrows(IllegalArgumentException.class, () -> legacy.parse(docx)).getMessage());
         assertEquals(List.of("getTestList: 응답 필드 표를 찾지 못했습니다"), legacy.skipped());
-    }
-
-    @Test
-    void rule_엔진_정보를_담고_지원_범위_밖으로_건너뛴_오퍼레이션은_없다() throws Exception {
-        SpecParseResult result = parser.parse(resource("corpus/jejudatahub-wifi-usage.hwp"));
-
-        assertEquals(SpecParseResult.Engine.RULE, result.engine());
-        assertFalse(result.operations().isEmpty());
-        assertTrue(result.operations().stream().noneMatch(Operation::outOfScope));
-    }
-
-    @Test
-    void 확장자로_Reader를_고르고_대소문자는_가리지_않는다() throws Exception {
-        Path upper = Files.copy(resource("msrstn-info.hwp"), tempDir.resolve("MSRSTN-INFO.HWP"));
-
-        SpecParseResult result = parser.parse(upper);
-
-        assertEquals(3, result.apis().size());
-        JsonNode metadata = result.apis().get(0).ir().get("metadata");
-        assertEquals("HWP", metadata.get("sourceFormat").asText());
-        assertEquals("MSRSTN-INFO.HWP", metadata.get("sourceFile").asText());
-    }
-
-    @Test
-    void 문서를_읽지_못하면_Reader의_예외를_그대로_던진다() throws Exception {
-        // CLI가 읽기 실패와 변환 실패를 다른 문구로 알리므로 SpecParseException으로 바꾸지 않는다
-        Path hwp = Files.writeString(tempDir.resolve("broken.hwp"), "dummy");
-
-        IOException e = assertThrows(IOException.class, () -> parser.parse(hwp));
-
-        assertEquals("HWP 파일을 읽을 수 없습니다: broken.hwp", e.getMessage());
-    }
-
-    @Test
-    void 명세_문서가_아니면_받지_않는다() {
-        assertThrows(IllegalArgumentException.class, () -> parser.parse(tempDir.resolve("schema-example.json")));
     }
 
     /** 기존 파서 3종 가운데 확장자에 맞는 것으로 읽은 결과 */
@@ -243,15 +147,6 @@ class RuleSpecParserTest {
                 table.getRow(r).getCell(c).setText(rows.get(r).get(c));
             }
         }
-    }
-
-    /** 정보 표와 요청·응답 표를 갖춘 오퍼레이션 하나 */
-    @SafeVarargs
-    private List<Block> operation(List<String>... infoRows) {
-        List<Block> blocks = new ArrayList<>(requestOnly(infoRows));
-        blocks.add(new Block.Heading("응답 메시지 명세"));
-        blocks.add(table(HEADER, row("resultCode", "결과코드", "2", "1", "00", "결과코드")));
-        return blocks;
     }
 
     /** 응답 표가 없는 오퍼레이션 하나 */

@@ -50,12 +50,6 @@ public final class LlmFixtures {
         return parameter(name, Location.QUERY, LlmValueType.STRING, Requirement.OPTIONAL, "", "", false);
     }
 
-    /** 공통 구간에서 온 선택 쿼리 파라미터 */
-    public static LlmRequestParameter commonQuery(String name, String description) {
-        return new LlmRequestParameter(name, Location.QUERY, LlmValueType.STRING, Requirement.OPTIONAL, description,
-                "", "", true);
-    }
-
     public static LlmRequestParameter parameter(String name, Location location, LlmValueType type,
                                                 Requirement required, String example, String defaultValue,
                                                 boolean common) {
@@ -110,35 +104,6 @@ public final class LlmFixtures {
         private OperationBuilder() {
         }
 
-        /** 픽스처에서 읽은 오퍼레이션을 바꿔 쓸 때 */
-        public static OperationBuilder from(LlmOperation operation) {
-            OperationBuilder builder = new OperationBuilder();
-            builder.operationName = operation.operationName();
-            builder.title = operation.title();
-            builder.description = operation.description();
-            builder.callBackUrl = operation.urlCandidates().callBackUrl();
-            builder.tableUrl = operation.urlCandidates().tableUrl();
-            builder.urlLine = operation.urlCandidates().urlLine();
-            builder.requestExampleUrl = operation.urlCandidates().requestExampleUrl();
-            builder.serviceUrl = operation.urlCandidates().serviceUrl();
-            builder.httpMethod = operation.httpMethod();
-            builder.responseFormat = operation.responseFormat();
-            builder.defaultResponseFormat = operation.defaultResponseFormat();
-            builder.formatParameter = operation.formatParameter();
-            builder.auth = operation.auth();
-            builder.requestParameters = new ArrayList<>(operation.requestParameters());
-            builder.responseStructure = operation.responseStructure();
-            builder.responseExampleFormat = operation.responseExampleFormat();
-            builder.responseFields = new ArrayList<>(operation.responseFields());
-            builder.resultCodeField = operation.resultCode().fieldName();
-            builder.successCodes = new ArrayList<>(operation.resultCode().successCodes());
-            builder.errorCodes = new ArrayList<>(operation.errorCodes());
-            builder.evidence = new ArrayList<>(operation.evidence());
-            builder.uncertain = new ArrayList<>(operation.uncertain());
-            builder.unsupported = new ArrayList<>(operation.unsupported());
-            return builder;
-        }
-
         public OperationBuilder name(String operationName) {
             this.operationName = operationName;
             return this;
@@ -176,11 +141,6 @@ public final class LlmFixtures {
 
         public OperationBuilder serviceUrl(String serviceUrl) {
             this.serviceUrl = serviceUrl;
-            return this;
-        }
-
-        public OperationBuilder method(HttpMethod httpMethod) {
-            this.httpMethod = httpMethod;
             return this;
         }
 
@@ -222,11 +182,6 @@ public final class LlmFixtures {
 
         public OperationBuilder fields(LlmResponseField... fields) {
             this.responseFields = new ArrayList<>(List.of(fields));
-            return this;
-        }
-
-        public OperationBuilder addField(LlmResponseField field) {
-            this.responseFields.add(field);
             return this;
         }
 

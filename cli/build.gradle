@@ -19,9 +19,6 @@ application {
 }
 
 tasks.named('test') {
-    // --engine llm 전체 흐름 테스트는 parser-llm의 녹화 응답 그 자체를 재생한다. 한쪽만 고쳐지지 않게 복사하지 않고 저장소 루트에서 읽는다
-    systemProperty 'h2spec.repoRoot', rootProject.projectDir.absolutePath
-    inputs.dir("$rootDir/parser-llm/src/test/resources/llm-recordings").withPropertyName('llmRecordings')
     // 테스트가 --cache-dir을 빠뜨려도 llm 엔진의 기본 캐시 위치가 사용자의 ~/.cache가 아니라 빌드 디렉터리가 되게 한다
     environment 'XDG_CACHE_HOME', layout.buildDirectory.dir('test-cache').get().asFile.absolutePath
 }
