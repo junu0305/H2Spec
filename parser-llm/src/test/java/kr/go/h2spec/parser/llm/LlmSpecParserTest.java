@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.parser.Block;
+import kr.go.h2spec.parser.ParsedApi;
 import kr.go.h2spec.parser.SpecParseException;
 import kr.go.h2spec.parser.SpecParseResult;
 import kr.go.h2spec.parser.SpecParseResult.Engine;
@@ -44,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * llm 엔진의 조립(1-7)을 본다. 문서는 {@link SampleDocument}의 작은 표준 기술문서이고, 회사 대신 정해 둔 응답을 돌려주는
+ * llm 엔진의 조립을 본다. 문서는 {@link SampleDocument}의 작은 표준 기술문서이고, 회사 대신 정해 둔 응답을 돌려주는
  * {@link ScriptedLlmClient}를 쓴다. 실제 문서와 녹화로 끝까지 돌리는 것은 {@link RecordedFlowTest}가 본다.
  */
 class LlmSpecParserTest {
@@ -62,8 +63,6 @@ class LlmSpecParserTest {
     Path tempDir;
 
     private final List<String> warnings = new ArrayList<>();
-
-    // ---- 요청 ----
 
     // ---- 결과 ----
 
@@ -106,10 +105,10 @@ class LlmSpecParserTest {
         assertEquals(List.of(), parser(client, options()).extract(document).operations());
     }
 
-    // ---- 실패 처리 (설계 7.3) ----
+    // ---- 실패 처리 ----
 
     @ParameterizedTest
-    @CsvSource({"AUTH, AUTH", "RATE_LIMITED, RETRYABLE", "UNAVAILABLE, RETRYABLE", "BAD_REQUEST, FAILED"})
+    @CsvSource({"AUTH, AUTH", "SETTINGS, SETTINGS", "RATE_LIMITED, RETRYABLE", "UNAVAILABLE, RETRYABLE", "BAD_REQUEST, FAILED"})
     void 호출_실패를_CLI가_가르는_실패_종류로_바꾸고_다시_부르지_않는다(LlmException.Kind kind, SpecParseException.Kind expected) {
         LlmException failure = new LlmException(kind, "Claude API 오류 (HTTP 4xx): 테스트 오류");
         ScriptedLlmClient client = new ScriptedLlmClient().fail(failure);
@@ -126,7 +125,7 @@ class LlmSpecParserTest {
     }
 
     @Test
-    void 출력이_잘리면_그_문서를_실패로_알리고_잘림_표시를_남겨_같은_요청은_다시_부르지_않는다() throws Exception {
+    void 잘린_응답에_다_적힌_오퍼레이션이_없으면_실패로_알리고_잘린_응답을_남겨_같은_요청은_다시_부르지_않는다() throws Exception {
         ExtractionCache cache = ExtractionCache.at(tempDir.resolve("cache"));
         ScriptedLlmClient client = new ScriptedLlmClient().reply(truncated(128_000));
 
@@ -135,15 +134,15 @@ class LlmSpecParserTest {
 
         assertEquals(SpecParseException.Kind.FAILED, e.kind());
         assertEquals("LLM 출력이 출력 한도 128000 토큰에 걸려 잘렸습니다 (sample.docx, 출력 128000 토큰, thinking 포함). "
-                + "나눠 부르기가 들어오기 전에는 출력이 잘리는 문서를 llm 엔진으로 변환하지 못합니다", e.getMessage());
+                + "다 적힌 오퍼레이션이 없어 나눠 부를 수 없습니다", e.getMessage());
         assertEquals(Optional.of(new Engine("llm", PROVIDER, MODEL, EFFORT, false, new TokenUsage(1_000, 0, 0, 128_000))),
                 e.engine(), "잘린 출력도 과금된다");
 
         SpecParseException again = assertThrows(SpecParseException.class,
                 () -> parser(client, options().withCache(cache)).extract(BLOCKS, FILE, "DOCX"));
-        assertEquals(1, client.calls(), "잘림 표시가 있으면 다시 부르지(과금하지) 않는다");
+        assertEquals(1, client.calls(), "잘린 응답이 캐시에 있으면 다시 부르지(과금하지) 않는다");
         assertEquals(SpecParseException.Kind.FAILED, again.kind());
-        assertTrue(again.getMessage().contains("결과 캐시에 잘림 표시가 있어 다시 부르지 않음"), again.getMessage());
+        assertTrue(again.getMessage().contains("결과 캐시에 잘린 응답이 있어 다시 부르지 않음"), again.getMessage());
         assertEquals(Optional.of(new Engine("llm", PROVIDER, MODEL, EFFORT, true, TokenUsage.NONE)), again.engine());
 
         // 출력 한도를 바꾸면 키가 달라져 다시 부른다
@@ -154,7 +153,69 @@ class LlmSpecParserTest {
         assertEquals(1, result.apis().size());
     }
 
-    // ---- JSON 파싱 실패 (설계 4.4) ----
+    @Test
+    void 출력이_잘리면_다_적힌_오퍼레이션을_건져_그_뒤부터_나눠_부르고_새_오퍼레이션이_없으면_끝낸다() throws Exception {
+        // 오퍼레이션 하나를 다 적고 둘째를 적다가 잘린 응답
+        String whole = json(standardOperation());
+        String cut = whole.substring(0, whole.length() - 2) + ",{\"operationName\":\"getNext";
+        ScriptedLlmClient client = new ScriptedLlmClient().reply(
+                new LlmResponse(cut, ScriptedLlmClient.MODEL, ScriptedLlmClient.USAGE, LlmResponse.Finish.TRUNCATED),
+                complete(json()));
+
+        SpecParseResult result = parser(client, options()).extract(BLOCKS, FILE, "DOCX");
+
+        assertEquals(2, client.calls());
+        LlmRequest next = client.requests().get(1);
+        assertTrue(next.cacheDocument(), "같은 문서를 다시 부르므로 문서도 프롬프트 캐시에 올린다");
+        assertEquals(client.requests().get(0).document(), next.document());
+        assertTrue(next.instruction().contains("<done_operations>\n- getMsrstnList | 측정소 목록 조회 | "), next.instruction());
+        assertEquals(List.of("MsrstnList"), result.apis().stream().map(ParsedApi::apiId).toList());
+        assertEquals("한국환경공단", result.apis().get(0).ir().get("api").get("provider").asText(), "문서 공통 값은 잘린 응답에서 건진다");
+        assertEquals(new TokenUsage(2_000, 400, 600, 8_000), result.engine().tokenUsage(), "잘린 호출도 과금된다");
+        assertEquals(List.of(FILE + ": 출력이 출력 한도에 걸려 잘려 오퍼레이션을 20개씩 나눠 불렀습니다 (나눠 부른 호출 1번, 오퍼레이션 1개)"),
+                warnings);
+    }
+
+    @Test
+    void rule_엔진이_찾은_오퍼레이션이_한_번에_적을_수보다_많으면_처음부터_나눠_부르고_같은_IR을_낸다() throws Exception {
+        // 측정소정보 문서는 오퍼레이션이 3개다. 한 번에 2개씩 나눠 부르면 2개, 1개, 0개로 세 번 부른다
+        String document = "msrstn-info.docx";
+        ObjectNode recorded = (ObjectNode) MAPPER.readTree(TestDocuments.recording(TestDocuments.PROVIDER,
+                TestDocuments.recordingName(document)));
+        ScriptedLlmClient client = new ScriptedLlmClient().reply(complete(part(recorded, 0, 2, true)),
+                complete(part(recorded, 2, 3, false)), complete(part(recorded, 3, 3, false)));
+
+        SpecParseResult split = parser(client, options().withOperationsPerCall(2)).extract(TestDocuments.path(document));
+        SpecParseResult whole = parser(new ScriptedLlmClient().reply(complete(recorded.toString())), options())
+                .extract(TestDocuments.path(document));
+
+        assertEquals(3, client.calls());
+        assertTrue(client.requests().get(0).instruction().contains("처음 2개까지만 적어라"), client.requests().get(0).instruction());
+        assertTrue(client.requests().get(1).instruction().contains("최대 2개까지"), client.requests().get(1).instruction());
+        assertEquals(List.of("MsrstnList", "NearbyMsrstnList", "TMStdrCrdnt"),
+                split.apis().stream().map(ParsedApi::apiId).toList());
+        for (int i = 0; i < whole.apis().size(); i++) {
+            assertEquals(withoutParsedAt(whole.apis().get(i).ir()), withoutParsedAt(split.apis().get(i).ir()),
+                    "나눠 불러도 한 번에 부른 것과 같은 IR을 낸다");
+        }
+    }
+
+    /** 녹화 응답에서 오퍼레이션 일부만 담은 응답. 첫 호출이 아니면 지시대로 문서 공통 값을 비운다 */
+    private static String part(ObjectNode recorded, int from, int to, boolean first) {
+        ObjectNode part = recorded.deepCopy();
+        ArrayNode operations = part.putArray("operations");
+        for (int i = from; i < to; i++) {
+            operations.add(recorded.get("operations").get(i));
+        }
+        if (!first) {
+            part.put("serviceName", "").put("provider", "");
+            part.putArray("errorCodes");
+            part.putArray("documentNotes");
+        }
+        return part.toString();
+    }
+
+    // ---- JSON 파싱 실패 ----
 
     @Test
     void JSON으로_읽지_못하면_한_번_더_불러_쓰고_두_호출의_토큰을_더하며_읽힌_응답만_저장한다() throws Exception {
@@ -215,6 +276,24 @@ class LlmSpecParserTest {
     }
 
     @Test
+    void 다시_부른_응답도_결과_캐시에_남아_다음_실행은_부르지_않고_캐시에서_꺼냈다고_알린다() throws Exception {
+        ExtractionCache cache = ExtractionCache.at(tempDir.resolve("cache"));
+        String invented = json(standardOperation().fields(
+                LlmFixtures.field("result.header.resultCode", LlmResponseField.PathSource.RESPONSE_EXAMPLE)));
+        ScriptedLlmClient client = new ScriptedLlmClient().reply(complete(invented), complete(json(standardOperation())));
+        parser(client, options().withCache(cache)).extract(BLOCKS, FILE, "DOCX");
+        warnings.clear();
+
+        SpecParseResult again = parser(client, options().withCache(cache)).extract(BLOCKS, FILE, "DOCX");
+
+        assertEquals(2, client.calls(), "두 응답 모두 캐시에서 꺼낸다");
+        assertTrue(again.engine().cacheUsed());
+        assertEquals(TokenUsage.NONE, again.engine().tokenUsage());
+        assertEquals(List.of(FILE + ": 원문 대조에서 버린 항목이 있어 검증 결과를 알려 다시 부른 응답을 결과 캐시에서 꺼냈습니다 "
+                + "(통과한 오퍼레이션 0개 → 1개, 다시 부른 결과를 씀)"), warnings);
+    }
+
+    @Test
     void 다시_부른_결과가_낫지_않으면_처음_결과를_쓴다() throws Exception {
         String partial = json(standardOperation().fields(
                 LlmFixtures.field("response.header.resultCode", LlmResponseField.PathSource.RESPONSE_EXAMPLE),
@@ -230,7 +309,7 @@ class LlmSpecParserTest {
         assertTrue(warnings.get(0).endsWith("(통과한 오퍼레이션 1개 → 0개, 처음 결과를 씀)"), warnings.get(0));
     }
 
-    // ---- 결과 캐시 (설계 5.4) ----
+    // ---- 결과 캐시 ----
 
     @Test
     void 결과_캐시에_있으면_부르지_않고_캐시를_썼다고_알리며_같은_IR을_낸다() throws Exception {
@@ -247,8 +326,6 @@ class LlmSpecParserTest {
         assertEquals(withoutParsedAt(first.apis().get(0).ir()), withoutParsedAt(second.apis().get(0).ir()),
                 "같은 입력과 같은 설정에서 같은 IR을 낸다");
     }
-
-    // ---- 교차검증 (설계 5.3) ----
 
     // ---- 팩토리와 API 키 ----
 

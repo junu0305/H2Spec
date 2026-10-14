@@ -28,6 +28,7 @@ import picocli.CommandLine.Spec;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,17 +50,17 @@ public class ConvertCommand implements Callable<Integer> {
     private static final String JSON_FORMAT = "JSON";
     /** 덮어쓰기 옵션으로 바꾼 값을 IR의 reviewNotes에 남길 때 붙이는 머리말 */
     private static final String CLI_NOTE_PREFIX = "[CLI] ";
-    /** 기본 엔진. 범용 API 키가 환경에 있다는 것만으로 문서를 외부로 보내고 과금하지 않도록 모든 단계에서 rule이다 (설계 원칙 6) */
+    /** 기본 엔진. 범용 API 키가 환경에 있다는 것만으로 문서를 외부로 보내고 과금하지 않도록 rule이다 */
     private static final String RULE_ENGINE = "rule";
     private static final String LLM_ENGINE = "llm";
-    /** h2spec 전용 설정이 있을 때만 llm을 쓰는 엔진. 실패한 문서를 rule로 대신 변환하는 경로와 함께 2단계(2-4)에서 들어온다 */
+    /** h2spec 전용 설정이 있을 때만 llm을 쓰는 엔진. 실패한 문서를 rule로 대신 변환하는 경로와 함께 앞으로 들어온다 */
     private static final String AUTO_ENGINE = "auto";
-    /** --model이 없을 때 읽는 모델 환경변수 (설계 7.1). 회사는 ProviderResolver가 H2SPEC_LLM_PROVIDER로 정한다 */
+    /** --model이 없을 때 읽는 모델 환경변수. 회사는 ProviderResolver가 H2SPEC_LLM_PROVIDER로 정한다 */
     private static final String MODEL_ENVIRONMENT_VARIABLE = "H2SPEC_LLM_MODEL";
     /** --effort가 없을 때 읽는 추론 깊이 환경변수 */
     private static final String EFFORT_ENVIRONMENT_VARIABLE = "H2SPEC_LLM_EFFORT";
 
-    /** 환경변수. llm 엔진으로 변환할 문서가 있을 때만 읽는다. rule 엔진은 회사를 정하지 않고 키 환경변수도 읽지 않는다 (설계 7.1) */
+    /** 환경변수. llm 엔진으로 변환할 문서가 있을 때만 읽는다. rule 엔진은 회사를 정하지 않고 키 환경변수도 읽지 않는다 */
     private final Supplier<Map<String, String>> environment;
     /** llm 엔진에 쓸 수 있는 회사 */
     private final List<LlmProviderFactory> providers;
@@ -150,7 +151,7 @@ public class ConvertCommand implements Callable<Integer> {
             return 1;
         }
         if (AUTO_ENGINE.equalsIgnoreCase(engine)) {
-            // 실패한 문서를 rule로 대신 변환하는 경로(설계 7.3)가 아직 없어, 받아 두면 rule이나 llm 한쪽으로 사용자가 모르게 바뀐다
+            // 실패한 문서를 rule로 대신 변환하는 경로가 아직 없어, 받아 두면 rule이나 llm 한쪽으로 사용자가 모르게 바뀐다
             err("--engine auto는 아직 지원하지 않습니다. rule 또는 llm을 쓰세요");
             return 1;
         }
@@ -173,7 +174,7 @@ public class ConvertCommand implements Callable<Integer> {
         }
     }
 
-    /** 디렉터리 안의 모든 명세 파일(DOCX, IR JSON)을 찾아 각각 변환한다. */
+    /** 디렉터리 안의 모든 명세 파일(DOCX/HWP/HWPX, IR JSON)을 찾아 각각 변환한다. */
     private int convertDirectory() {
         List<Path> targets;
         try (var files = Files.list(input)) {
@@ -206,7 +207,7 @@ public class ConvertCommand implements Callable<Integer> {
                 return abort(e, targets.size() - i - 1);
             }
         }
-        // llm 엔진은 배치 전체에 쓴 토큰도 알린다 (설계 7.4). LLM이 답한 뒤에 실패한 문서의 토큰도 과금되므로 합계에 든다
+        // llm 엔진은 배치 전체에 쓴 토큰도 알린다. LLM이 답한 뒤에 실패한 문서의 토큰도 과금되므로 합계에 든다
         spec.commandLine().getOut().println(
                 String.format("%d개 중 %d개 변환 성공, %d개 실패", targets.size(), targets.size() - failureCount, failureCount)
                         + (llmTokens == null ? "" : " · LLM 토큰 합계 " + tokens(llmTokens)));
@@ -214,10 +215,10 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     /**
-     * 명세 문서를 변환할 엔진을 정한다. llm 엔진은 파일을 하나라도 변환하기 전에 회사와 키를 정한다(설계 7.2).
+     * 명세 문서를 변환할 엔진을 정한다. llm 엔진은 파일을 하나라도 변환하기 전에 회사와 키를 정한다.
      * 키가 없다는 것을 첫 문서에서야 알면 그 앞의 파일만 변환된 채 끝나기 때문이다.
      * rule 엔진과, 변환할 명세 문서 없이 IR JSON만 있는 실행은 회사를 정하지 않고 환경변수도 읽지 않는다.
-     * IR JSON은 엔진과 무관하게 바로 생성하므로(설계 7.1) LLM 키가 없어도 지금처럼 변환돼야 한다.
+     * IR JSON은 엔진과 무관하게 바로 생성하므로 LLM 키가 없어도 변환돼야 한다.
      *
      * @param targets 이번 실행에서 변환할 파일
      * @return 변환을 시작해도 되면 true. 회사를 정하지 못했으면 이유를 알리고 false
@@ -228,17 +229,19 @@ public class ConvertCommand implements Callable<Integer> {
         }
         Map<String, String> env = environment.get();
         try {
-            // llm은 회사를 정하지 못하면 rule로 가지 않고 예외로 끝나므로(설계 7.2의 5번) 결과는 늘 UseLlm이다
+            // llm은 회사를 정하지 못하면 rule로 가지 않고 예외로 끝나므로 결과는 늘 UseLlm이다
             ProviderResolver.Resolution.UseLlm resolved = (ProviderResolver.Resolution.UseLlm)
                     new ProviderResolver(providers, env).resolve(ProviderResolver.Engine.LLM, provider);
             LlmProviderFactory chosen = resolved.provider();
             LlmSettings settings = LlmSettings.of(modelOf(chosen, env), effortOf(chosen, env), resolved.apiKey())
                     .withWorkspaceId(workspaceOf(chosen, env));
-            specParser = llmParsers.create(chosen, settings, llmOptions());
+            LlmSpecParser.Options options = llmOptions();
+            specParser = llmParsers.create(chosen, settings, options);
             llmTokens = TokenUsage.NONE;
-            // 문서를 외부로 보내는 것은 사용자가 켠 일이지만, 무엇을 어디로 보내는지는 실행마다 한 번 알린다 (설계 10장)
+            // 문서를 외부로 보내는 것은 사용자가 켠 일이지만, 무엇을 어디로 보내는지는 실행마다 한 번 알린다
             err("문서 내용을 " + chosen.id() + "(" + settings.model() + ", 추론 깊이 " + settings.effort()
                     + ")로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.");
+            pruneCache(options.cache());
             return true;
         } catch (IllegalArgumentException e) {
             // 회사를 정하지 못했거나(ProviderResolutionException) 키·모델이 설정에 맞지 않을 때다. 어느 메시지에도 키 값은 없다
@@ -247,7 +250,7 @@ public class ConvertCommand implements Callable<Integer> {
         }
     }
 
-    /** --model, H2SPEC_LLM_MODEL, 회사별 기본 모델 순으로 정한다 (설계 7.1). 빈 값은 주지 않은 것으로 본다 */
+    /** --model, H2SPEC_LLM_MODEL, 회사별 기본 모델 순으로 정한다. 빈 값은 주지 않은 것으로 본다 */
     private String modelOf(LlmProviderFactory chosen, Map<String, String> env) {
         if (model != null && !model.isBlank()) {
             return model.strip();
@@ -292,6 +295,21 @@ public class ConvertCommand implements Callable<Integer> {
         return null;
     }
 
+    /**
+     * 결과 캐시에서 오래 쓰지 않은 응답을 지운다. 프롬프트나 모델이 바뀌면 이전 응답은 다시 쓰이지 않고 쌓이기만 해서, llm 엔진으로
+     * 변환하는 실행마다 한 번 정리한다. 정리하지 못해도 변환은 그대로 한다.
+     */
+    private void pruneCache(ExtractionCache cache) {
+        try {
+            int removed = cache.prune(ExtractionCache.DEFAULT_MAX_IDLE, Instant.now());
+            if (removed > 0) {
+                err("결과 캐시에서 " + ExtractionCache.DEFAULT_MAX_IDLE.toDays() + "일 넘게 쓰지 않은 응답 " + removed + "개를 지웠습니다");
+            }
+        } catch (IOException e) {
+            err("결과 캐시를 정리하지 못했습니다: " + e.getMessage());
+        }
+    }
+
     /** 캐시·교차검증 옵션을 llm 엔진 설정에 옮긴다. 경고는 라이브러리가 기본으로 버리므로 표준 오류로 받는다 */
     private LlmSpecParser.Options llmOptions() {
         LlmSpecParser.Options options = LlmSpecParser.Options.defaults()
@@ -305,16 +323,22 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     /**
-     * 키 오류(AUTH)로 실행을 멈춘다. 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다 (설계 7.3).
+     * 키 오류(AUTH)나 모델 이름·주소 오류(SETTINGS)로 실행을 멈춘다. 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다.
      * 변환 요약을 내지 않으므로 남은 파일을 변환하지 않았다는 것을 따로 알린다.
      */
     private int abort(SpecParseException e, int remaining) {
         e.engine().ifPresent(this::reportEngine);
         err(e.getMessage());
         if (remaining > 0) {
-            err("API 키 오류라 남은 파일 " + remaining + "개는 변환하지 않고 멈춥니다");
+            String reason = e.kind() == SpecParseException.Kind.AUTH ? "API 키 오류" : "LLM 설정 오류";
+            err(reason + "라 남은 파일 " + remaining + "개는 변환하지 않고 멈춥니다");
         }
         return 1;
+    }
+
+    /** 다른 문서도 같은 이유로 실패하는 오류. 실행 전체를 멈춘다 */
+    private static boolean stopsRun(SpecParseException e) {
+        return e.kind() == SpecParseException.Kind.AUTH || e.kind() == SpecParseException.Kind.SETTINGS;
     }
 
     private boolean isSupportedSpecFile(Path path) {
@@ -325,7 +349,8 @@ public class ConvertCommand implements Callable<Integer> {
     /**
      * 파일 하나(명세 문서 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다.
      *
-     * @throws SpecParseException 키 오류({@link SpecParseException.Kind#AUTH})일 때만. 부르는 쪽이 실행 전체를 멈춘다
+     * @throws SpecParseException 키 오류나 설정 오류({@link SpecParseException.Kind#AUTH}, {@link SpecParseException.Kind#SETTINGS})일
+     *                            때만. 부르는 쪽이 실행 전체를 멈춘다
      */
     private boolean convertFile(Path file) throws SpecParseException {
         try {
@@ -339,11 +364,11 @@ public class ConvertCommand implements Callable<Integer> {
                 return true;
             }
         } catch (SpecParseException e) {
-            if (e.kind() == SpecParseException.Kind.AUTH) {
+            if (stopsRun(e)) {
                 throw e;
             }
             // 429·5xx·네트워크(RETRYABLE)와 그 밖의 실패는 그 문서만 실패다. --engine llm을 고른 사용자의 뜻과 다르므로
-            // rule 엔진으로 대신 변환하지 않는다 (설계 7.3). rule 엔진은 FAILED만 낸다
+            // rule 엔진으로 대신 변환하지 않는다. rule 엔진은 FAILED만 낸다
             e.engine().ifPresent(this::reportEngine);
             err(e.getMessage());
             return false;
@@ -357,10 +382,10 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     /**
-     * llm 엔진으로 변환한 문서마다 쓴 회사·모델과 토큰 사용량을 알리고 실행 합계에 더한다 (설계 7.4).
+     * llm 엔진으로 변환한 문서마다 쓴 회사·모델과 토큰 사용량을 알리고 실행 합계에 더한다.
      * 변환에 실패한 문서도 LLM이 답한 뒤였으면(출력 잘림, 거절 등) 그 호출이 과금되므로 똑같이 알린다.
-     * 토큰 사용량은 실행마다 달라 IR에 넣지 않으므로 여기에만 남는다. rule 엔진의 출력은 지금과 같게 둔다.
-     * "캐시 사용"은 h2spec 결과 캐시(설계 5.4)에서 꺼냈다는 뜻이고, 그때는 LLM을 부르지 않아 토큰이 0이다.
+     * 토큰 사용량은 실행마다 달라 IR에 넣지 않으므로 여기에만 남는다. rule 엔진은 알리지 않는다.
+     * "캐시 사용"은 h2spec 결과 캐시에서 꺼냈다는 뜻이고, 그때는 LLM을 부르지 않아 토큰이 0이다.
      */
     private void reportEngine(SpecParseResult.Engine used) {
         if (!LLM_ENGINE.equals(used.name())) {
@@ -375,7 +400,7 @@ public class ConvertCommand implements Callable<Integer> {
     /**
      * 토큰 사용량을 "입력 N / 출력 M"으로 적는다. N은 보낸 입력 전체로, 캐시와 상관없는 입력에 회사의 프롬프트 캐시에서 읽은 입력과
      * 캐시에 쓴 입력을 더한 값이다. 프롬프트 캐시가 맞았는지에 따라 값이 흔들리지 않고 같은 문서면 같은 크기로 보인다.
-     * 어댑터가 회사마다 다른 집계(설계 6.2)를 이 세 칸으로 나눠 두므로 회사와 상관없이 같은 뜻이다.
+     * 어댑터가 회사마다 다른 집계를 이 세 칸으로 나눠 두므로 회사와 상관없이 같은 뜻이다.
      * 프롬프트 캐시에서 읽은 입력은 단가가 입력의 10분의 1이라 따로도 적는다.
      * M은 출력 단가로 과금되는 출력 전부라 thinking을 포함한다.
      */

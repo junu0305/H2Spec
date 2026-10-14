@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * generator 안전장치(설계 0-3). IR의 글로 생성 코드에 코드를 끼워 넣거나, 컴파일되지 않는 코드나
+ * generator 안전장치. IR의 글로 생성 코드에 코드를 끼워 넣거나, 컴파일되지 않는 코드나
  * 출력 디렉터리 밖의 파일을 만들 수 없는지 본다. 끼워 넣기는 무력화된 뒤 생성 코드가 실제로 컴파일되는지까지 본다.
  */
 class CodeGeneratorSafetyTest {
@@ -94,6 +94,23 @@ class CodeGeneratorSafetyTest {
                 () -> new CodeGenerator().generate(ir.build(), out()));
 
         assertTrue(e.getMessage().contains("generatorHints.responseFormatParameter.value"), e.getMessage());
+        assertEquals(List.of(), filesUnder(tempDir));
+    }
+
+    @Test
+    void 포맷_파라미터_힌트가_경로_변수나_serviceKey를_가리키면_거부한다() throws Exception {
+        SampleIr pathHint = new SampleIr();
+        pathHint.endpoint = "/getSample/{type}";
+        pathHint.params.add(new RequestParameter("type", "path", "string", true, "형식", null, null, null));
+        pathHint.formatParameter = new GeneratorHints.ResponseFormatParameter("type", "xml");
+        SampleIr keyHint = new SampleIr();
+        keyHint.formatParameter = new GeneratorHints.ResponseFormatParameter("serviceKey", "xml");
+
+        for (SampleIr ir : List.of(pathHint, keyHint)) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> new CodeGenerator().generate(ir.build(), out()));
+            assertTrue(e.getMessage().contains("serviceKey가 아닌 쿼리 파라미터여야 합니다"), e.getMessage());
+        }
         assertEquals(List.of(), filesUnder(tempDir));
     }
 

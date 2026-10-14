@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * IR이 generator를 끝까지 통과하는지 본다: IrLoader → CodeGenerator → 생성 코드 javac 컴파일 (설계 9.4의 generator 통과율).
+ * IR이 generator를 끝까지 통과하는지 본다: IrLoader → CodeGenerator → 생성 코드 javac 컴파일 (generator 통과율).
  * CLI는 생성 코드를 컴파일하지 않으므로 숫자로 시작하는 메서드 이름 같은 오류는 컴파일해야 드러난다.
  * <p>
  * 컴파일 classpath는 이 프로그램의 classpath다. build.gradle이 생성 코드가 쓰는 interceptor-core·spring-web·

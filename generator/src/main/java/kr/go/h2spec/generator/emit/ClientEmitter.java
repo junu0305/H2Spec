@@ -28,7 +28,7 @@ public class ClientEmitter {
     private static final String METHOD_NAME_PREFIX = "call";
     /**
      * interceptor-core의 PublicDataErrorDetector가 기본으로 찾는 결과코드 이름. 이 밖의 이름만 인터셉터에 넘겨서,
-     * 기본 이름만 있는 IR(rule 엔진의 IR은 모두 그렇다)은 성공코드만 넘기던 코드를 그대로 만든다.
+     * 기본 이름만 있는 IR(rule 엔진의 IR은 모두 그렇다)은 성공코드만 넘기는 코드를 만든다.
      * generator는 interceptor-core에 기대지 않아 목록을 따로 두고, 인터셉터가 실제로 이 이름을 찾는지는 테스트가 본다.
      */
     static final Set<String> BUILT_IN_RESULT_CODE_KEYS =
@@ -69,6 +69,14 @@ public class ClientEmitter {
         return sb.toString();
     }
 
+    // TODO(인증 확장): generator는 이름이 serviceKey(대소문자 무시)인 쿼리 파라미터만 인증키로 받고, 그 밖의 인증은 여기서 실패한다.
+    //   샘플 문서에서 걸리는 오퍼레이션: jeju-folksong(쿼리 authApiKey), nongsaro-eco-farming 2개(쿼리 apiKey),
+    //   jejudatahub-wifi-usage(주소 경로 {your_appkey}). 요청 헤더로 받는 키도 같은 일이다.
+    //   지금 두 엔진의 처리: rule 엔진은 authType을 늘 SERVICE_KEY_QUERY_PARAM으로 적고 IR을 만들어 코드 생성 때 이 예외로 실패하고,
+    //   llm 엔진은 IrNormalizer.authType에서 지원 범위 밖으로 미리 건너뛴다(LlmAuth로 종류와 이름은 이미 안다).
+    //   고칠 것: IR에 인증 정보(종류: 쿼리·경로·헤더, 파라미터 이름)를 담는 자리를 정하고, 여기서 그 이름·위치로 키를 넣는다.
+    //   OpenApiEmitter의 securityScheme, rule 엔진 IrAssembler의 authType, IrNormalizer의 지원 범위 판정,
+    //   llm-eval DetailMetric의 인증 방식 비교도 함께 바꾼다. 관련 자리는 "TODO(인증 확장)"으로 찾는다.
     private RequestParameter findServiceKeyParam(IrSpec ir) {
         for (RequestParameter p : ir.api().requestParameters()) {
             if (SERVICE_KEY_PARAM.equalsIgnoreCase(p.name())) {
@@ -230,7 +238,8 @@ public class ClientEmitter {
         if (isXml) {
             sb.append(INDENT).append("private final XmlMapper xmlMapper = new XmlMapper();\n");
         } else {
-                // DTO의 @JsonRootName과 짝. 공공데이터 JSON 응답은 {"response":{...}}처럼 루트를 키로 감싼다
+            // DTO의 @JsonRootName과 짝. 공공데이터 JSON 응답은 {"response":{...}}처럼 루트를 키로 감싼다
+            // TODO(루트 여럿): 루트 없는 응답이면 풀지 않아야 한다. 자세한 내용은 DtoTreeBuilder.build
             sb.append(INDENT).append("private final ObjectMapper objectMapper = new ObjectMapper()\n");
             sb.append(INDENT.repeat(3))
               .append(".enable(DeserializationFeature.UNWRAP_ROOT_VALUE);\n");

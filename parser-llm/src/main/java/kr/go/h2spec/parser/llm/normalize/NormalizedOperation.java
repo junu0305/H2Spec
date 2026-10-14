@@ -3,7 +3,7 @@ package kr.go.h2spec.parser.llm.normalize;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * 정규화한 오퍼레이션 하나. 뒤 단계가 {@code SpecParseResult}의 오퍼레이션 기록으로 옮긴다 (설계 3.4).
+ * 정규화한 오퍼레이션 하나. 뒤 단계가 {@code SpecParseResult}의 오퍼레이션 기록으로 옮긴다.
  * <ul>
  *   <li>변환함: {@code ir}이 있고 {@code skipReason}이 null이다.</li>
  *   <li>지원 범위 밖으로 건너뜀: {@code ir}과 {@code skipReason}이 함께 있고 {@code outOfScope}가 true다.

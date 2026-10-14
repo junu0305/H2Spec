@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 세트 C의 대리 지표 결과 (설계 11장 0-6). 원문 블록과 rule 엔진 결과를 패턴으로 비교해 센 휴리스틱이라 정확하지 않다.
- * 1.2의 한계 표에 규모를 붙여 llm 엔진의 근거와 3단계 항목(3-1~3-3)의 우선순위로 쓴다.
+ * 세트 C의 대리 지표 결과. 원문 블록과 rule 엔진 결과를 패턴으로 비교해 센 휴리스틱이라 정확하지 않다.
+ * rule 엔진의 한계마다 해당 문서 수를 세어, llm 엔진이 필요한 근거와 generator가 아직 못 하는 일(인증 방식, 루트 없는 JSON)의 규모를 보는 데 쓴다.
  *
  * @param directory 문서 디렉터리
  * @param documents 문서마다의 결과 (경로 순)
@@ -16,13 +16,13 @@ public record ProxyReport(String directory, List<DocumentSignals> documents) {
 
     /** 대리 지표 네 가지 */
     public enum Proxy {
-        /** (a) 3단계와 무관하게 rule 엔진의 포맷 판단이 틀리는 문서 (IrAssembler.responseFormat) */
+        /** (a) generator 확장과 무관하게 rule 엔진의 포맷 판단이 틀리는 문서 (IrAssembler.responseFormat) */
         JSON_EXAMPLE_XML_IR("(a)", "응답 예제는 JSON인데 rule IR의 responseFormat이 XML"),
-        /** (b) rule 엔진이 가정하는 표준 응답 구조와 다른 문서. 3-2(루트 없는 JSON)의 규모 */
+        /** (b) rule 엔진이 가정하는 표준 응답 구조와 다른 문서. 루트 없는 JSON 지원의 규모 */
         NON_STANDARD_STRUCTURE("(b)", "응답 예제 구조가 표준(response·header·body·items·item)과 다름"),
-        /** (c) rule 엔진의 고정 성공코드 00과 다른 문서. 3-3(결과코드 비교)의 규모 */
+        /** (c) rule 엔진의 고정 성공코드 00과 다른 문서. 성공코드를 문서에서 읽어야 하는 규모 */
         NON_00_SUCCESS_CODE("(c)", "00이 아닌 정상 코드가 적힘"),
-        /** (d) generator가 만들지 못하는 인증 방식. 3-1(인증 방식 표현)의 규모 */
+        /** (d) generator가 만들지 못하는 인증 방식. 인증 방식 표현 확장의 규모 */
         NON_SERVICE_KEY_AUTH("(d)", "serviceKey 쿼리가 아닌 인증");
 
         private final String mark;

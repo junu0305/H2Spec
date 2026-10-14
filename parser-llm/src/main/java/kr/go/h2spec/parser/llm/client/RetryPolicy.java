@@ -5,14 +5,14 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 다시 부르면 나을 수 있는 실패({@link LlmException.Kind#retryable()})를 지수 백오프로 다시 부른다 (설계 4.4).
+ * 다시 부르면 나을 수 있는 실패({@link LlmException.Kind#retryable()})를 지수 백오프로 다시 부른다.
  * <p>
  * 회사가 {@code retry-after}로 기다릴 시간을 알려 주면 그만큼 기다리고, 아니면 첫 대기부터 두 배씩 늘린다. 어느 쪽이든 상한에서 자른다.
  * 키 오류(AUTH)와 잘못된 요청(BAD_REQUEST)은 다시 불러도 결과가 같으므로 바로 던진다.
- * 대기에 흔들기(jitter)는 넣지 않는다. 한 프로세스가 같은 문서를 순서대로 부르므로(설계 4.4) 요청이 한꺼번에 몰리지 않고,
+ * 대기에 흔들기(jitter)는 넣지 않는다. 한 프로세스가 같은 문서를 순서대로 부르므로 요청이 한꺼번에 몰리지 않고,
  * 대기 시간이 정해져 있어야 테스트가 실제로 기다리지 않고 확인할 수 있다.
  * <p>
- * 회사마다 다른 것은 실패를 {@link LlmException}으로 바꾸는 일뿐이라, 재시도는 어댑터 밖에 하나만 둔다(원칙 3).
+ * 회사마다 다른 것은 실패를 {@link LlmException}으로 바꾸는 일뿐이라, 재시도는 어댑터 밖에 하나만 둔다.
  */
 public final class RetryPolicy {
 
@@ -21,7 +21,7 @@ public final class RetryPolicy {
     /** 대기 상한. {@code retry-after}가 이보다 길어도 여기서 자른다. 그래도 한도에 걸리면 남은 재시도에서 다시 기다린다 */
     public static final Duration DEFAULT_MAX_DELAY = Duration.ofMinutes(1);
 
-    /** 기다린다. 테스트는 기다리지 않고 대기 시간만 기록하는 것으로 바꾼다 */
+    /** 기다린다. 대기 시간만 기록하는 것으로 바꾸면 실제로 기다리지 않고 시험할 수 있다 */
     @FunctionalInterface
     public interface Sleeper {
 

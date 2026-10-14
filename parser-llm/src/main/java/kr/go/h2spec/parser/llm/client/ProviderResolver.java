@@ -7,16 +7,16 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * {@code --provider}·환경변수·키로 llm 엔진에 쓸 회사를 정한다 (설계 7.2).
+ * {@code --provider}·환경변수·키로 llm 엔진에 쓸 회사를 정한다.
  * <ol>
  *   <li>{@code --provider}</li>
  *   <li>{@code H2SPEC_LLM_PROVIDER}</li>
- *   <li>(llm만) 키 환경변수가 한 회사 것만 있으면 그 회사. 한 회사의 여러 키 이름(Gemini의 {@code GOOGLE_API_KEY}, {@code GEMINI_API_KEY})은 한 회사로 센다</li>
+ *   <li>(llm만) 키 환경변수가 한 회사 것만 있으면 그 회사. 한 회사의 여러 키 이름은 한 회사로 센다</li>
  *   <li>(llm만) 여러 회사 것이 있으면 오류</li>
  *   <li>정하지 못했거나 정한 회사의 키가 없으면 llm은 오류, auto는 한 줄 안내와 함께 rule로 진행</li>
  * </ol>
  * auto는 1·2번으로 회사가 정해질 때만 llm을 쓴다. {@code ANTHROPIC_API_KEY} 같은 범용 키는 다른 도구 때문에 이미 설정된 경우가 많아,
- * 키가 있다는 것만으로 문서를 외부로 보내고 과금하면 안 되기 때문이다(원칙 6). rule 엔진은 회사를 정하지 않고 키도 읽지 않으므로 이 클래스를 부르지 않는다.
+ * 키가 있다는 것만으로 문서를 외부로 보내고 과금하면 안 되기 때문이다. rule 엔진은 회사를 정하지 않고 키도 읽지 않으므로 이 클래스를 부르지 않는다.
  * <p>
  * 회사 목록과 환경변수를 생성자로 받는다. 테스트가 아직 없는 회사와 임의의 환경으로 모든 규칙을 확인할 수 있게 하기 위해서다.
  */
@@ -31,7 +31,7 @@ public final class ProviderResolver {
     public enum Engine {
         /** 사용자가 {@code --engine llm}을 골랐다. 정하지 못하면 오류다 */
         LLM,
-        /** {@code --engine auto}. h2spec 전용 설정이 있을 때만 llm을 쓰고 아니면 rule로 진행한다 */
+        /** {@code --engine auto}(CLI는 아직 받지 않는다). h2spec 전용 설정이 있을 때만 llm을 쓰고 아니면 rule로 진행한다 */
         AUTO
     }
 

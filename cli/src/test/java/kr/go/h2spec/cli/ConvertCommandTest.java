@@ -236,7 +236,7 @@ class ConvertCommandTest {
 
     @Test
     void path_파라미터가_있는_IR도_산출물로_변환한다() throws Exception {
-        // 문서 파서는 아직 in:path를 만들지 않지만 IR을 직접 입력하는 경로는 지원한다
+        // IR을 직접 입력해도 path 파라미터는 쿼리가 아니라 주소의 {이름} 자리에 들어간다
         Path ir = Path.of(getClass().getResource("/ir/path-parameter-example.json").toURI());
 
         int exit = new CommandLine(new H2SpecCli()).execute(
@@ -411,7 +411,7 @@ class ConvertCommandTest {
         int documentExit = new CommandLine(new H2SpecCli()).execute(
                 "convert", "--input", docx.toString(), "--output", fromDocument.toString(),
                 "--success-code", "99", "--format", "json", "--package", "com.example.publicdata");
-        // 옵션 없이 추출한 IR을 입력으로 주면 옵션을 생성할 때만 적용한다 (이전의 문서 변환과 같은 경로)
+        // 옵션 없이 추출한 IR을 입력으로 주면 옵션을 생성할 때만 적용한다
         int plainIrExit = new CommandLine(new H2SpecCli()).execute(
                 "convert", "--input", plainOutput.resolve("ir").toString(), "--output", fromPlainIr.toString(),
                 "--success-code", "99", "--format", "json", "--package", "com.example.publicdata");
@@ -430,7 +430,7 @@ class ConvertCommandTest {
 
     @Test
     void 덮어쓰기_옵션을_줘도_입력한_IR_JSON_파일은_고치지_않는다() throws Exception {
-        // 빌드가 커밋된 IR을 바꾸면 안 된다. 입력 IR에는 지금처럼 생성할 때만 적용한다
+        // 빌드가 커밋된 IR을 바꾸면 안 된다. 입력 IR에는 생성할 때만 적용한다
         Path inputDir = Files.createDirectories(tempDir.resolve("input"));
         Path inputIr = Files.copy(irPath(), inputDir.resolve("schema-example.json"));
         Files.copy(docPath("msrstn-info.docx"), inputDir.resolve("msrstn-info.docx"));

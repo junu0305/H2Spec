@@ -28,15 +28,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
- * 검증을 통과한 오퍼레이션을 IR로 바꾼다 (설계 5.2). IR의 모양은 rule 엔진({@code IrAssembler})과 같고,
+ * 검증을 통과한 오퍼레이션을 IR로 바꾼다. IR의 모양은 rule 엔진({@code IrAssembler})과 같고,
  * rule 엔진과 같은 규칙(주소 나누기, apiId, 게이트웨이 serviceKey, 경로 변수, 결과코드 필드, 기본값)은 {@link IrConventions}를
  * 그대로 부른다. 같은 칸에서는 엔진이 달라도 같은 IR이 나와야 생성 클래스명과 파일 경로가 바뀌지 않는다.
  * <p>
- * 지원 범위 밖(GET이 아닌 메서드, 헤더·본문 파라미터, 이름이 serviceKey가 아닌 인증키, 루트가 여럿인 응답)인 오퍼레이션도
- * 버리지 않는다. 정규화한 IR을 이유와 함께 돌려주어 교차검증과 평가가 "건너뛰기 전"의 추출 결과를 볼 수 있게 한다.
- * 지금처럼 잘못된 IR을 만들고 generator에서 실패하는 대신 이유를 알리고 건너뛰기 위해서다.
+ * 지원 범위 밖(GET이 아닌 메서드, 헤더·본문 파라미터, 이름이 serviceKey가 아닌 인증키, 루트가 여럿인 응답)인 오퍼레이션은
+ * generator에서 실패하게 두지 않고 이유를 알려 건너뛴다. 다만 버리지는 않는다. 정규화한 IR을 이유와 함께 돌려주어
+ * 교차검증과 평가가 "건너뛰기 전"의 추출 결과를 볼 수 있게 한다.
  * <p>
  * {@code reviewNotes}는 출처별로 {@code [LLM]}, {@code [검증]}, {@code [정규화]} 순으로 모은다. {@code [교차검증]}은
  * {@code CrossChecker}가 뒤에 붙인다.
@@ -44,7 +45,7 @@ import java.util.Set;
 public final class IrNormalizer {
 
     private static final String GET = "GET";
-    /** metadata의 엔진 칸과 거기 적는 이름 (설계 8장). rule 엔진은 같은 칸에 rule을 적는다 */
+    /** metadata의 엔진 칸과 거기 적는 이름. rule 엔진은 같은 칸에 rule을 적는다 */
     private static final String ENGINE_KEY = "engine";
     private static final String ENGINE = "llm";
     private static final String SERVICE_KEY_AUTH = "SERVICE_KEY_QUERY_PARAM";
@@ -60,9 +61,12 @@ public final class IrNormalizer {
     private static final String REQUIRED_UNKNOWN_NOTE = "필수 여부를 알 수 없어 선택(false)으로 둔 요청 파라미터";
     private static final String LEADING_ZERO_NOTE = "앞자리 0이 있는 숫자 값이라 string으로 둔 항목";
     private static final String STANDARD_ASSUMED_NOTE = "응답 구조를 표준 구조로 가정함";
+    /** 기본 응답 형식을 모른다고 적은 노트. 형식은 코드가 정하고 필요할 때만 알린다 */
+    private static final Pattern UNKNOWN_DEFAULT_FORMAT =
+            Pattern.compile("기본 (?:응답 )?(?:형식|포맷)[^.]*(?:밝혀|밝히지|알 수 없|적혀 있지 않|나와 있지 않|없)");
     private static final String NO_SUCCESS_CODE_NOTE = "문서에서 성공코드를 찾지 못해 00으로 둠";
     private static final String AUTH_SCOPE =
-            "generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다 (3-1 전까지)";
+            "generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final LlmMetadata llm;
@@ -142,8 +146,13 @@ public final class IrNormalizer {
         api.set("errorSpec", errorSpec(operation, validation.errorCodes(), success.code()));
 
         List<String> reviewNotes = new ArrayList<>();
-        list(source.uncertain()).forEach(text -> addLlmNote(reviewNotes, text));
-        list(extraction.documentNotes()).forEach(text -> addLlmNote(reviewNotes, text));
+        boolean standardAssumed = source.responseStructure() == null
+                || source.responseStructure() == LlmOperation.ResponseStructure.STANDARD_ASSUMED;
+        for (List<String> llmNotes : List.of(list(source.uncertain()), list(extraction.documentNotes()))) {
+            llmNotes.stream()
+                    .filter(text -> !repeatsCodeNote(LlmText.oneLine(text), standardAssumed, success, operation))
+                    .forEach(text -> addLlmNote(reviewNotes, text));
+        }
         list(source.unsupported()).forEach(text -> addLlmNote(reviewNotes, text));
         reviewNotes.addAll(operation.notes());
         if (success.note() != null) {
@@ -250,10 +259,12 @@ public final class IrNormalizer {
     }
 
     /**
-     * 인증 방식 (설계 5.2). 게이트웨이 serviceKey는 부르기 전에 보충했다. 이름이 serviceKey(대소문자 무시, KASI 문서는
+     * 인증 방식. 게이트웨이 serviceKey는 부르기 전에 보충했다. 이름이 serviceKey(대소문자 무시, KASI 문서는
      * {@code ServiceKey})인 query 파라미터가 있어야 받는다. generator는 {@code authType}을 읽지 않고 serviceKey라는 이름만
-     * 찾기 때문이다({@code ClientEmitter}). 그 밖의 인증은 3-1 전까지 지원 범위 밖이다.
+     * 찾기 때문이다({@code ClientEmitter}). 그 밖의 인증은 generator가 받지 못해 지원 범위 밖이다.
      */
+    // TODO(인증 확장): generator가 다른 인증을 받게 되면 여기서 지원 범위 밖으로 건너뛰지 않고 IR에 인증 정보를 적는다.
+    //   자세한 내용은 generator의 ClientEmitter.findServiceKeyParam
     private String authType(LlmAuth auth, ArrayNode parameters, List<String> outOfScope) {
         for (JsonNode parameter : parameters) {
             if ("query".equals(parameter.get("in").asText())
@@ -415,13 +426,14 @@ public final class IrNormalizer {
             node.put("type", type);
             node.put("description", LlmText.oneLine(field.source().description()));
             if (resultCode) {
-                // generator는 아직 읽지 않는다 (3-3)
+                // generator는 읽기만 하고 아직 쓰지 않는다
                 node.put("isResultIndicator", true);
             }
         }
+        // TODO(루트 여럿): generator가 루트 없는 응답을 받게 되면 건너뛰지 않는다. 자세한 내용은 generator의 DtoTreeBuilder.build
         if (roots.size() > 1) {
             outOfScope.add("응답 루트가 둘 이상 (" + String.join(", ", roots)
-                    + "): 3단계 IR 확장 전까지 generator는 루트 하나로 감싼 응답만 받는다");
+                    + "): generator는 루트 하나로 감싼 응답만 받는다");
         }
         return fields;
     }
@@ -436,7 +448,7 @@ public final class IrNormalizer {
         String fieldName = resultCodeFieldName(operation.source());
         ArrayNode candidates = (ArrayNode) errorSpec.get("resultCodeFieldCandidates");
         if (!fieldName.isEmpty() && JavaNameRules.isSafeRawName(fieldName) && !contains(candidates, fieldName)) {
-            // 기본 목록에 없는 결과코드 위치만 앞에 더한다. generator는 아직 읽지 않는다 (3-3)
+            // 기본 목록에 없는 결과코드 위치만 앞에 더한다. generator가 마지막 마디를 결과코드 이름으로 인터셉터에 넘긴다
             candidates.insert(0, fieldName);
         }
         List<LlmErrorCode> errors = new ArrayList<>(operation.errorCodes());
@@ -456,7 +468,7 @@ public final class IrNormalizer {
 
     // ---- metadata ----
 
-    /** rule 엔진과 같은 metadata에서 엔진을 llm으로 바꾸고 바로 뒤에 실행 설정을 더한다. 자리는 설계 8장의 예시와 같다 */
+    /** rule 엔진과 같은 metadata에서 엔진을 llm으로 바꾸고 바로 뒤에 실행 설정을 더한다 */
     private ObjectNode metadata(String sourceFile, String sourceFormat, List<String> reviewNotes) {
         ObjectNode metadata = objectMapper.createObjectNode();
         Iterator<Map.Entry<String, JsonNode>> fields =
@@ -471,6 +483,31 @@ public final class IrNormalizer {
             }
         }
         return metadata;
+    }
+
+    /**
+     * 코드가 {@code [검증]}·{@code [정규화]} 노트로 따로 알리는 것을 LLM이 다시 적은 노트인지 본다. 프롬프트가 적지 말라고 해도 가끔 적어
+     * 같은 말이 두 번 붙는다. 겹치는 것이 분명한 세 경우만 거른다: 표준 구조를 가정한 오퍼레이션의 표준 구조 이야기, 기본 응답 형식을 모른다는
+     * 이야기, 성공코드 후보가 엇갈린 오퍼레이션에서 그 후보 값을 둘 이상 그대로 적은 이야기.
+     */
+    private static boolean repeatsCodeNote(String text, boolean standardAssumed, SuccessCodeSelector.Selection success,
+                                           ValidatedOperation operation) {
+        if (standardAssumed && text.contains("표준 구조")) {
+            return true;
+        }
+        if (UNKNOWN_DEFAULT_FORMAT.matcher(text).find()) {
+            return true;
+        }
+        if (success.note() == null) {
+            return false;
+        }
+        long mentioned = operation.successCodes().stream()
+                .map(ValidatedOperation.SuccessCode::code)
+                .distinct()
+                .filter(code -> Pattern.compile("(?<![A-Za-z0-9_-])" + Pattern.quote(code) + "(?![A-Za-z0-9_-])")
+                        .matcher(text).find())
+                .count();
+        return mentioned >= 2;
     }
 
     private static void addLlmNote(List<String> notes, String text) {

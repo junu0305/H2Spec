@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * rule 엔진의 SpecParser. 기존 파서 3종을 합친 것이라 같은 문서에서 같은 IR과 건너뛴 목록을 내야 한다.
- * 합성 문서는 RuleEngineTest처럼 실제 문서의 구조를 줄여 DOCX로 썼다.
+ * 합성 문서는 실제 문서의 구조를 줄여 DOCX로 썼다.
  */
 class RuleSpecParserTest {
 

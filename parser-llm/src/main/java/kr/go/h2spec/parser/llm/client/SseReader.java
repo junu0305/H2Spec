@@ -6,7 +6,8 @@ import java.io.Reader;
 import java.util.Objects;
 
 /**
- * {@code text/event-stream} 본문(SSE)을 이벤트 하나씩 읽는다. 세 회사 모두 스트리밍 응답을 이 형식으로 보낸다.
+ * {@code text/event-stream} 본문(SSE)을 이벤트 하나씩 읽는다. 회사와 상관없는 형식이라 client 패키지에 두고,
+ * Claude 어댑터가 스트리밍 응답을 읽을 때 쓴다.
  * <p>
  * WHATWG HTML 명세의 해석 규칙 중 어댑터가 쓰는 것만 따른다. 줄 끝은 CRLF·LF·CR을 모두 받고, {@code :}로 시작하는 줄은 주석이며,
  * 여러 {@code data} 줄은 줄바꿈으로 잇는다. {@code id}·{@code retry}는 끊긴 스트림을 이어 받을 때 쓰는 값인데,

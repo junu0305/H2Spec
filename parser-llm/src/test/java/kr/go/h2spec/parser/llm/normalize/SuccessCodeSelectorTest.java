@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 성공코드 정책(설계 5.2). 예시는 설계가 근거로 든 기관 문서의 후보다. */
+/** 성공코드 정책. 예시는 실제 기관 문서에 나온 후보다. */
 class SuccessCodeSelectorTest {
 
     @Test

@@ -20,12 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * 세 회사에 그대로 넘기는 스키마 파일(extraction-schema-v3.json)이 record와 같고, 세 회사가 모두 받는 범위(설계 4.2)만 쓰는지 본다.
+ * 회사에 그대로 넘기는 스키마 파일(extraction-schema-v3.json)이 record와 같고, 세 회사(Claude·GPT·Gemini)가 모두 받는 범위만
+ * 쓰는지 본다. 지금 어댑터는 Claude뿐이지만 다른 회사를 더해도 스키마를 그대로 쓰게 하려는 것이다.
  * 스키마는 record에서 만들지 않고 직접 쓰므로, 둘이 어긋나면 LLM 응답을 record로 읽지 못한다.
  */
 class ExtractionSchemaTest {
 
-    /** 세 회사가 함께 받지 않거나 설계 4.2가 쓰지 않기로 한 키워드. 제약은 코드가 검증(5.1)에서 본다 */
+    /** 세 회사가 함께 받지 않거나 중간 스키마에서 쓰지 않기로 한 키워드. 제약은 코드가 원문 대조·형식 검사에서 본다 */
     private static final Set<String> FORBIDDEN = Set.of("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
             "multipleOf", "minLength", "maxLength", "pattern", "format", "maxItems", "$ref", "$defs", "definitions",
             "anyOf", "oneOf", "allOf", "not");

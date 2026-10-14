@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 충실히 옮긴 LLM 출력(픽스처)을 검증·정규화한 IR이, 같은 Block 목록으로 돌린 rule 엔진의 IR과 metadata를 빼고 같아야 한다.
  * 주소 고르기·나누기, apiId, generatorHints, 결과코드 필드의 타입과 표시, 응답 포맷, errorSpec 기본값이 여기서 맞물린다.
  * <p>
- * rule 엔진이 채우지 않는 값 두 가지만 비교에서 뺀다(설계 8장). {@code api.provider}는 rule 엔진이 늘 빈 값이고,
+ * rule 엔진이 채우지 않는 값 두 가지만 비교에서 뺀다. {@code api.provider}는 rule 엔진이 늘 빈 값이고,
  * {@code errorSpec.knownErrorCodes}는 llm 엔진만 문서의 에러코드 표로 채운다. 둘 다 이미 IR 계약에 있는 필드라
  * llm 엔진이 채우기 시작할 뿐이다. 빼는 대신 llm 쪽 값이 문서와 맞는지 따로 본다.
  */

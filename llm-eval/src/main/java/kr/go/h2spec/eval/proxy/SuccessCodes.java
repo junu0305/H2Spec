@@ -12,13 +12,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 문서에 적힌 정상(성공) 결과코드 후보를 모은다. 설계 4.2의 성공코드 후보 출처와 같은 세 자리를 본다:
+ * 문서에 적힌 정상(성공) 결과코드 후보를 모은다. llm 엔진의 성공코드 후보 출처와 같은 세 자리를 본다:
  * 응답 필드 표의 결과코드 행(샘플·설명), 응답 예제의 결과코드 값, 에러코드 표의 정상 행.
  * rule 엔진은 문서와 상관없이 늘 00을 쓰므로, 00이 아닌 후보가 있는 문서가 대리 지표 (c)다. 휴리스틱이다.
  */
 final class SuccessCodes {
 
-    /** 후보로 받는 코드 꼴 (설계 5.1 V8). 빈 칸 표시인 "-"는 코드가 아니다 */
+    /** 후보로 받는 코드 꼴. 검증 규칙 V8의 꼴에 영숫자 한 자 이상을 더 요구해 빈 칸 표시인 "-"는 코드로 보지 않는다 */
     private static final Pattern CODE = Pattern.compile("[A-Za-z0-9_-]*[A-Za-z0-9][A-Za-z0-9_-]*");
     /** 샘플 칸의 코드. 뒤에 붙인 괄호 설명("00(정상)")은 뗀다 */
     private static final Pattern SAMPLE_CODE =
@@ -40,7 +40,7 @@ final class SuccessCodes {
     private SuccessCodes() {
     }
 
-    /** 후보의 출처 (설계 4.2 LlmResultCode의 source와 같다) */
+    /** 후보의 출처 ({@code LlmSuccessCode.Source}와 같다) */
     enum Source {
         FIELD_TABLE("응답 필드 표"),
         RESPONSE_EXAMPLE("응답 예제"),

@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 교차검증(설계 5.3). 짝짓기와 비교는 작은 IR로, 실제 흐름은 문서로 본다.
- * rule 엔진 결과는 {@link RuleEngine.Result}를 직접 만들거나 같은 Block 목록으로 돌린다.
+ * 교차검증. 짝짓기와 비교를 작은 IR로 보고, rule 엔진 결과는 {@link RuleEngine.Result}를 직접 만든다.
+ * 실제 문서로 돌리는 흐름은 RecordedFlowTest가 본다.
  */
 class CrossCheckerTest {
 
@@ -117,8 +117,6 @@ class CrossCheckerTest {
                 ir(URL_A, List.of(), List.of(), "JSON", "00"), ir(URL_A, List.of(), List.of(), "XML", "00"), false),
                 "형식을 고를 수 없는 오퍼레이션은 그대로 알린다");
     }
-
-    // ---- 실제 문서 ----
 
     // ---- 도우미 ----
 

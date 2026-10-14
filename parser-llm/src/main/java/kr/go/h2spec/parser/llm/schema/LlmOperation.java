@@ -20,7 +20,7 @@ import java.util.List;
  *                              기본 형식을 모를 때 정규화가 IR의 응답 형식을 경로와 같은 형식으로 맞추는 데 쓴다
  * @param responseFields 값을 담는 응답 필드. 하위 필드를 감싸기만 하는 컨테이너는 경로로만 나타난다
  * @param resultCode 결과코드 필드와 성공코드 후보
- * @param errorCodes 문서의 에러코드 표
+ * @param errorCodes 이 오퍼레이션에만 있는 에러코드 표. 문서 공통 표는 {@link LlmExtraction#errorCodes()}에 적는다
  * @param evidence 근거 블록 번호 ({@code T27}). {@code DocumentSerializer}가 붙인 번호다
  * @param uncertain 확신 없는 점 (한국어 문장)
  * @param unsupported GET이 아닌 메서드, 이름이 serviceKey가 아닌 인증키, 헤더 인증처럼 generator가 지원하지 않는 요소.

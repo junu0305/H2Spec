@@ -11,7 +11,7 @@ import java.util.Set;
  *   <li>{@code header} 아래는 값 필드만 온다</li>
  *   <li>{@code body} 아래는 값 필드와 {@code items}만 온다</li>
  *   <li>{@code items} 아래는 {@code item}만 오고 {@code item} 아래는 값 필드만 온다.
- *       JSON에서 {@code items}가 바로 배열인 모양도 표준이다. 생성 DTO가 표준 경로 하나로 두 모양을 다 받는다 (설계 4.2)</li>
+ *       JSON에서 {@code items}가 바로 배열인 모양도 표준이다. 생성 DTO가 표준 경로 하나로 두 모양을 다 받는다</li>
  * </ul>
  * 이름은 대소문자를 가린다. XML 태그와 JSON 키가 대소문자를 가리기 때문이다.
  */

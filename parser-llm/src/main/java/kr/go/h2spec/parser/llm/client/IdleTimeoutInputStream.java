@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class IdleTimeoutInputStream extends FilterInputStream {
 
-    /** 시간을 재고 감시를 깨우는 방법. 테스트는 손으로 돌리는 시계로 바꿔 실제로 기다리지 않는다 */
+    /** 시간을 재고 감시를 깨우는 방법. 손으로 돌리는 시계로 바꾸면 실제로 기다리지 않고 시험할 수 있다 */
     public interface Timer {
 
         /** 실제 시계와 JDK의 지연 실행기. 감시용 스레드를 따로 두지 않는다. 감시는 대기 시간마다 한 번 깨는 정도라 가볍다 */

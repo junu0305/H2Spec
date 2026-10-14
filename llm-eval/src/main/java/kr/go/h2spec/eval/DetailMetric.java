@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * 0-4에서 정답 파일에 더하는 키(설계 9.2)로 재는 지표. 키가 없는 오퍼레이션은 그 지표에서 빠지고,
+ * 정답 파일에 앞으로 더할 키로 재는 지표. 키가 없는 오퍼레이션은 그 지표에서 빠지고,
  * 정답 오퍼레이션에 키가 하나도 없으면 리포트에 "정답 없음"으로 남는다.
  * 지금 corpus 정답에는 이 키가 없어 모두 꺼져 있다. 값을 짐작해 채우지 않는다.
  * <p>
@@ -48,7 +48,7 @@ enum DetailMetric {
         }
     },
 
-    /** 응답 필드의 전체 경로. 이번 전환의 핵심 지표다 (설계 9.4) */
+    /** 응답 필드의 전체 경로. rule 엔진은 표준 구조를 가정해 경로를 만들므로 llm 엔진과 견줄 핵심 지표다 */
     RESPONSE_PATH("응답 경로 정확도", "responseDetail", gold -> gold.responseDetail() != null) {
         @Override
         Check check(GoldOperation gold, EngineOperation engine) {
@@ -105,7 +105,7 @@ enum DetailMetric {
     },
 
     /**
-     * 성공코드. 정답이 빈 값이면 문서에 성공코드가 없다는 뜻이고, IR의 00과 그 사정을 적은 노트가 함께 있어야 맞다 (설계 9.2).
+     * 성공코드. 정답이 빈 값이면 문서에 성공코드가 없다는 뜻이고, IR의 00과 그 사정을 적은 노트가 함께 있어야 맞다.
      * IR은 빈 성공코드를 받지 못한다
      */
     SUCCESS_CODE("성공코드 정확도", "successCode", gold -> gold.successCode() != null) {
@@ -122,8 +122,8 @@ enum DetailMetric {
     },
 
     /**
-     * 성공코드 후보가 엇갈린 문서에서 노트를 남겼는지 (설계 9.4). 정책(설계 5.2)은 후보 값이 서로 다르거나
-     * 0·000을 00으로 바꿨을 때 후보를 모두 노트로 남긴다. 실제 값은 호출해 봐야 알아 검수자가 확인해야 하기 때문이다
+     * 성공코드 후보가 엇갈린 문서에서 노트를 남겼는지. llm 엔진의 성공코드 정책({@code SuccessCodeSelector})은
+     * 후보 값이 서로 다르거나 0·000을 00으로 바꿨을 때 후보를 모두 노트로 남긴다. 실제 값은 호출해 봐야 알아 검수자가 확인해야 하기 때문이다
      */
     SUCCESS_CODE_NOTE("성공코드 엇갈림 노트", "successCodeCandidates", gold -> gold.successCodeCandidates() != null) {
         @Override
@@ -231,7 +231,7 @@ enum DetailMetric {
     }
 
     /**
-     * 성공코드 후보가 노트를 남겨야 하는 모양인지 본다 (설계 5.2): 값이 서로 다르거나, 00이 아닌 0·000 같은 값이 있다.
+     * 성공코드 후보가 노트를 남겨야 하는 모양인지 본다: 값이 서로 다르거나, 00이 아닌 0·000 같은 값이 있다.
      *
      * @param candidates 후보 값
      * @return 노트를 남겨야 하면 true
@@ -243,8 +243,9 @@ enum DetailMetric {
     }
 
     /**
-     * IR의 인증 방식. 3-1의 {@code api.auth}가 있으면 그 종류를, 없으면 {@code authType}을 정답과 같은 이름으로 바꿔 쓴다.
-     * 지금 IR은 늘 SERVICE_KEY_QUERY_PARAM이다.
+     * IR의 인증 방식. IR에 {@code api.auth}가 생기면 그 종류를, 없으면 {@code authType}을 정답과 같은 이름으로 바꿔 쓴다.
+     * rule 엔진 IR은 늘 SERVICE_KEY_QUERY_PARAM이고, llm 엔진은 serviceKey 쿼리 파라미터가 없어 지원 범위 밖으로 둔
+     * 오퍼레이션에 인증 종류(PATH_KEY 등)를 적는다.
      *
      * @param api IR의 api 노드
      * @return SERVICE_KEY_QUERY 같은 인증 종류. 적혀 있지 않으면 UNKNOWN

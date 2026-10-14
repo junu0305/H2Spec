@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 평가 도구의 진입점 (설계 9.4, 0-6). 정답 세트를 엔진으로 돌려 기준선 리포트를 쓰고, 정답 없는 문서 묶음(세트 C)에서는
+ * 평가 도구의 진입점. 정답 세트를 엔진으로 돌려 기준선 리포트를 쓰고, 정답 없는 문서 묶음(세트 C)에서는
  * rule 엔진 결과와 원문을 패턴으로 비교한 대리 지표를 낸다. LLM이나 외부 서비스는 부르지 않는다.
  * llm 엔진은 녹화 응답을 재생해 돌린다({@link ReplayLlmEvalEngine}).
  * <pre>{@code
@@ -24,7 +24,7 @@ import java.util.List;
  */
 public final class LlmEval {
 
-    /** 기본 리포트 위치 (저장소 루트 기준). 이 아래 {@code <날짜>-<엔진>} 디렉터리에 쓴다 (설계 9.4) */
+    /** 기본 리포트 위치 (저장소 루트 기준). 이 아래 {@code <날짜>-<엔진>} 디렉터리에 쓴다 */
     static final String REPORTS = "llm-eval/build/reports";
 
     private LlmEval() {
@@ -80,7 +80,7 @@ public final class LlmEval {
 
     private static void baseline(EvalOptions options, Path outDir, LocalDate date, PrintStream out)
             throws IOException {
-        // 여러 세트를 주면 한 리포트로 합쳐 잰다. 지원 등급 기준(설계 9.5)이 세트 A·B를 합쳐서 보기 때문이다
+        // 여러 세트를 주면 한 리포트로 합쳐 잰다. llm 엔진을 README에서 "검증됨"으로 올릴지 정하는 기준이 세트 A·B를 합쳐서 보기 때문이다
         List<EvalDocument> documents = new ArrayList<>();
         for (String set : options.sets()) {
             documents.addAll(DataSets.documents(set, options.root()));

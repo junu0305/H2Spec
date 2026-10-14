@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * CodeGenerator가 파일을 쓰기 전에 검사하고, parser-llm의 검증(V4·V6·V12)도 같은 규칙을 쓴다.
  *
  * <p>원래 이름이 식별자 꼴인지가 아니라, 원래 이름을 {@link JavaNames#camel}로 바꾼 Java 이름을 본다.
- * 원래 이름으로 거르면 지금 잘 되는 이름(공백·한글·'-'가 든 이름. Java 이름으로 바뀌고 어노테이션이 원래 이름을 지킨다)을
+ * 원래 이름으로 거르면 잘 되는 이름(공백·한글·'-'가 든 이름. Java 이름으로 바뀌고 어노테이션이 원래 이름을 지킨다)을
  * 거부하고, 실제로 깨지는 이름(item.name, 예약어 class, station_name과 stationName)은 놓친다.
  */
 public final class JavaNameRules {

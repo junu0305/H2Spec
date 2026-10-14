@@ -39,7 +39,7 @@ class SpecBlockAssembler {
 
     /** 서비스 개요 표에서 찾은 기본 주소를 IrAssembler로 넘기는 키 */
     static final String SERVICE_URL_KEY = "__serviceUrl";
-    /** 정보 표 밖에서 확정한 오퍼레이션 주소를 IrAssembler로 넘기는 키 */
+    /** 주소 후보에서 고르고 겹치는 주소를 바로잡은 오퍼레이션 주소를 IrAssembler로 넘기는 키 */
     static final String ENDPOINT_URL_KEY = "__endpointUrl";
     /** 조립 과정에서 사람이 확인해야 할 점을 IrAssembler의 reviewNotes로 넘기는 키 */
     static final String REVIEW_NOTE_KEY = "__reviewNote";
@@ -108,7 +108,7 @@ class SpecBlockAssembler {
         private String exampleUrl;
         /** 응답 필드 표가 없을 때 필드를 뽑을 응답 예제(JSON) */
         private String responseSample;
-        /** "데이터 공통 사항"처럼 모든 오퍼레이션에 붙는 공통 파라미터 구간 */
+        /** "데이터 공통 사항"처럼 뒤따르는 오퍼레이션마다 붙는 공통 사항 구간 */
         private boolean common;
 
         boolean hasFields() {

@@ -32,8 +32,8 @@ import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * convert의 엔진 옵션 (설계 7.1~7.4, 1-8). 환경변수와 llm 엔진을 가짜로 바꿔 실제 환경변수·키·네트워크 없이 본다.
- * 가짜 엔진은 문서를 읽지 않고 파일 이름마다 정해 둔 결과를 돌려주므로, 명세 문서는 확장자만 맞춘 빈 파일로 둔다.
+ * convert의 엔진 옵션. 환경변수와 llm 엔진을 가짜로 바꿔 실제 환경변수·키·네트워크 없이 본다.
+ * 가짜 엔진은 문서를 읽지 않고 파일 이름마다 정해 둔 결과를 돌려주므로, 명세 문서는 확장자만 맞춘 가짜 파일로 둔다.
  */
 class ConvertCommandEngineTest {
 
@@ -42,7 +42,7 @@ class ConvertCommandEngineTest {
             "문서 내용을 claude(claude-sonnet-5-5, 추론 깊이 medium)로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.";
     private static final LlmProviderFactory CLAUDE = new FakeProvider("claude", List.of("ANTHROPIC_API_KEY"));
     private static final LlmProviderFactory OPENAI = new FakeProvider("openai", List.of("OPENAI_API_KEY"));
-    /** 쓰이면 안 되는 엔진. 회사를 정하지 못한 실행이나 rule 엔진 실행에서 쓴다 */
+    /** 쓰이면 안 되는 엔진. rule 엔진 실행에서 쓴다 */
     private static final SpecParser UNUSED = document -> {
         throw new AssertionError("llm 엔진을 쓰면 안 된다: " + document);
     };
@@ -219,6 +219,30 @@ class ConvertCommandEngineTest {
         assertEquals(List.of(NOTICE, auth), single.err().lines().toList());
     }
 
+    @Test
+    void 모델_이름이나_주소_오류도_남은_파일을_변환하지_않고_실행_전체를_멈춘다() throws Exception {
+        // 모델 이름을 잘못 적으면 모든 문서가 같은 이유로 거절된다. 문서마다 실패로 세며 끝까지 돌지 않는다
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        for (String name : List.of("a.hwp", "b.hwp")) {
+            Files.writeString(inputDir.resolve(name), "fake");
+        }
+        String settings = "LLM 설정 오류로 변환하지 못했습니다. 모델 이름(--model)이나 API 주소를 확인하세요 (a.hwp, claude): "
+                + "Claude API 오류 (HTTP 404): not_found_error: model: claude-sonet-5-5";
+        ParsedApi last = api("LastApi");
+        FakeParser parser = new FakeParser(Map.of(
+                "a.hwp", () -> {
+                    throw new SpecParseException(SpecParseException.Kind.SETTINGS, settings);
+                },
+                "b.hwp", () -> llmResult(false, TokenUsage.NONE, last)));
+
+        Run run = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--input", inputDir.toString(), "--output", out("output"));
+
+        assertEquals(1, run.exit());
+        assertEquals(List.of("a.hwp"), parser.parsed);
+        assertEquals(List.of(NOTICE, settings, "LLM 설정 오류라 남은 파일 1개는 변환하지 않고 멈춥니다"), run.err().lines().toList());
+    }
+
     /** 가짜 환경변수와 가짜 llm 엔진으로 convert 명령을 만든다. 실행 뒤 {@link #environment}와 {@link #factory}로 본다 */
     private ConvertCommand command(List<LlmProviderFactory> providers, Map<String, String> env, SpecParser parser) {
         environment = new RecordingEnvironment(env);
@@ -358,7 +382,7 @@ class ConvertCommandEngineTest {
         SpecParseResult get() throws SpecParseException;
     }
 
-    /** 1단계에는 Claude뿐이라 아직 없는 회사까지 흉내 낸다. 클라이언트를 만들면 테스트가 실패한다 */
+    /** 지금은 Claude뿐이라 아직 없는 회사까지 흉내 낸다. 클라이언트를 만들면 테스트가 실패한다 */
     private record FakeProvider(String id, List<String> apiKeyEnvironmentVariables) implements LlmProviderFactory {
 
         @Override

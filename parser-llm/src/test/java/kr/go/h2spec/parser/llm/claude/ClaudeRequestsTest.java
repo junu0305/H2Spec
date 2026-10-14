@@ -14,7 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** {@link LlmRequest}를 Claude Messages API 요청 본문으로 바꾸는 규칙(설계 6.2)을 본다. */
+/** {@link LlmRequest}를 Claude Messages API 요청 본문으로 바꾸는 규칙을 본다. */
 class ClaudeRequestsTest {
 
     private static final ExtractionPrompt PROMPT = ExtractionPrompt.load();
@@ -41,20 +41,26 @@ class ClaudeRequestsTest {
     }
 
     @Test
-    void 문서_블록_뒤에_작업_지시_블록을_두고_문서에는_프롬프트_캐시를_걸지_않는다() {
+    void 문서_블록_뒤에_작업_지시_블록을_두고_나눠_부를_때만_문서에_프롬프트_캐시를_건다() {
         JsonNode messages = ClaudeRequests.body(request, settings).path("messages");
 
         assertEquals(1, messages.size());
         assertEquals("user", messages.path(0).path("role").asText());
         JsonNode content = messages.path(0).path("content");
         assertEquals(2, content.size());
-        // 문서를 한 번만 부르는 지금은 캐시를 다시 읽을 일이 없어 캐시 쓰기 값만 더 내므로 캐시 지점을 두지 않는다
+        // 문서는 대개 한 번만 불러 캐시를 다시 읽을 일이 드물고 캐시 쓰기 값만 더 내므로 캐시 지점을 두지 않는다
         assertEquals("text", content.path(0).path("type").asText());
         assertEquals("<document>\n" + DOCUMENT + "</document>", content.path(0).path("text").asText());
         assertEquals(List.of("type", "text"), names(content.path(0)));
         assertEquals("text", content.path(1).path("type").asText());
         assertEquals(INSTRUCTION, content.path(1).path("text").asText());
         assertEquals(List.of("type", "text"), names(content.path(1)));
+
+        // 나눠 부르기는 같은 문서를 여러 번 보내므로 두 번째 호출부터 문서를 캐시에서 읽는다
+        LlmRequest split = new LlmRequest(PROMPT.promptText(), DOCUMENT, INSTRUCTION, PROMPT.schemaText(), 32000, true);
+        JsonNode splitContent = ClaudeRequests.body(split, settings).path("messages").path(0).path("content");
+        assertEquals("ephemeral", splitContent.path(0).path("cache_control").path("type").asText());
+        assertEquals(List.of("type", "text"), names(splitContent.path(1)), "작업 지시는 호출마다 달라 캐시하지 않는다");
     }
 
     @Test
@@ -70,7 +76,7 @@ class ClaudeRequestsTest {
 
     @Test
     void 샘플링_파라미터와_thinking은_보내지_않는다() {
-        // Opus 5.5는 기본값이 아닌 temperature·top_p·top_k와 thinking 끄기를 400으로 거부한다. 정한 필드 말고는 아무것도 보내지 않는다
+        // Opus 5.5·Sonnet 5.5는 기본값이 아닌 temperature·top_p·top_k와 thinking 끄기를 400으로 거부한다. 정한 필드 말고는 아무것도 보내지 않는다
         assertEquals(List.of("model", "max_tokens", "system", "messages", "output_config", "stream"),
                 names(ClaudeRequests.body(request, settings)));
     }

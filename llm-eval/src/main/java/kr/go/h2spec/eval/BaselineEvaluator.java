@@ -21,7 +21,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
- * 정답 세트를 엔진 하나로 돌려 정답과 비교한다 (설계 9.4). 지표 계산은 {@link BaselineReport#totals()}가 맡고,
+ * 정답 세트를 엔진 하나로 돌려 정답과 비교한다. 지표 계산은 {@link BaselineReport#totals()}가 맡고,
  * 여기서는 문서마다 엔진을 돌리고, 짝을 짓고, 짝마다 비교하고, IR마다 generator를 끝까지 돌려 본다.
  */
 final class BaselineEvaluator {
@@ -137,7 +137,7 @@ final class BaselineEvaluator {
     }
 
     /**
-     * 주소는 끝 슬래시만 무시하고 글자 그대로 비교한다 (교차검증과 같다, 설계 5.3). 스킴을 무시하면 http와 https가 갈린 경우를 놓친다.
+     * 주소는 끝 슬래시만 무시하고 글자 그대로 비교한다 (교차검증과 같다). 스킴을 무시하면 http와 https가 갈린 경우를 놓친다.
      */
     static boolean sameUrl(String expected, String actual) {
         return expected.replaceAll("/+$", "").equals(actual.replaceAll("/+$", ""));

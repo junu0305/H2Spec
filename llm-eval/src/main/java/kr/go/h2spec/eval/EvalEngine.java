@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * 평가할 추출 엔진. 지금은 rule 엔진뿐이고, llm 엔진은 1단계에서 {@code SpecParser}를 감싸 붙인다.
+ * 평가할 추출 엔진. rule 엔진과, 녹화 응답을 재생하는 llm 엔진({@code ReplayLlmEvalEngine})이 있다.
  */
 public interface EvalEngine {
 

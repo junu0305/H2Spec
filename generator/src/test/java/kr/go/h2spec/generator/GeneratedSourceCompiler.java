@@ -50,7 +50,7 @@ public final class GeneratedSourceCompiler {
     }
 
     /**
-     * javap -p -constants 출력. 클래스를 초기화하지 않고 상수 값과 static 초기화 블록이 있는지 보기 위해 쓴다.
+     * javap -p -constants 출력. 클래스를 초기화하지 않고 static 초기화 블록이 있는지 보기 위해 쓴다.
      * 끼워 넣은 static 블록이 살아 있으면 클래스를 불러 초기화하는 순간 그 코드가 실행된다.
      */
     public static String javap(Path classesDir, String className) {

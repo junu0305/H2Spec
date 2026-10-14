@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 확장자(.docx, .hwp, .hwpx. 대소문자 무시)로 문서의 Reader와 IR metadata에 적을 sourceFormat을 정한다.
+ * 확장자(.docx, .hwp, .hwpx, 대소문자 무시)로 문서의 Reader와 IR metadata에 적을 sourceFormat을 정한다.
  * <p>
  * 두 엔진과 CLI가 같은 대응을 쓰도록 한 곳에 둔다. 엔진마다 따로 두면 같은 문서가 엔진에 따라 다른 sourceFormat으로
  * 적히거나 CLI만 문서로 보는 확장자가 생긴다. 여기 없는 확장자를 IR JSON으로 보는 것은 CLI가 정한다.

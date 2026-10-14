@@ -75,8 +75,9 @@ public final class IrConventions {
 
     /**
      * 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다.
-     * generator의 ClientEmitter가 포맷 값을 채워 보내는 이름과 같아야 한다. 여기서만 넓히면
+     * generator의 ClientEmitter가 힌트 없이 포맷 값을 채워 보내는 이름과 같아야 한다. 여기서만 넓히면
      * 클라이언트는 포맷 파라미터를 보내지 않는데 DTO는 JSON을 기대해 응답을 읽지 못한다.
+     * 이 밖의 이름은 llm 엔진이 generatorHints.responseFormatParameter로 알린다.
      * 두 목록이 같은지는 IrConventionsTest가 확인한다.
      */
     private static final Set<String> RESPONSE_FORMAT_PARAMETERS = Set.of("returnType", "dataType", "resultType");
@@ -611,7 +612,7 @@ public final class IrConventions {
     // ---- 포맷 파라미터, 기본값 ----
 
     /**
-     * 응답 포맷을 고르는 요청 파라미터 이름. generator의 ClientEmitter가 포맷 값을 채워 보내는 이름과 같다.
+     * 응답 포맷을 고르는 요청 파라미터 이름. generator의 ClientEmitter가 힌트 없이 포맷 값을 채워 보내는 이름과 같다.
      *
      * @return returnType, dataType, resultType
      */
@@ -638,6 +639,7 @@ public final class IrConventions {
      * @param apiId {@link #splitUrl}이 만든 apiId
      * @return generatorHints
      */
+    // TODO(rule 포맷 파라미터): 포맷 파라미터 힌트는 llm 엔진만 더한다(IrNormalizer). rule 엔진도 더할 일은 IrAssembler에 적어 두었다
     public static ObjectNode generatorHints(String apiId) {
         ObjectNode hints = JsonNodeFactory.instance.objectNode();
         hints.put("targetClientType", "RestTemplate");
@@ -663,8 +665,7 @@ public final class IrConventions {
         metadata.put("sourceFormat", sourceFormat);
         metadata.put("parsedAt", OffsetDateTime.now().toString());
         metadata.put("parserVersion", PARSER_VERSION);
-        // 두 엔진이 같은 자리에 엔진 이름을 적어(설계 8장), 커밋된 IR만 보고도 어느 엔진이 만들었는지 안다.
-        // auto가 rule로 대신 변환한 문서도 이 값으로 가려진다(설계 7.3)
+        // 두 엔진이 같은 자리에 엔진 이름을 적어, 커밋된 IR만 보고도 어느 엔진이 만들었는지 안다
         metadata.put("engine", ENGINE);
         metadata.put("manualReviewRequired", !reviewNotes.isEmpty());
         ArrayNode notes = metadata.putArray("reviewNotes");

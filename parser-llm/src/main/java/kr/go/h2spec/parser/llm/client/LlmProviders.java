@@ -7,14 +7,14 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * 쓸 수 있는 회사 목록 (설계 6.1).
+ * 쓸 수 있는 회사 목록.
  * <p>
  * ServiceLoader와 회사별 모듈을 두지 않고 목록을 코드로 적는다. 어댑터를 쓰는 곳이 cli 하나이고 cli가 모든 회사를 묶으므로
- * SPI로 얻는 것이 없다(설계 3.3). 외부 어댑터 jar를 끼워야 하면 그때 SPI로 바꾼다.
+ * SPI로 얻는 것이 없다. 외부 어댑터 jar를 끼워야 하면 그때 SPI로 바꾼다.
  */
 public final class LlmProviders {
 
-    /** 회사를 더하면 여기에 한 줄을 더한다. 1단계에는 첫 회사만 있다. 이 순서가 안내 메시지에 회사를 적는 순서다 */
+    /** 회사를 더하면 여기에 한 줄을 더한다. 지금은 Claude만 있다. 이 순서가 안내 메시지에 회사를 적는 순서다 */
     public static final List<LlmProviderFactory> ALL = List.of(new ClaudeProviderFactory());
 
     private LlmProviders() {

@@ -17,12 +17,12 @@ import java.io.Reader;
 import java.time.Duration;
 
 /**
- * Claude Messages API의 응답을 {@link LlmResponse}와 {@link LlmException}으로 바꾼다 (설계 6.1·6.2).
+ * Claude Messages API의 응답을 {@link LlmResponse}와 {@link LlmException}으로 바꾼다.
  * <p>
  * {@link ClaudeClient}가 스트리밍 응답을 해석할 때 쓴다. HTTP 호출 없이 시험할 수 있게 따로 둔다.
  * <ul>
  *   <li>출력 JSON은 글 블록에만 온다. thinking 블록(요약이든 빈 글이든)과 서명은 버린다.</li>
- *   <li>사용량은 {@link Usage}의 뜻에 맞춰 옮긴다(설계 6.2의 토큰 집계). Claude의 {@code input_tokens}는 이미 캐시 읽기·쓰기를 뺀 값이고,
+ *   <li>사용량은 {@link Usage}의 뜻에 맞춰 옮긴다. Claude의 {@code input_tokens}는 이미 캐시 읽기·쓰기를 뺀 값이고,
  *       {@code output_tokens}에는 thinking이 들어 있다.</li>
  *   <li>거절({@code stop_reason: refusal})은 HTTP 200으로 오므로 오류가 아니라 {@link Finish#REFUSED}다.</li>
  * </ul>
@@ -88,7 +88,11 @@ public final class ClaudeResponses {
         if (statusCode == 429) {
             return Kind.RATE_LIMITED;
         }
-        // 500·502·503·504와 과부하(529). 설계 4.4대로 5xx는 모두 다시 부른다
+        // 메시지 API의 경로는 하나라 404는 모르는 모델이거나 주소(프록시 경로)가 틀린 것이다. 다른 문서를 불러도 똑같이 실패한다
+        if (statusCode == 404) {
+            return Kind.SETTINGS;
+        }
+        // 500·502·503·504와 과부하(529). 5xx는 모두 다시 부른다
         if (statusCode >= 500) {
             return Kind.UNAVAILABLE;
         }
@@ -101,7 +105,8 @@ public final class ClaudeResponses {
         return switch (errorType) {
             case "authentication_error", "permission_error" -> Kind.AUTH;
             case "rate_limit_error" -> Kind.RATE_LIMITED;
-            case "invalid_request_error", "not_found_error", "request_too_large", "billing_error" -> Kind.BAD_REQUEST;
+            case "not_found_error" -> Kind.SETTINGS;
+            case "invalid_request_error", "request_too_large", "billing_error" -> Kind.BAD_REQUEST;
             // overloaded_error·api_error·timeout_error. 스트림 중간의 오류는 거의 일시적인 서버 문제라 모르는 종류도 다시 부른다
             default -> Kind.UNAVAILABLE;
         };

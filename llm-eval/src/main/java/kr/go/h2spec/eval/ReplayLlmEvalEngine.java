@@ -49,7 +49,7 @@ public final class ReplayLlmEvalEngine implements EvalEngine {
     }
 
     /**
-     * 문서의 녹화 응답을 llm 엔진에 넣어 오퍼레이션을 얻는다. 지원 범위 밖으로 건너뛴 오퍼레이션도 정규화한 IR과 함께 담는다(설계 9.4).
+     * 문서의 녹화 응답을 llm 엔진에 넣어 오퍼레이션을 얻는다. 지원 범위 밖으로 건너뛴 오퍼레이션도 정규화한 IR과 함께 담는다.
      *
      * @throws IOException 문서를 읽지 못했거나, 녹화 응답이 없거나, 응답을 결과로 쓸 수 없을 때(JSON이 아니거나 스키마를 어김)
      */

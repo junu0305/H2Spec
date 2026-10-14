@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * LLM 출력을 문서 원문과 대조하고 형식을 검사한다 (설계 5.1의 V1~V12).
+ * LLM 출력을 문서 원문과 대조하고 형식을 검사한다 (검증 규칙 V1~V12).
  * <p>
  * 순서는 V1(주소 후보·오퍼레이션명) → 주소 고르기·겹치는 주소 바로잡기 → V2·V11이다. V2와 V11은 주소를 고른 뒤에야 볼 수 있다.
  * 나머지 검사는 오퍼레이션마다 따로 한다. 다만 겹치는 주소 바로잡기에는 rule 엔진처럼 주소를 정하고 응답 필드가 남은(V10)
@@ -131,7 +131,7 @@ public final class ExtractionValidator {
         LlmUrlCandidates urls = draft.operation.urlCandidates() == null
                 ? new LlmUrlCandidates("", "", "", "", "")
                 : draft.operation.urlCandidates();
-        // 칸마다 rule 엔진이 그 칸에 쓰는 함수로 주소를 꺼낸다 (설계 3.4)
+        // 칸마다 rule 엔진이 그 칸에 쓰는 함수로 주소를 꺼낸다
         String callBack = locateUrl(draft, source, evidence, "callBackUrl", urls.callBackUrl(),
                 text -> IrConventions.callBackUrl(text) != null || IrConventions.schemelessUrl(text) != null);
         String table = locateUrl(draft, source, evidence, "tableUrl", urls.tableUrl(),
@@ -238,7 +238,7 @@ public final class ExtractionValidator {
 
     /**
      * 생성 코드의 문자열 리터럴과 파일 경로에 들어가는 주소를 본다. 주소는 원문의 후보에서 골랐지만,
-     * 원문 자체가 엉뚱한 글을 담을 수 있다(설계 10장의 프롬프트 주입).
+     * 원문 자체가 엉뚱한 글을 담을 수 있다(프롬프트 주입).
      */
     private static String urlFormatError(IrConventions.UrlParts parts) {
         String url = parts.baseUrl() + parts.endpoint();
@@ -507,7 +507,7 @@ public final class ExtractionValidator {
     /**
      * 경로 트리가 일관되지 않은 필드를 버린다 (V7). generator의 {@code DtoTreeBuilder}와 같은 규칙이다.
      * 같은 노드가 값 필드이면서 컨테이너일 수 없고, 같은 노드의 {@code []} 표기가 같아야 한다. 앞의 것을 남긴다.
-     * 루트가 여럿인 것은 충돌이 아니다. 3단계 IR 확장 전까지 정규화가 지원 범위 밖으로 건너뛴다.
+     * 루트가 여럿인 것은 충돌이 아니다. generator가 받지 못해 정규화가 지원 범위 밖으로 건너뛴다.
      */
     private List<Field> consistentTree(Draft draft, List<Field> fields) {
         Map<String, Node> roots = new LinkedHashMap<>();
@@ -638,7 +638,7 @@ public final class ExtractionValidator {
 
     /**
      * 요청 파라미터 이름과 응답 경로의 칸 이름이 생성 코드에 들어갈 수 있는지 본다 (V4·V6).
-     * 원래 이름은 따옴표·역슬래시·제어문자·마침표가 없어야 하고, generator가 만들 Java 이름은 식별자로 컴파일되어야 한다(0-3).
+     * 원래 이름은 따옴표·역슬래시·제어문자·마침표가 없어야 하고, generator가 만들 Java 이름은 식별자로 컴파일되어야 한다.
      * 원래 이름이 식별자 꼴인지로 거르지 않는다. 공백·한글·{@code -}가 든 이름은 지금도 잘 생성된다.
      */
     private static boolean isUsableName(String name) {

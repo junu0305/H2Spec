@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 검증 규칙(설계 5.1의 V1~V12)을 하나씩 본다. 문서는 {@link SampleDocument}의 작은 표준 기술문서이고,
+ * 검증 규칙(V1~V12) 가운데 주요 규칙을 하나씩 본다. 문서는 {@link SampleDocument}의 작은 표준 기술문서이고,
  * LLM 출력은 그 문서를 그대로 옮긴 것({@link SampleDocument#standardOperation()})에서 규칙마다 한 곳만 바꾼다.
  */
 class ExtractionValidatorTest {
@@ -149,9 +149,7 @@ class ExtractionValidatorTest {
                 operation.notes());
     }
 
-    // ---- V6, V7 ----
-
-    // ---- V8, V9, V10 ----
+    // ---- V8 ----
 
     @Test
     void V8_성공코드_후보는_출처가_가리키는_자리에_있고_코드_꼴이어야_하며_버려도_노트를_남기지_않는다() {
@@ -186,7 +184,7 @@ class ExtractionValidatorTest {
         assertEquals("주소가 앞 오퍼레이션(getMsrstnList)과 같습니다: " + URL, operations.get(1).dropReason());
     }
 
-    // ---- V12 ----
+    // ---- 회사 응답의 null ----
 
     @Test
     void 회사_응답의_null은_빈_값으로_보고_예외_없이_건너뛴다() {

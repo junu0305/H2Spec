@@ -5,9 +5,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 회사 API 호출이 실패했다 (설계 6.1). CLI는 {@link #kind()}로 실패 처리(설계 7.3)를 가른다.
+ * 회사 API 호출이 실패했다. CLI는 {@link #kind()}로 실패 처리를 가른다.
  * <p>
- * 메시지에는 API 키를 넣지 않는다(설계 10장). 회사가 돌려준 오류 글을 옮길 때도 어댑터가 키를 가린다.
+ * 메시지에는 API 키를 넣지 않는다. 회사가 돌려준 오류 글을 옮길 때도 어댑터가 키를 가린다.
  */
 public class LlmException extends Exception {
 
@@ -15,6 +15,8 @@ public class LlmException extends Exception {
     public enum Kind {
         /** 키가 틀렸거나 권한이 없다. 모든 문서가 같은 이유로 실패하므로 CLI는 전체를 멈춘다 */
         AUTH,
+        /** 모델 이름이나 API 주소가 틀렸다(회사가 그런 모델이나 경로를 모른다). 모든 문서가 같은 이유로 실패하므로 CLI는 전체를 멈춘다 */
+        SETTINGS,
         /** 회사의 호출 한도에 걸렸다 */
         RATE_LIMITED,
         /** 회사 서버 오류·과부하, 네트워크 오류, 시간 초과 */

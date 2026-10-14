@@ -154,6 +154,7 @@ public class OpenApiEmitter {
         return schema;
     }
 
+    // TODO(인증 확장): 인증키를 늘 serviceKey 쿼리 파라미터로 적는다. 자세한 내용은 ClientEmitter.findServiceKeyParam
     private ObjectNode components() {
         ObjectNode scheme = objectMapper.createObjectNode();
         scheme.put("type", "apiKey");

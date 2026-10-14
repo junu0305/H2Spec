@@ -36,7 +36,7 @@ tasks.named('test') {
     inputs.dir("$rootDir/parser-llm/src/test/resources/llm-recordings").withPropertyName('llmRecordings')
 }
 
-// 평가 도구는 저장소 안에서 돌리는 개발용 프로그램이라 배포하지 않는다 (설계 3.3).
+// 평가 도구는 저장소 안에서 돌리는 개발용 프로그램이라 배포하지 않는다.
 // 루트 build.gradle이 모든 하위 모듈에 maven-publish를 적용하므로 여기서 게시 태스크만 끈다.
 // JitPack도 publishToMavenLocal로 올라온 것만 내보내므로 이 모듈은 빠진다
 tasks.withType(AbstractPublishToMaven).configureEach {

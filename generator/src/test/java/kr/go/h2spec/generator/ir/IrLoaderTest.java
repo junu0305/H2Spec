@@ -34,7 +34,7 @@ class IrLoaderTest {
 
     @Test
     void 결과코드_위치_후보가_없는_IR도_읽고_빈_목록으로_둔다() throws Exception {
-        // 후보는 선택 필드다. 후보가 없는 IR(손으로 쓴 IR 등)도 지금처럼 생성할 수 있어야 한다
+        // 후보는 선택 필드다. 후보가 없는 IR(손으로 쓴 IR 등)도 생성할 수 있어야 한다
         ObjectNode tree = schemaExampleTree();
         ((ObjectNode) tree.path("api").path("errorSpec")).remove("resultCodeFieldCandidates");
         Path file = writeVariant(tree, "missing-result-code-candidates.json");

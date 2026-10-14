@@ -253,7 +253,7 @@ class IrAssemblerTest {
 
     @Test
     void 샘플데이터_기반_integer_추론_노트는_조립_노트_뒤에_한_줄로_묶는다() {
-        // 기상청 중기예보 MidTa는 기온 필드마다 같은 노트가 붙어 42줄이 됐다. 요청과 응답에 함께 있는 이름은 한 번만 적는다
+        // 기상청 중기예보 MidTa는 기온 필드마다 같은 노트가 붙어 줄마다 두면 42줄이 된다. 요청과 응답에 함께 있는 이름은 한 번만 적는다
         Map<String, String> info = Map.of(
                 "Call Back URL", "http://apis.data.go.kr/1234567/TestSvc/getTestList",
                 SpecBlockAssembler.REVIEW_NOTE_KEY, "조립 단계의 노트");

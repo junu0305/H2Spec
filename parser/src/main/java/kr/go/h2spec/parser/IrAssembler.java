@@ -98,6 +98,7 @@ public class IrAssembler {
         api.put("endpoint", url.endpoint());
         api.put("httpMethod", "GET");
         api.put("description", IrText.oneLine(description == null ? "" : description));
+        // TODO(인증 확장): 문서의 인증 방식과 상관없이 늘 serviceKey 쿼리로 적는다. 자세한 내용은 ClientEmitter.findServiceKeyParam
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
         api.put("responseFormat", responseFormat(requests));
         ArrayNode parameters = requestParameters(requests, requestParamNames, reviewNotes);
@@ -113,6 +114,14 @@ public class IrAssembler {
         ObjectNode ir = objectMapper.createObjectNode();
         ir.set("metadata", IrConventions.metadata(sourceFile, sourceFormat, reviewNotes.lines()));
         ir.set("api", api);
+        // TODO(rule 포맷 파라미터): rule 엔진은 generatorHints.responseFormatParameter를 적지 않는다. 그래서 포맷 파라미터 이름이
+        //   generator가 아는 returnType·dataType·resultType(IrConventions.responseFormatParameters)이 아니면 생성 클라이언트가
+        //   그 파라미터에 값을 보내지 않아 서버 기본 형식이 오고, 필수 파라미터면 호출이 실패할 수 있다.
+        //   샘플 문서: its-traffic-light(type, 필수), khoa-realtime-sea-current(type, 필수), mohw-emergency-safety-org(apiType),
+        //   docs/sample의 천문연 특일 정보(_type).
+        //   고칠 것: llm 엔진(IrNormalizer.hintedFormatParameter·formatValue)처럼 요청 표에서 포맷 파라미터를 찾아
+        //   {name, value}를 적는다. 값은 responseFormat이고 대소문자는 표의 샘플·기본값을 따른다. responseFormat 판단
+        //   (아래 responseFormat)도 같은 파라미터를 보게 한다. 관련 자리는 "TODO(rule 포맷 파라미터)"로 찾는다.
         ir.set("generatorHints", IrConventions.generatorHints(apiId));
         return new ParsedApi(apiId, ir);
     }
@@ -235,6 +244,7 @@ public class IrAssembler {
      * 응답 포맷은 포맷 파라미터의 샘플데이터(문서가 적어둔 기본값)로 정한다.
      * 항목설명 문구는 "xml 또는json", "결과형식(xml/json)"처럼 기관마다 달라 근거로 삼기 어렵다.
      */
+    // TODO(rule 포맷 파라미터): generator가 아는 이름의 포맷 파라미터만 본다. 자세한 내용은 assemble의 generatorHints 자리
     private String responseFormat(List<List<String>> requestRows) {
         for (List<String> cells : requestRows) {
             if (IrConventions.responseFormatParameters().contains(cells.get(0))
@@ -245,7 +255,10 @@ public class IrAssembler {
         return XML_FORMAT;
     }
 
-    /** 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다. */
+    /**
+     * 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다.
+     * TODO(루트 여럿): 맨 바깥에 키가 여럿인 응답에도 표준 경로를 만들어 틀린 DTO가 나온다. 자세한 내용은 generator의 DtoTreeBuilder.build
+     */
     private String pathFor(String name, Set<String> requestParamNames) {
         if (IrConventions.isResultCodeOrMessageField(name)) {
             return "response.header." + name;
@@ -328,7 +341,7 @@ public class IrAssembler {
             return true;
         }
         if (STRUCTURE_SAMPLE.matcher(cells.get(4).strip()).find()) {
-            // 샘플 칸에 값 대신 하위 구조 도식("“resultList”:[{“meta”: {...}") 을 적은 행
+            // 샘플 칸에 값 대신 하위 구조 도식("“resultList”:[{“meta”: {...}")을 적은 행
             return true;
         }
         if (LIST_NAME.matcher(name).find() && isEmptyCell(size) && isEmptyCell(cells.get(3)) && noSample) {
@@ -341,7 +354,7 @@ public class IrAssembler {
 
     /**
      * 항목구분·필수여부 칸이 필수를 뜻하는지 본다. 표준 표기는 1/0과 1..n/0..n이고,
-     * 기관에 따라 필수/옵션, Y/N, O/X, ○ 로 적는다.
+     * 기관에 따라 필수/옵션, Y/N, O/X, ○로 적는다.
      */
     private boolean isRequired(String gubun) {
         String value = SpecLabels.normalize(gubun);

@@ -26,12 +26,12 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * Claude Messages API 어댑터 (설계 6.2). 회사 SDK 없이 JDK {@link HttpClient}와 이미 쓰는 Jackson으로 부른다(설계 3.3).
+ * Claude Messages API 어댑터. 회사 SDK 없이 JDK {@link HttpClient}와 이미 쓰는 Jackson으로 부른다.
  * <p>
- * 응답은 스트리밍(SSE)으로 받는다. 출력이 길고 thinking까지 더해지면 응답이 몇 분씩 걸려, 한 번에 받으면 HTTP 타임아웃에 걸린다(설계 4.4).
+ * 응답은 스트리밍(SSE)으로 받는다. 출력이 길고 thinking까지 더해지면 응답이 몇 분씩 걸려, 한 번에 받으면 HTTP 타임아웃에 걸린다.
  * 429·5xx·네트워크 오류·시간 초과는 {@link RetryPolicy}로 다시 부른다. 본문은 한 번만 만들어 재시도마다 같은 바이트를 보낸다.
  * <p>
- * API 키는 요청 머리에만 싣는다. 회사가 돌려준 오류 글에 키가 섞여 와도 예외 메시지에서는 가린다(설계 10장).
+ * API 키는 요청 머리에만 싣는다. 회사가 돌려준 오류 글에 키가 섞여 와도 예외 메시지에서는 가린다.
  */
 public final class ClaudeClient implements LlmClient {
 
@@ -54,7 +54,7 @@ public final class ClaudeClient implements LlmClient {
         this(settings, HttpClient.newHttpClient(), RetryPolicy.of(settings), IdleTimeoutInputStream.Timer.SYSTEM);
     }
 
-    /** 테스트가 재시도 대기와 본문 멈춤 감시를 실제 시간 대신 기록·손으로 돌리는 시계로 바꿀 때 쓴다 */
+    /** 재시도 대기와 본문 멈춤 감시를 실제 시간 대신 기록하는 대기·손으로 돌리는 시계로 바꿔 시험할 수 있게 받는다 */
     ClaudeClient(LlmSettings settings, HttpClient http, RetryPolicy retry, IdleTimeoutInputStream.Timer timer) {
         this.settings = Objects.requireNonNull(settings, "settings");
         this.http = Objects.requireNonNull(http, "http");

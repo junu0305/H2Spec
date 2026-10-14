@@ -14,7 +14,7 @@ import java.util.Map;
  * 정답 세트를 한 엔진으로 평가한 결과. summary.md와 문서별 차이 JSON이 이것을 그대로 옮긴다.
  *
  * @param set       세트 이름 (A)
- * @param engine    엔진 이름 (rule)
+ * @param engine    엔진 이름 (rule, llm)
  * @param date      평가한 날짜. 리포트 디렉터리 이름에 들어간다
  * @param documents 문서마다의 결과 (세트 순서)
  */
@@ -25,7 +25,7 @@ record BaselineReport(String set, String engine, LocalDate date, List<DocumentRe
      *
      * @param document       문서 경로 (저장소 루트 기준)
      * @param gold           정답 파일 경로 (저장소 루트 기준). 없으면 null
-     * @param error          문서나 정답 파일을 읽지 못한 이유. 읽었으면 null
+     * @param error          엔진이 결과를 내지 못했거나 정답 파일을 읽지 못한 이유. 그런 일이 없었으면 null
      * @param operations     엔진이 찾은 오퍼레이션 (문서 순서)
      * @param generator      operations와 같은 자리의 generator 확인 결과. IR이 없는 자리는 null
      * @param goldOperations 정답 오퍼레이션. 정답 파일이 없으면 null
@@ -51,7 +51,7 @@ record BaselineReport(String set, String engine, LocalDate date, List<DocumentRe
      * @param urlMatch  주소가 같은지. 정답에 url이 없으면 null
      * @param request   요청 파라미터 이름 비교. 정답에 request가 없으면 null
      * @param response  응답 필드 이름 비교. 정답에 response가 없으면 null
-     * @param checks    9.2의 새 키로 잰 지표. 키가 없는 지표는 빠진다
+     * @param checks    정답 파일의 세부 키로 잰 지표({@link DetailMetric}). 키가 없는 지표는 빠진다
      */
     record PairResult(Match match, boolean extracted, Boolean urlMatch, NameMatch request, NameMatch response,
                       Map<DetailMetric, Check> checks) {
@@ -72,7 +72,7 @@ record BaselineReport(String set, String engine, LocalDate date, List<DocumentRe
      * @param response          응답 필드 이름 점수
      * @param generator         generator를 통과한 정답 오퍼레이션 / supportedByGenerator가 false가 아닌 정답 오퍼레이션
      * @param generatorAssumed  generator 분모 중 supportedByGenerator가 없어 지원 범위 안으로 가정한 수
-     * @param details           9.2의 새 키로 잰 지표
+     * @param details           정답 파일의 세부 키로 잰 지표({@link DetailMetric})
      * @param coverage          지표마다 키가 있는 정답 오퍼레이션 수
      */
     record Totals(int documents, int scoredDocuments, int goldOperations, int extracted, Ratio recall,
@@ -80,7 +80,7 @@ record BaselineReport(String set, String engine, LocalDate date, List<DocumentRe
                   Ratio generator, int generatorAssumed, Map<DetailMetric, Ratio> details,
                   Map<DetailMetric, Integer> coverage) {
 
-        /** @return 짝지은 오퍼레이션 중 주소가 틀린 수. 조용한 오류라 가장 중요하다 (설계 9.4) */
+        /** @return 짝지은 오퍼레이션 중 주소가 틀린 수. 조용한 오류라 가장 중요하다 */
         int wrongUrls() {
             return url.total() - url.hits();
         }

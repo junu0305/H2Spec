@@ -4,14 +4,14 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 엔진이 문서를 변환하지 못했다. 실패 종류로 CLI가 처리를 가를 수 있게 한다. 키 오류는 다른 문서도 같은 이유로
+ * 엔진이 문서를 변환하지 못했다. 실패 종류로 CLI가 처리를 가를 수 있게 한다. 키·설정 오류는 다른 문서도 같은 이유로
  * 실패하므로 전체를 멈추고, 그 밖의 실패는 그 문서만 실패로 센다.
  * <p>
  * rule 엔진은 변환한 오퍼레이션이 없을 때 기존 파서와 같은 메시지로 {@link Kind#FAILED}만 쓴다.
  * 문서를 읽지 못한 것은 이 예외로 바꾸지 않고 {@link java.io.IOException} 그대로 던진다. CLI가 둘을 다른 문구로 알린다.
  * <p>
  * llm 엔진은 LLM이 답한 뒤에 실패하면(출력 잘림, 거절, JSON 파싱 실패, 변환한 오퍼레이션 없음) 엔진 정보를 함께 담는다.
- * 그 호출도 과금되므로 CLI가 실패한 문서의 토큰 사용량도 알리고 합계에 더한다(설계 7.4).
+ * 그 호출도 과금되므로 CLI가 실패한 문서의 토큰 사용량도 알리고 합계에 더한다.
  */
 public class SpecParseException extends Exception {
 
@@ -19,6 +19,8 @@ public class SpecParseException extends Exception {
     public enum Kind {
         /** API 키 오류. 다른 문서도 같은 이유로 실패한다 */
         AUTH,
+        /** LLM 설정(모델 이름, API 주소) 오류. 다른 문서도 같은 이유로 실패한다 */
+        SETTINGS,
         /** 429·5xx·네트워크 오류가 재시도한 뒤에도 이어졌다. 나중에 다시 하면 될 수 있다 */
         RETRYABLE,
         /** 그 밖의 실패. 변환한 오퍼레이션이 없거나 LLM 응답을 결과로 쓸 수 없는 경우(출력 잘림, 거절, JSON 파싱 실패) */

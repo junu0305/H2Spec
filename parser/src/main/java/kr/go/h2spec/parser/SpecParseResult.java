@@ -66,7 +66,7 @@ public record SpecParseResult(List<Operation> operations, List<String> skipped, 
      * 토큰 사용량과 캐시 사용은 같은 결과에서도 실행마다 달라지므로 IR에는 넣지 않는다.
      *
      * @param name       엔진 ("rule", "llm")
-     * @param provider   LLM 회사 ("claude", "openai", "gemini"). rule 엔진은 null
+     * @param provider   LLM 회사 ID (지금은 "claude"뿐). rule 엔진은 null
      * @param model      모델 ID. rule 엔진은 null
      * @param effort     회사별 추론 깊이 설정값. rule 엔진은 null
      * @param cacheUsed  결과 캐시를 썼는지. rule 엔진은 false

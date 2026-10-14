@@ -5,8 +5,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 /**
  * 생성에 쓰는 힌트.
  *
- * @param responseFormatParameter 응답 형식을 고르는 요청 파라미터. generator가 아는 이름(returnType·dataType·resultType)이
- *                                아닌 파라미터에 값을 채울 때만 쓴다. 없으면 null
+ * @param responseFormatParameter 응답 형식을 고르는 요청 파라미터와 넣을 값. generator는 아는 이름(returnType·dataType·resultType)이면
+ *                                힌트 없이도 값을 채우므로, llm 엔진은 그 밖의 이름(type, apiType 등)일 때만 적는다. 없으면 null
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GeneratorHints(String targetPackage, ResponseFormatParameter responseFormatParameter) {

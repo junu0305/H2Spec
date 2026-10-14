@@ -9,6 +9,14 @@ public class DtoTreeBuilder {
 
     private static final String LIST_SUFFIX = "[]";
 
+    // TODO(루트 여럿): 응답 경로의 첫 칸(루트)이 하나여야 해서, 맨 바깥에 키가 여럿인 JSON 응답은 받지 못한다(아래 예외).
+    //   샘플 문서: kosha-certificate-check({"header": …, "body": …}), jejudatahub-wifi-usage({"totCnt", "hasMore", "data"}).
+    //   지금 두 엔진의 처리: llm 엔진은 이런 오퍼레이션을 지원 범위 밖으로 건너뛴다(IrNormalizer.responseFields).
+    //   rule 엔진은 응답을 늘 표준 구조(response.header·response.body)로 가정해 경로를 만들어(IrAssembler.pathFor),
+    //   컴파일은 되지만 실제 응답을 읽지 못하는 DTO가 나온다.
+    //   고칠 것: 루트 없는 DTO(최상위 필드를 그대로 갖는 클래스)를 만들고, 그때는 ClientEmitter의 JSON 루트 풀기(UNWRAP_ROOT_VALUE)와
+    //   DtoEmitter의 @JsonRootName·@JacksonXmlRootElement를 쓰지 않는다. rule 엔진이 이런 응답을 알아보는 방법도 정한다.
+    //   관련 자리는 "TODO(루트 여럿)"으로 찾는다.
     public DtoNode build(List<ResponseField> fields) {
         DtoNode root = null;
         for (ResponseField field : fields) {

@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 원문 대조(설계 5.1)의 대상. Reader가 만든 Block 목록을 칸(문단 하나, 표의 칸 하나) 단위로 펼쳐 두고
+ * 원문 대조의 대상. Reader가 만든 Block 목록을 칸(문단 하나, 표의 칸 하나) 단위로 펼쳐 두고
  * LLM이 옮긴 글을 칸마다 찾는다.
  * <ul>
  *   <li>직렬화한 텍스트가 아니라 Block의 원래 글과 대조하고, 대소문자를 가린다. LLM이 옮긴 글은 직렬화가 바꾼 것
@@ -195,7 +195,7 @@ final class SourceText {
         return rank(hits, evidence);
     }
 
-    /** 에러코드 표에서 정상·NORMAL이 함께 적힌 행의 코드를 찾는다 */
+    /** 에러코드 표에서 정상이나 NORMAL이 적힌 행의 코드를 찾는다 */
     List<Hit> codesInNormalRows(String code, Set<Integer> evidence) {
         List<Hit> hits = new ArrayList<>();
         for (List<Cell> row : rows) {

@@ -9,9 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 정답 파일 ({@code *.expected.json}, 설계 9.2).
+ * 정답 파일 ({@code *.expected.json}).
  * <p>
- * {@code url}·{@code request}·{@code response}는 지금 corpus 테스트가 쓰는 키다. 나머지는 0-4에서 사람이 문서를 보고 더하는 키라
+ * {@code url}·{@code request}·{@code response}는 지금 corpus 테스트가 쓰는 키다. 나머지는 사람이 문서를 보고 앞으로 더할 키라
  * 아직 없을 수 있다. 없는 키는 null로 두어 그 키로 재는 지표만 건너뛴다. 정답 값을 여기서 짐작해 채우지 않는다.
  * 빈 값과 없는 키는 다르다. {@code "successCode": ""}는 "문서에 성공코드가 없다"는 정답이다.
  *
@@ -32,7 +32,7 @@ record GoldFile(String source, List<GoldOperation> operations) {
      * @param response              응답 필드 이름 (경로의 마지막 칸)
      * @param httpMethod            문서의 HTTP 메서드 표기 (GET, POST, OTHER, UNKNOWN)
      * @param responseFormat        IR에 들어갈 응답 포맷 (XML, JSON)
-     * @param successCode           설계 5.2의 정책이 고를 성공코드. 문서에 성공코드가 없으면 빈 문자열
+     * @param successCode           llm 엔진의 성공코드 정책({@code SuccessCodeSelector})이 고를 성공코드. 문서에 성공코드가 없으면 빈 문자열
      * @param successCodeCandidates 문서 안에서 엇갈린 성공코드 후보의 값
      * @param auth                  인증 방식 (SERVICE_KEY_QUERY, PATH_KEY, HEADER_KEY …)
      * @param requestDetail         요청 파라미터의 위치·타입·필수 여부
@@ -107,7 +107,7 @@ record GoldFile(String source, List<GoldOperation> operations) {
         return texts;
     }
 
-    /** 후보는 {@code {code, source}} 객체로 적을 수도, 값만 적을 수도 있다 (설계 9.2는 형식을 정하지 않았다) */
+    /** 후보는 {@code {code, source}} 객체로 적을 수도, 값만 적을 수도 있다 (형식을 하나로 정하지 않았다) */
     private static List<String> candidates(JsonNode array) {
         if (array == null || !array.isArray()) {
             return null;

@@ -24,7 +24,7 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * 정답 없는 문서 묶음(세트 C)에서 대리 지표 네 가지를 센다 (설계 11장 0-6). 문서마다 rule 엔진을 돌리고,
+ * 정답 없는 문서 묶음(세트 C)에서 대리 지표 네 가지를 센다. 문서마다 rule 엔진을 돌리고,
  * 같은 블록에서 응답 예제·성공코드 후보·인증 흔적을 찾아 rule 결과와 견준다. 패턴으로 세는 휴리스틱이라 정확하지 않다.
  */
 public final class ProxyEvaluator {
@@ -101,7 +101,7 @@ public final class ProxyEvaluator {
         return new DocumentSignals(name, null, operations.size(), irs, examples, candidates, signals);
     }
 
-    /** (a) rule 엔진은 포맷 파라미터의 샘플값으로만 포맷을 정해 JSON 전용 API도 XML로 낸다 (설계 1.2) */
+    /** (a) rule 엔진은 포맷 파라미터의 샘플값으로만 포맷을 정해 JSON 전용 API도 XML로 낸다 */
     private static Signal jsonExampleXmlIr(List<ResponseExample> responses, List<EngineOperation> operations) {
         List<String> json = blocksOf(responses, Format.JSON);
         List<String> xmlIrs = operations.stream()
@@ -131,8 +131,9 @@ public final class ProxyEvaluator {
     }
 
     /**
-     * (c) 후보 하나라도 00이 아니면 센다. 정책(설계 5.2)은 0·000을 00으로 바꾸지만, 인터셉터는 글자까지 같은 값만
-     * 성공으로 보므로(3-3 전) 실제 API가 0을 돌려주면 정상 응답이 예외가 된다. 그래서 따로 나눠 센다
+     * (c) 후보 하나라도 00이 아니면 센다. llm 엔진의 성공코드 정책({@code SuccessCodeSelector})은 0·000을 00으로 바꾸고
+     * 인터셉터도 숫자 코드는 앞자리 0을 떼고 비교하지만, INFO-00처럼 숫자가 아닌 코드는 글자까지 같아야 성공이라
+     * rule 엔진의 고정값 00으로는 정상 응답이 예외가 된다. 그래서 따로 나눠 센다
      */
     private static Signal non00SuccessCode(List<Candidate> candidates) {
         Set<String> kinds = new LinkedHashSet<>();

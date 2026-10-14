@@ -22,7 +22,7 @@ import java.util.TreeMap;
  * 복사해 두면 한쪽만 고쳐져도 알 수 없기 때문이다. Gradle은 저장소 루트를 시스템 속성으로 넘기고(parser-llm/build.gradle),
  * IDE에서 모듈 디렉터리로 돌리면 그 부모를 쓴다. 테스트는 원본의 긴 이름 대신 녹화 파일과 같은 짧은 영문 이름으로 문서를 가리킨다.
  * <p>
- * 녹화({@code llm-recordings/<회사>/<문서>.json})는 LLM이 그 문서에서 낸 중간 스키마 JSON이다(설계 9.3). 2026-10-11 실제 Claude 응답
+ * 녹화({@code llm-recordings/<회사>/<문서>.json})는 LLM이 그 문서에서 낸 중간 스키마 JSON이다. 실제 Claude 응답
  * ({@code claude-sonnet-5-5}, effort medium, 프롬프트 extraction-v4, 스키마 v3)을 그대로 담았다. 빠진 필드나 null이 있으면 읽지 않아, 녹화가 스키마의
  * 모든 필드를 채웠다고 말할 수 있게 한다. 손으로 쓴 응답은 {@code fixtures/}에 따로 둔다({@link #fixture}).
  */

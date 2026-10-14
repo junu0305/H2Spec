@@ -154,7 +154,6 @@ class ClientEmitterTest {
                 base.generatorHints());
     }
 
-    /** schema-example 기반 IR에서 serviceKey 파라미터 이름만 바꾼 IR */
     @Test
     void path_파라미터는_경로용_인코더로_치환한다() throws Exception {
         // URLEncoder는 공백을 +로 바꾸는데 경로 세그먼트에서 +는 공백이 아니라 글자 그대로다
@@ -181,6 +180,7 @@ class ClientEmitterTest {
         assertFalse(source.contains("encodePath"), "쓰이지 않는 헬퍼를 넣지 않는다");
     }
 
+    /** schema-example 기반 IR에서 serviceKey 파라미터 이름만 바꾼 IR */
     private IrSpec withServiceKeyNamed(String name) throws Exception {
         IrSpec base = new IrLoader().load(resource("/ir/schema-example.json"));
         List<kr.go.h2spec.generator.ir.RequestParameter> params = new java.util.ArrayList<>();

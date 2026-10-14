@@ -106,7 +106,7 @@ final class PublicDataErrorDetector {
      * 문서에는 성공코드가 00인데 실제 응답은 0이나 JSON 숫자 0({@code "resultCode": 0})으로 오는 기관이 있다.
      * 앞자리 0만 다른 숫자 코드는 같은 수를 뜻하므로 오류 코드를 성공으로 잘못 볼 일이 없다.
      * 사전({@link PublicDataErrorCatalog#find})도 같은 이유로 자릿수를 무시한다.
-     * IR의 성공코드 정책(설계 문서 5.2)은 문서마다 엇갈리는 0·00·000을 00으로 적고, 이 비교를 안전장치로 삼는다.
+     * IR의 성공코드 정책은 문서마다 엇갈리는 0·00·000을 00으로 적고, 이 비교를 안전장치로 삼는다.
      * 숫자가 아닌 코드(INFO-00 등)는 대소문자까지 같아야 성공이다.
      */
     private boolean isSuccessCode(String code) {

@@ -3,8 +3,8 @@ package kr.go.h2spec.eval;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * 엔진이 문서에서 찾은 오퍼레이션 하나. 0-1의 {@code SpecParseResult} 오퍼레이션 기록과 같은 내용을 담는다.
- * 지표는 이 기록만 보므로 llm 엔진이 붙어도 지표 코드는 그대로 쓴다.
+ * 엔진이 문서에서 찾은 오퍼레이션 하나. {@code SpecParseResult}의 오퍼레이션 기록과 같은 내용을 담는다.
+ * 지표는 이 기록만 보므로 rule·llm 엔진이 같은 지표 코드를 쓴다.
  *
  * @param operationName 영문 오퍼레이션명. 없으면 null
  * @param title         국문 기능명. 없으면 null
@@ -16,7 +16,7 @@ public record EngineOperation(String operationName, String title, ObjectNode ir,
                               boolean outOfScope) {
 
     /**
-     * 범위 판정 전의 추출 결과가 있는지 본다. 재현율·정확도는 이 결과로 잰다 (설계 9.4).
+     * 범위 판정 전의 추출 결과가 있는지 본다. 재현율·정확도는 이 결과로 잰다.
      *
      * @return IR이 있으면 true
      */

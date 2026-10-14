@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * 평가 세트 (설계 9.1). 세트 A의 문서와 정답 파일은 저장소의 테스트 리소스 그 자체다.
- * 세트 B(docs/sample)는 정답 파일을 0-4에서 새로 쓰고, 세트 C는 저장소 밖에 있고 정답이 없어 대리 지표로만 본다.
+ * 평가 세트. 세트 A의 문서와 정답 파일은 저장소의 테스트 리소스 그 자체다.
+ * 세트 B(docs/sample)는 정답 파일을 새로 써야 하고, 세트 C는 저장소 밖에 있고 정답이 없어 대리 지표로만 본다.
  */
 final class DataSets {
 
@@ -17,7 +17,7 @@ final class DataSets {
     static final String CORPUS = "parser/src/test/resources/docs/corpus";
     /**
      * corpus 밖의 세트 A 문서. msrstn-info는 같은 문서의 DOCX·HWP·HWPX판이고 HWPX판은 cli 테스트 리소스에만 있다.
-     * 셋 다 아직 정답 파일이 없다. 단위 테스트가 일부 값만 확인하고 있어, 정답을 지어내지 않고 정답 없는 문서로 둔다
+     * 모두 아직 정답 파일이 없다. 단위 테스트가 일부 값만 확인하고 있어, 정답을 지어내지 않고 정답 없는 문서로 둔다
      */
     static final List<String> EXTRA_SET_A = List.of(
             "parser/src/test/resources/docs/msrstn-info.docx",
@@ -39,7 +39,7 @@ final class DataSets {
     }
 
     /**
-     * 세트의 문서를 돌려준다. 지금은 세트 A뿐이다. 세트 B는 0-4에서 정답 파일의 자리가 정해지면 더한다.
+     * 세트의 문서를 돌려준다. 지금은 세트 A뿐이다. 세트 B는 정답 파일의 자리가 정해지면 더한다.
      *
      * @param set  세트 이름
      * @param root 저장소 루트

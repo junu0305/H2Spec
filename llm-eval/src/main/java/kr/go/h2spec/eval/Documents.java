@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 확장자로 Reader와 sourceFormat을 고른다. 0-1의 {@code DocumentReaders}가 생기면 그것으로 바꾼다.
- * 지금은 같은 분기가 {@code ConvertCommand}와 파서 3종에 흩어져 있어 여기서도 따로 둔다.
+ * 확장자로 Reader와 sourceFormat을 고른다. parser 모듈의 {@code DocumentReaders}와 같은 대응을 따로 둔 것이라
+ * 그것으로 바꿀 수 있다.
  */
 public final class Documents {
 

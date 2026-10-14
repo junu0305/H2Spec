@@ -11,7 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** DTO 트리를 Jackson XML 어노테이션이 붙은 단일 .java 소스로 방출한다. */
+/** DTO 트리를 Jackson 어노테이션(응답 포맷에 따라 XML용 또는 JSON용)이 붙은 단일 .java 소스로 방출한다. */
 public class DtoEmitter {
 
     private static final String INDENT = "    ";
@@ -45,6 +45,7 @@ public class DtoEmitter {
           .append(" * H2Spec generator가 자동 생성한 코드입니다. 직접 수정하지 마세요.\n")
           .append(" */\n");
         sb.append("@JsonIgnoreProperties(ignoreUnknown = true)\n");
+        // TODO(루트 여럿): 루트 없는 응답이면 루트 어노테이션을 달지 않아야 한다. 자세한 내용은 DtoTreeBuilder.build
         if (isXml) {
             sb.append("@JacksonXmlRootElement(localName = \"").append(JavaText.literal(root.name())).append("\")\n");
         } else {
@@ -126,9 +127,9 @@ public class DtoEmitter {
         return JavaNameRules.canonicalIdentifier(className).toLowerCase(Locale.ROOT);
     }
 
-    // 트리에 리스트가 있으면 java.util.List + 빈 줄, 항상 JsonIgnoreProperties,
-    // 리스트 있으면 ElementWrapper/Property, 원본명!=camel명인 필드가 있으면 Property, 항상 RootElement.
-    // 마지막에 빈 줄.
+    // 트리에 리스트가 있으면 java.util.List + 빈 줄, 항상 JsonIgnoreProperties. XML은 리스트 있으면 ElementWrapper/Property,
+    // 원본명!=camel명인 필드가 있으면 Property, 항상 RootElement. JSON은 리스트나 원본명!=camel명인 필드가 있으면
+    // JsonProperty, 리스트 래퍼가 있으면 JsonCreator, 항상 JsonRootName. 마지막에 빈 줄.
     private void appendImports(StringBuilder sb, DtoNode root, boolean isXml) {
         boolean hasList = hasList(root);
         boolean hasRenamedField = hasRenamedField(root);
@@ -189,8 +190,8 @@ public class DtoEmitter {
         return false;
     }
 
-    // 필드 선언 전부(javadoc, 리스트 어노테이션, localName 어노테이션 포함) → getter/setter 전부.
-    // 각 선언 사이 빈 줄.
+    // 필드 선언 전부(javadoc, 리스트 어노테이션, 이름 어노테이션 포함) → getter/setter 전부.
+    // javadoc·어노테이션이 붙은 필드 선언의 앞뒤와 getter/setter 사이마다 빈 줄.
     private void appendClassBody(StringBuilder sb, DtoNode node, int depth, boolean isXml,
                                  Map<DtoNode, String> classNames) {
         String indent = INDENT.repeat(depth);

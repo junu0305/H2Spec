@@ -29,7 +29,7 @@ final class SpecLabels {
     private static final Pattern NO_BREAK_SPACE = Pattern.compile("[\\u00a0\\u2007\\u202f\\ufeff]");
     /** 이보다 긴 문단은 본문 문장으로 보고 구간 제목으로 쓰지 않는다 */
     private static final int MAX_HEADING_LENGTH = 60;
-    /** 문장으로 끝나는 문단 (…한다, …함, …됨, …임, …음, 마침표). "개요"처럼 요로 끝나는 제목이 있어 요는 넣지 않는다 */
+    /** 문장으로 끝나는 문단 (…한다, …함, …됨, …임, …음, …것, 마침표). "개요"처럼 요로 끝나는 제목이 있어 요는 넣지 않는다 */
     private static final Pattern SENTENCE_ENDING = Pattern.compile("(다|함|됨|임|음|것)[.!]?$|\\.$");
     /** 구간 표지 바로 뒤에 붙으면 문장이 되는 조사 */
     private static final String PARTICLES = "는은를을와과의에로도가이";

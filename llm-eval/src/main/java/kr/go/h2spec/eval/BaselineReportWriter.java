@@ -26,7 +26,7 @@ import static kr.go.h2spec.eval.Markdown.cell;
 import static kr.go.h2spec.eval.Markdown.decimal;
 
 /**
- * 평가 결과를 summary.md(한국어 요약표)와 문서별 차이 JSON으로 쓴다 (설계 9.4). 요약표는 PR 본문에 붙인다.
+ * 평가 결과를 summary.md(한국어 요약표)와 문서별 차이 JSON으로 쓴다. 요약표는 PR 본문에 붙인다.
  * 실행 시각·소요 시간은 쓰지 않는다. 같은 입력이면 날짜 말고는 같은 리포트가 나와야 실행끼리 diff로 비교할 수 있다.
  */
 final class BaselineReportWriter {
@@ -192,7 +192,7 @@ final class BaselineReportWriter {
         section(md, "못 찾은 오퍼레이션", missed);
         section(md, "정답에 없는 엔진 오퍼레이션", extra);
         section(md, "요청·응답 이름 차이", names);
-        section(md, "9.2 키 지표에서 틀린 항목", details);
+        section(md, "세부 키 지표에서 틀린 항목", details);
     }
 
     private void generatorFailures(StringBuilder md, BaselineReport report) {
@@ -403,7 +403,7 @@ final class BaselineReportWriter {
         return document.substring(document.lastIndexOf('/') + 1);
     }
 
-    /** 세트 C처럼 디렉터리가 달라도 파일 이름이 같은 문서가 있어 두 번째부터 번호를 붙인다 */
+    /** 디렉터리가 다르면 파일 이름이 같은 문서가 있을 수 있어 두 번째부터 번호를 붙인다 */
     private static String uniqueName(String name, Set<String> used) {
         String candidate = name;
         for (int i = 2; !used.add(candidate); i++) {

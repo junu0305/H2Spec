@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 /**
  * 어댑터를 만들 때 넘기는 설정 ({@link LlmProviderFactory#create}).
  * <p>
- * API 키는 환경변수로만 받는다(설계 10장). 이 record는 키를 담지만 {@link #toString()}은 키를 가린다.
+ * API 키는 환경변수로만 받는다. 이 record는 키를 담지만 {@link #toString()}은 키를 가린다.
  * 설정을 통째로 로그나 예외 메시지에 찍어도 키가 남지 않게 하기 위해서다.
  *
  * @param model 모델 ID. 회사별 기본값은 {@link LlmProviderFactory#defaultModel()}
@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
  * @param requestTimeout 응답 머리를 받을 때까지, 그리고 스트리밍 본문에서 다음 데이터가 올 때까지 기다리는 최대 시간.
  *                       응답 전체에 걸리는 시간은 제한하지 않는다. thinking이 길면 응답이 몇 분씩 걸리기 때문이다
  * @param retryAttempts 다시 부르면 나을 수 있는 실패({@link LlmException.Kind#retryable()}) 뒤에 다시 부르는 최대 횟수. 0이면 한 번만 부른다
- * @param baseUrl API 주소(스킴·호스트와 경로 앞부분). null이면 회사 기본 주소다. 테스트가 가짜 서버를 가리킬 때 쓴다
+ * @param baseUrl API 주소(스킴·호스트와 경로 앞부분). null이면 회사 기본 주소다. 프록시처럼 다른 주소를 거칠 때 쓴다
  * @param workspaceId 요청을 실행할 워크스페이스 ID. null이면 보내지 않는다. 한 워크스페이스에 묶이지 않은 키(여러 워크스페이스에서 쓰는
  *                    개인 키·서비스 계정 키)는 요청마다 워크스페이스를 밝혀야 한다(Claude는 {@code anthropic-workspace-id} 머리)
  */

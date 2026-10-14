@@ -11,7 +11,7 @@ import kr.go.h2spec.parser.llm.schema.LlmSuccessCode;
 import java.util.List;
 
 /**
- * 원문 대조·형식 검사(설계 5.1)를 마친 오퍼레이션 하나. 정규화({@code IrNormalizer})가 이것으로 IR을 만든다.
+ * 원문 대조·형식 검사를 마친 오퍼레이션 하나. 정규화({@code IrNormalizer})가 이것으로 IR을 만든다.
  * <p>
  * 이름과 주소는 LLM이 옮긴 글이 아니라 원문에서 찾은 칸의 원래 글에서 rule 엔진과 같은 함수로 꺼낸 값이다.
  * 같은 칸에서는 엔진이 달라도 같은 값이 나오게 하기 위해서다.

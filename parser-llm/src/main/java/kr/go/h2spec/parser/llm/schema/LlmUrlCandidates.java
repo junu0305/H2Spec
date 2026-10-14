@@ -2,7 +2,7 @@ package kr.go.h2spec.parser.llm.schema;
 
 /**
  * 오퍼레이션 주소 후보. LLM은 주소를 고르지 않고 칸마다 원문 그대로 옮기며, 주소 안에 공백을 넣지 않는다.
- * 코드가 rule 엔진과 같은 규칙으로 고르므로 같은 후보에서는 엔진이 달라도 같은 주소가 나온다 (설계 원칙 1).
+ * 코드가 rule 엔진과 같은 규칙으로 고르므로 같은 후보에서는 엔진이 달라도 같은 주소가 나온다.
  * 칸의 몫은 rule 엔진과 같게 나눈다. 없으면 빈 문자열이다.
  *
  * @param callBackUrl 정보 표의 주소 칸 (Call Back URL, 요청주소, 요청 URL, 호출 URL, End Point(URL), API URL 등)

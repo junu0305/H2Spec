@@ -27,11 +27,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 녹화한 LLM 응답으로 llm 엔진의 전체 흐름을 문서마다 끝까지 돌린다 (설계 9.3, 1-9). 키 없이 {@code ./gradlew build}에서 돈다.
+ * 녹화한 LLM 응답으로 llm 엔진의 전체 흐름을 문서마다 끝까지 돌린다. 키 없이 {@code ./gradlew build}에서 돈다.
  * <p>
  * {@link LlmSpecParser}가 문서를 읽어 직렬화 → 녹화 재생({@link RecordedLlmClient}) → 검증 → 정규화 → 교차검증을 거쳐 낸 결과에서,
  * 변환한 오퍼레이션은 IrLoader → CodeGenerator → 생성 코드 javac 컴파일까지 돌린다. CLI는 생성 코드를 컴파일하지 않으므로
- * 컴파일되지 않는 IR은 여기서 드러난다. 녹화가 문서의 일부 오퍼레이션만 담은 문서(기상청 등)는 나머지를 rule 엔진만 찾아 경고가 난다.
+ * 컴파일되지 않는 IR은 여기서 드러난다. 녹화에 없는 오퍼레이션을 rule 엔진만 찾으면 경고가 나므로 그 수도 문서마다 확인한다.
  */
 class RecordedFlowTest {
 
@@ -117,7 +117,7 @@ class RecordedFlowTest {
         assertTrue(jeju.skipReason().contains("응답 루트가 둘 이상 (totCnt, hasMore, data)"), jeju.skipReason());
         assertEquals("JSON", jeju.api().ir().get("api").get("responseFormat").asText(), "IR은 문서의 의미대로 정규화했다");
         assertEquals(List.of(), result.apis(), "지원 범위 밖 IR은 파일로 쓰지 않는다");
-        assertEquals(List.of("읍면동별 와이파이 사용량 API: " + jeju.skipReason()), result.skipped(), "설계 7.4의 출력과 같은 꼴");
+        assertEquals(List.of("읍면동별 와이파이 사용량 API: " + jeju.skipReason()), result.skipped(), "CLI가 건너뛴 오퍼레이션을 알리는 꼴");
 
         SpecParseException e = assertThrows(SpecParseException.class,
                 () -> parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document)).parse(TestDocuments.path(document)));

@@ -25,7 +25,8 @@ import java.util.List;
 
 /**
  * 규칙마다의 테스트가 쓰는 LLM 출력을 코드로 만든다. 중간 스키마 record는 필드가 많아 테스트가 보려는 값만 바꿔 쓰게 한다.
- * 기본값은 LLM이 아무것도 찾지 못했을 때 내는 값(빈 문자열, 빈 배열, {@code UNKNOWN})이다.
+ * 기본값은 LLM이 아무것도 찾지 못했을 때 내는 값(빈 문자열, 빈 배열, {@code UNKNOWN})이다. 응답 형식·응답 구조·예제 형식·인증만
+ * 표준 기술문서의 값(XML, 예제로 정한 구조, 쿼리의 serviceKey)으로 둔다.
  */
 public final class LlmFixtures {
 
@@ -81,7 +82,7 @@ public final class LlmFixtures {
         return new LlmErrorCode(code, message);
     }
 
-    /** 오퍼레이션 하나를 만든다. 바꾸지 않은 필드는 LLM이 찾지 못했을 때의 값이다 */
+    /** 오퍼레이션 하나를 만든다. 바꾸지 않은 필드는 클래스 설명의 기본값이다 */
     public static final class OperationBuilder {
         private String operationName = "";
         private String title = "";

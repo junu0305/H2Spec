@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 정규화 표(설계 5.2)의 행마다 본다. 문서는 {@link SampleDocument}의 작은 표준 기술문서와, 주소·인증키가 다른 작은 문서다.
+ * 정규화 규칙을 IR 칸마다 본다. 문서는 {@link SampleDocument}의 작은 표준 기술문서와, 주소·인증키가 다른 작은 문서다.
  * 정규화는 검증 결과를 받으므로 테스트도 검증을 거친 결과를 정규화한다.
  */
 class IrNormalizerTest {
@@ -76,7 +76,7 @@ class IrNormalizerTest {
         JsonNode metadata = normalize(standardOperation()).ir().get("metadata");
 
         assertEquals(List.of("sourceFile", "sourceFormat", "parsedAt", "parserVersion", "engine", "llm",
-                "manualReviewRequired", "reviewNotes"), keys(metadata), "설계 8장의 예시와 같은 자리");
+                "manualReviewRequired", "reviewNotes"), keys(metadata), "rule 엔진의 metadata에서 engine 바로 뒤에 llm을 더한 자리");
         assertEquals("sample.docx", metadata.get("sourceFile").asText());
         assertEquals("DOCX", metadata.get("sourceFormat").asText());
         assertEquals("llm", metadata.get("engine").asText());
@@ -85,10 +85,6 @@ class IrNormalizerTest {
         assertFalse(metadata.toString().toLowerCase().contains("token"), "토큰 수는 실행마다 달라 IR에 넣지 않는다");
         assertFalse(metadata.toString().toLowerCase().contains("cache"));
     }
-
-    // ---- api.apiName, description, provider ----
-
-    // ---- api.httpMethod ----
 
     // ---- api.authType, serviceKey ----
 
@@ -104,7 +100,7 @@ class IrNormalizerTest {
     }
 
     @Test
-    void 경로_키_헤더_키_인증_없음은_3_1_전까지_지원_범위_밖이다() {
+    void 헤더_키와_인증_없음은_지원_범위_밖이다() {
         NormalizedOperation none = normalize(document(ORGANIZATION_URL), extraction(documentOperation(ORGANIZATION_URL)
                 .auth(LlmAuth.Kind.NONE, "")));
         assertTrue(none.skipReason().startsWith("인증 방식 미지원 (인증키 없음)"), none.skipReason());
@@ -114,7 +110,7 @@ class IrNormalizerTest {
                         parameter("X-Api-Key", Location.HEADER, LlmValueType.STRING, Requirement.REQUIRED, "", "", false))
                         .auth(LlmAuth.Kind.HEADER_KEY, "X-Api-Key")));
         assertEquals("요청 파라미터 위치 미지원 (헤더: X-Api-Key): generator는 query·path 파라미터만 받는다; "
-                + "인증 방식 미지원 (헤더의 X-Api-Key): generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다 (3-1 전까지)",
+                + "인증 방식 미지원 (헤더의 X-Api-Key): generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다",
                 header.skipReason(), "이유가 여럿이면 모두 적는다");
     }
 
@@ -289,7 +285,7 @@ class IrNormalizerTest {
     }
 
     @Test
-    void 응답_루트가_둘_이상이면_3단계_전까지_지원_범위_밖이다() {
+    void 응답_루트가_둘_이상이면_지원_범위_밖이다() {
         List<Block> blocks = new ArrayList<>(SampleDocument.standard());
         blocks.set(9, table(row("응답메시지"), row("{\n\"header\": {\"resultCode\": \"00\"},\n\"body\": {\"totalCount\": 1}\n}")));
 
@@ -297,14 +293,49 @@ class IrNormalizerTest {
                 field("header.resultCode", RESPONSE_EXAMPLE), field("body.totalCount", RESPONSE_EXAMPLE))));
 
         assertTrue(normalized.outOfScope());
-        assertEquals("응답 루트가 둘 이상 (header, body): 3단계 IR 확장 전까지 generator는 루트 하나로 감싼 응답만 받는다",
+        assertEquals("응답 루트가 둘 이상 (header, body): generator는 루트 하나로 감싼 응답만 받는다",
                 normalized.skipReason());
         assertEquals("header.resultCode", api(normalized).get("responseFields").get(0).get("path").asText());
     }
 
-    // ---- api.errorSpec ----
+    // ---- metadata.reviewNotes ----
 
-    // ---- reviewNotes, manualReviewRequired, 건너뜀 ----
+    @Test
+    void 코드가_따로_알리는_것을_LLM이_다시_적은_노트는_거르고_나머지는_남긴다() {
+        String url = "http://api.example.kr/svc/getList";
+        List<Block> blocks = List.of(
+                heading("상세기능정보"), table(row("상세기능명(국문)", "목록 조회"), row("Call Back URL", url)),
+                heading("요청 메시지 명세"), table(HEADER, row("serviceKey", "인증키", "100", "1", "-", "인증키")),
+                heading("응답 메시지 명세"), table(HEADER, row("resultCode", "결과코드", "2", "1", "00", "결과코드"),
+                        row("itemName", "항목명", "50", "0", "종로", "항목 이름")),
+                heading("요청/응답 메시지 예제"), table(row("응답메시지"), row("<response><header><resultCode>0</resultCode>"
+                        + "</header><body><items><item><itemName>종로</itemName></item></items></body></response>")));
+        // 표의 샘플은 00, 예제는 0이라 성공코드 후보가 엇갈려 [검증] 노트가 붙는다
+        LlmFixtures.OperationBuilder operation = operation().title("목록 조회").callBackUrl(url).parameters(query("serviceKey"))
+                .format(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "").exampleFormat(ResponseExampleFormat.XML)
+                .structure(ResponseStructure.EXAMPLE)
+                .fields(field("response.header.resultCode", RESPONSE_EXAMPLE),
+                        field("response.body.items.item[].itemName", RESPONSE_EXAMPLE))
+                .resultCode("resultCode", LlmFixtures.success("00", LlmSuccessCode.Source.FIELD_TABLE),
+                        LlmFixtures.success("0", LlmSuccessCode.Source.RESPONSE_EXAMPLE))
+                .uncertain("응답 필드 표의 resultCode 샘플은 00이고 응답 예제는 0으로 서로 다르다.",
+                        "기본 응답 형식은 문서에 밝혀져 있지 않다.",
+                        "결과코드 필드 이름이 표와 예제에서 다르게 적혀 있다.",
+                        "예제 구조가 표준 구조와 같아 표준 경로로 적었다.");
+        NormalizedOperation assumed = normalize(standardOperation().structure(ResponseStructure.STANDARD_ASSUMED)
+                .uncertain("응답 예제가 없어 표준 구조를 가정했다.", "다른 오퍼레이션의 표를 베낀 것으로 보인다."));
+
+        List<String> notes = notes(normalize(blocks, extraction(operation)));
+
+        assertEquals(List.of("[LLM] 결과코드 필드 이름이 표와 예제에서 다르게 적혀 있다.",
+                "[LLM] 예제 구조가 표준 구조와 같아 표준 경로로 적었다."),
+                notes.stream().filter(note -> note.startsWith("[LLM]")).toList(),
+                "값을 들먹이지 않은 결과코드 이야기와, 예제로 구조를 정한 오퍼레이션의 표준 구조 이야기는 남긴다");
+        assertTrue(notes.stream().anyMatch(note -> note.startsWith("[검증] 성공코드 후보: ")), notes.toString());
+        assertEquals(List.of("[LLM] 다른 오퍼레이션의 표를 베낀 것으로 보인다."),
+                notes(assumed).stream().filter(note -> note.startsWith("[LLM]")).toList());
+        assertTrue(notes(assumed).contains("[정규화] 응답 구조를 표준 구조로 가정함"), notes(assumed).toString());
+    }
 
     // ---- 도우미 ----
 

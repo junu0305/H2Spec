@@ -7,7 +7,7 @@ import java.util.Locale;
 
 /**
  * 평가 도구의 명령행 옵션. llm 엔진은 지금 녹화 응답으로만 돌린다. 회사를 직접 부르는 데 쓸 회사·모델·추론 깊이 옵션
- * (--provider, --model, --effort)은 1-10에서 더한다.
+ * (--provider, --model, --effort)은 아직 없다.
  *
  * @param sets      평가할 정답 세트. --proxy만 주면 비어 있다
  * @param engine    추출 엔진 이름
@@ -80,7 +80,7 @@ record EvalOptions(List<String> sets, String engine, Path out, Path proxy, Path 
         }
         if (engine.equals(ReplayLlmEvalEngine.NAME) && responses == null && !help) {
             throw new IllegalArgumentException("llm 엔진은 지금 녹화 응답(--responses <디렉터리>)으로만 평가할 수 있습니다. "
-                    + "회사를 직접 부르는 평가는 1-10에서 붙습니다");
+                    + "회사를 직접 부르는 평가는 아직 없습니다");
         }
         if (responses != null && !engine.equals(ReplayLlmEvalEngine.NAME)) {
             throw new IllegalArgumentException("--responses는 --engine llm과 함께 씁니다");
@@ -99,7 +99,7 @@ record EvalOptions(List<String> sets, String engine, Path out, Path proxy, Path 
                     }
                 }
                 case "B" -> throw new IllegalArgumentException(
-                        "세트 B(docs/sample)는 정답 파일을 0-4에서 쓰기 전이라 평가할 수 없습니다");
+                        "세트 B(docs/sample)는 아직 정답 파일이 없어 평가할 수 없습니다");
                 case "C" -> throw new IllegalArgumentException(
                         "세트 C는 정답이 없습니다. --proxy <문서 디렉터리>로 대리 지표를 내세요");
                 default -> throw new IllegalArgumentException("알 수 없는 세트입니다: " + raw.strip() + " (A만 있습니다)");

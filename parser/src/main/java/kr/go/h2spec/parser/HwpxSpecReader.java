@@ -24,8 +24,8 @@ import java.util.List;
 /**
  * HWPX(신형식, OWPML) 파일을 읽어 문단/표를 문서 순서 그대로 {@link Block} 목록으로 변환한다.
  * <p>
- * HWPX는 HWP와 마찬가지로 표를 문단에 딸린 개체로 담는다. 문단의 텍스트를 먼저 확인한 뒤
- * 그 문단에 표 개체가 있으면 이어서 꺼내는 방식으로 순서를 맞춘다.
+ * HWPX는 HWP와 마찬가지로 표를 문단에 딸린 개체로 담는다. 표는 화면에 놓인 자리를 따라, 글자열 속 제자리에
+ * 그려지는 표는 그 자리에서 꺼내고 그 밖의 표는 문단 글 뒤에 둔다.
  */
 public class HwpxSpecReader implements DocumentReader {
 

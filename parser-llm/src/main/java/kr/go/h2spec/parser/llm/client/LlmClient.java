@@ -1,7 +1,7 @@
 package kr.go.h2spec.parser.llm.client;
 
 /**
- * 회사 공통 호출 인터페이스 (설계 6.1). 회사별 어댑터가 구현한다.
+ * 회사 공통 호출 인터페이스. 회사별 어댑터가 구현한다.
  * <p>
  * 어댑터는 요청을 회사 형식으로 바꾸고, 응답에서 JSON 글과 사용량을 꺼내고, 회사별 오류·거절·잘림을
  * {@link LlmException.Kind}와 {@link LlmResponse.Finish}로 바꾸는 일만 한다. 프롬프트·스키마·검증은 회사와 상관없이 하나다.

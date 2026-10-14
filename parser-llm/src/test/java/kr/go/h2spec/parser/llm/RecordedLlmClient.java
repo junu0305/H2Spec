@@ -8,10 +8,10 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 녹화한 LLM 응답을 재생하는 클라이언트 (설계 9.3). 네트워크를 쓰지 않고 키도 없다.
+ * 녹화한 LLM 응답을 재생하는 클라이언트. 네트워크를 쓰지 않고 키도 없다.
  * <p>
  * 녹화({@code llm-recordings/<회사>/<문서>.json})는 회사와 무관한 중간 스키마 JSON이라, 어느 회사에서 녹화했든 같은 하류 코드
- * (검증 → 정규화 → 교차검증 → IrLoader → CodeGenerator)를 시험한다. 회사마다 다른 응답 해석은 어댑터 테스트가 본다.
+ * (검증 → 정규화 → 교차검증 → IrLoader → CodeGenerator)를 시험한다. 회사마다 다른 응답 해석(어댑터)은 거치지 않는다.
  * 녹화는 그 문서를 직렬화한 글을 보낼 때만 재생한다. 다른 문서에 녹화가 잘못 붙으면 실제 호출과 다른 것을 시험하게 되기 때문이다.
  */
 final class RecordedLlmClient implements LlmClient {

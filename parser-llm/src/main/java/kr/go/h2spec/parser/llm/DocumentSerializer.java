@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Reader가 만든 {@link Block} 목록을 LLM에 넘길 텍스트로 바꾼다 (설계 4.1).
+ * Reader가 만든 {@link Block} 목록을 LLM에 넘길 텍스트로 바꾼다.
  * <pre>{@code
  * [P23] 요청 URL
  * [P24] https://open.jejudatahub.net/api/proxy/7tttaDaD5ataaba75a57ttDtaDb6tb7t/{your_appkey}?{params(key=value)}
@@ -20,15 +20,16 @@ import java.util.regex.Pattern;
  * <p>
  * 원문 대조는 이 텍스트가 아니라 Block의 원래 글로 하므로, 여기서는 블록과 표의 행이 한 줄씩 남도록 줄바꿈과 칸 구분자만 바꾼다.
  * 목차·개정이력도 지우지 않는다. 걸러내는 규칙을 다시 만들지 않기 위해서다.
- * 같은 Block 목록은 항상 바이트 단위로 같은 텍스트가 된다. 결과 캐시 키와 회사별 프롬프트 캐싱이 이것에 기댄다.
+ * 같은 Block 목록은 항상 바이트 단위로 같은 텍스트가 된다. 결과 캐시 키가 이것에 기댄다.
  */
 public class DocumentSerializer {
 
     /**
      * 기본 길이 상한. {@link String#length()}로 센 글자 수다.
      * 샘플 DOCX 12개를 직렬화하면 9천~3만 6천 자이고 corpus HWP는 모두 7천 자 아래라, 가장 긴 문서의 다섯 배쯤인 20만 자에
-     * 실제 문서가 걸릴 일은 드물다. 설계의 어림(3만 6천 자에 약 2만 토큰)으로 약 11만 토큰이고, 토크나이저에 따라 30%를 더 써도
-     * 컨텍스트가 20만 토큰인 모델에 시스템 프롬프트와 출력 몫을 남기고 들어간다. 이보다 긴 문서는 한 번에 부를 크기가 아니다.
+     * 실제 문서가 걸릴 일은 드물다. 어림잡아(3만 6천 자에 약 2만 토큰) 약 11만 토큰이고, 토크나이저에 따라 30%를 더 써도
+     * 시스템 프롬프트와 출력 상한(12만 8천)을 더해 Claude Sonnet 5.5·Opus 5.5의 컨텍스트(100만 토큰)에 넉넉히 들어간다.
+     * 나눠 불러도 호출마다 문서 전체를 보내므로, 이보다 긴 문서는 보낼 크기가 아니다.
      */
     public static final int DEFAULT_MAX_LENGTH = 200_000;
 

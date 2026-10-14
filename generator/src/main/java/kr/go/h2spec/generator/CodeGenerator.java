@@ -37,7 +37,7 @@ public class CodeGenerator {
 
     /**
      * 생성 코드가 컴파일되지 않거나 출력 디렉터리 밖에 써질 IR은 파일을 쓰기 전에 IllegalArgumentException으로 거부한다.
-     * 검사를 IrLoader가 아니라 여기서 하는 것은 CLI가 IrLoader 뒤에 --package·--success-code를 덮어쓰고,
+     * 검사를 IrLoader가 아니라 여기서 하는 것은 CLI가 IrLoader 뒤에 --package 같은 덮어쓰기 옵션을 적용하고,
      * 이 메서드는 IrLoader를 거치지 않고도 불리기 때문이다.
      */
     public List<Path> generate(IrSpec ir, Path outputDir) throws IOException {
@@ -67,7 +67,7 @@ public class CodeGenerator {
     }
 
     // 컴파일되지 않을 코드와 출력 디렉터리 밖의 경로만 거부한다. 공백·한글·'-'가 든 이름(relevant departments, 측정소,
-    // sido-name)은 JavaNames가 Java 이름으로 바꾸고 어노테이션이 원래 이름을 지켜 지금도 잘 되므로 막지 않는다.
+    // sido-name)은 JavaNames가 Java 이름으로 바꾸고 어노테이션이 원래 이름을 지켜 잘 되므로 막지 않는다.
     private void validateNames(IrSpec ir) {
         // apiId와 패키지는 클래스 이름이자 파일 경로가 된다
         String apiId = ir.api().apiId();
@@ -86,6 +86,17 @@ public class CodeGenerator {
                 && !FORMAT_VALUE.matcher(formatHint.value()).matches()) {
             throw new IllegalArgumentException("generatorHints.responseFormatParameter.value 형식이 잘못되었습니다: "
                     + quote(formatHint.value()) + " — 영문자·숫자·.·_·-만 쓸 수 있습니다.");
+        }
+        // 힌트가 가리킨 파라미터는 메서드 인자에서 빠지고 쿼리에 값이 붙는다. 경로 변수면 주소의 {이름}이 남고,
+        // 인증키(serviceKey)면 키 자리에 형식 값이 들어간다
+        if (formatHint != null) {
+            for (RequestParameter p : ir.api().requestParameters()) {
+                if (p.name().equals(formatHint.name())
+                        && (!"query".equals(p.in()) || "serviceKey".equalsIgnoreCase(p.name()))) {
+                    throw new IllegalArgumentException("generatorHints.responseFormatParameter가 가리킬 수 없는 파라미터입니다: "
+                            + quote(p.name()) + " — serviceKey가 아닌 쿼리 파라미터여야 합니다.");
+                }
+            }
         }
         // 원래 이름은 어노테이션과 URL의 문자열 리터럴에 그대로 들어간다
         for (RequestParameter p : ir.api().requestParameters()) {
