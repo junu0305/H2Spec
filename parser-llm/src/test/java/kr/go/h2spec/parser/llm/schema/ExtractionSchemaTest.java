@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * 회사에 그대로 넘기는 스키마 파일(extraction-schema-v3.json)이 record와 같고, 세 회사(Claude·GPT·Gemini)가 모두 받는 범위만
- * 쓰는지 본다. 지금 어댑터는 Claude뿐이지만 다른 회사를 더해도 스키마를 그대로 쓰게 하려는 것이다.
+ * 쓰는지 본다. 세 회사의 어댑터가 같은 스키마 파일을 그대로 보내기 때문이다.
  * 스키마는 record에서 만들지 않고 직접 쓰므로, 둘이 어긋나면 LLM 응답을 record로 읽지 못한다.
  */
 class ExtractionSchemaTest {

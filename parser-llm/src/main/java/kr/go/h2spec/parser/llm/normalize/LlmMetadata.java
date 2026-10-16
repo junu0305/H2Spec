@@ -8,9 +8,9 @@ import kr.go.h2spec.parser.llm.ExtractionPrompt;
  * IR {@code metadata.llm}에 적는 실행 설정. 결과에 영향을 주는 설정이라 같은 IR을 다시 만드는 데 필요하다.
  * 토큰 수와 캐시 사용 여부는 담지 않는다. 결과가 같아도 실행마다 바뀌고 검수에 쓸모가 없어 CLI 출력에만 남긴다.
  *
- * @param provider      회사 ID ({@code claude}). 지금은 Claude 어댑터만 있다
+ * @param provider      회사 ID ({@code claude}, {@code openai}, {@code gemini})
  * @param model         모델 ID
- * @param effort        회사의 추론 깊이 설정값 그대로 (Claude는 {@code effort})
+ * @param effort        회사의 추론 깊이 설정값 그대로 (Claude {@code effort}, OpenAI {@code reasoning.effort}, Gemini {@code thinkingLevel})
  * @param promptVersion 프롬프트 버전 ({@code extraction-v4})
  * @param schemaVersion 중간 스키마 버전 ({@code 3})
  */

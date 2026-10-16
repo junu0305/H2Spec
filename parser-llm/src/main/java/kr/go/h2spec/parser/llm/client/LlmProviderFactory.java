@@ -1,5 +1,6 @@
 package kr.go.h2spec.parser.llm.client;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -7,7 +8,7 @@ import java.util.List;
  */
 public interface LlmProviderFactory {
 
-    /** @return 회사 ID. {@code --provider}와 {@code H2SPEC_LLM_PROVIDER}에 쓰는 값이다 (지금은 {@code claude}만 있다) */
+    /** @return 회사 ID. {@code --provider}와 {@code H2SPEC_LLM_PROVIDER}에 쓰는 값이다 ({@code claude}, {@code openai}, {@code gemini}) */
     String id();
 
     /** @return 기본 모델 ID. 모델 이름은 코드 여러 곳에 쓰지 않고 여기 한 곳에 둔다. {@code --model}이 덮어쓴다 */
@@ -32,6 +33,30 @@ public interface LlmProviderFactory {
      *         회사 결정은 이 이름들을 한 회사로 센다
      */
     List<String> apiKeyEnvironmentVariables();
+
+    /**
+     * @return 응답 머리와 응답 본문의 다음 조각을 기다리는 시간의 기본값({@link LlmSettings#requestTimeout()}). 추론하는 동안 아무것도
+     *         보내지 않는 회사는 길게 잡는다. 이 시간 동안 멈추면 끊고 다시 부르지 않는다
+     */
+    default Duration defaultRequestTimeout() {
+        return LlmSettings.DEFAULT_REQUEST_TIMEOUT;
+    }
+
+    /**
+     * @return 이 회사 모델의 출력 토큰 한도. llm 엔진의 출력 상한과 한 번에 적을 오퍼레이션 수를 이 안에 맞춘다
+     */
+    default int maxOutputTokens() {
+        return 128_000;
+    }
+
+    /**
+     * @return 회사를 정하지 않았을 때 이 회사를 고를 근거로 세는 키 환경변수 이름. 기본은 {@link #apiKeyEnvironmentVariables()} 전부다.
+     *         다른 서비스와 같이 쓰는 이름({@code GOOGLE_API_KEY})은 빼서, 그 키가 있다는 것만으로 이 회사를 고르거나 다른 회사와
+     *         겹친다고 오류를 내지 않게 한다. 빼도 회사를 직접 고르면 그 이름에서 키를 읽는다
+     */
+    default List<String> detectionEnvironmentVariables() {
+        return apiKeyEnvironmentVariables();
+    }
 
     /**
      * @return 요청을 실행할 워크스페이스 ID를 읽는 환경변수 이름. 한 워크스페이스에 묶이지 않은 키는 요청마다 워크스페이스를 밝혀야 한다.

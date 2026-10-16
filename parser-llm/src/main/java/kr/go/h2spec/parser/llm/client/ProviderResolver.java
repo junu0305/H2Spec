@@ -11,7 +11,8 @@ import java.util.stream.Collectors;
  * <ol>
  *   <li>{@code --provider}</li>
  *   <li>{@code H2SPEC_LLM_PROVIDER}</li>
- *   <li>(llm만) 키 환경변수가 한 회사 것만 있으면 그 회사. 한 회사의 여러 키 이름은 한 회사로 센다</li>
+ *   <li>(llm만) 키 환경변수가 한 회사 것만 있으면 그 회사. 한 회사의 여러 키 이름은 한 회사로 센다. 다른 서비스와 같이 쓰는 이름
+ *       ({@link LlmProviderFactory#detectionEnvironmentVariables()}에서 뺀 {@code GOOGLE_API_KEY})은 세지 않는다</li>
  *   <li>(llm만) 여러 회사 것이 있으면 오류</li>
  *   <li>정하지 못했거나 정한 회사의 키가 없으면 llm은 오류, auto는 한 줄 안내와 함께 rule로 진행</li>
  * </ol>
@@ -98,7 +99,9 @@ public final class ProviderResolver {
             return new Resolution.UseRule("LLM 회사가 지정되지 않아 rule 엔진으로 변환합니다. llm 엔진을 쓰려면 "
                     + PROVIDER_OPTION + " 또는 " + PROVIDER_ENVIRONMENT_VARIABLE + "로 회사를 지정하세요");
         }
-        List<LlmProviderFactory> withKeys = providers.stream().filter(provider -> apiKey(provider).isPresent()).toList();
+        List<LlmProviderFactory> withKeys = providers.stream()
+                .filter(provider -> value(provider.detectionEnvironmentVariables()).isPresent())
+                .toList();
         if (withKeys.size() == 1) {
             LlmProviderFactory provider = withKeys.get(0);
             return new Resolution.UseLlm(provider, apiKey(provider).orElseThrow());
@@ -109,9 +112,28 @@ public final class ProviderResolver {
                     + PROVIDER_OPTION + " 또는 " + PROVIDER_ENVIRONMENT_VARIABLE + "로 지정하세요");
         }
         throw new ProviderResolutionException("LLM API 키가 없습니다. 쓸 회사의 키를 환경변수("
-                + providers.stream().flatMap(provider -> provider.apiKeyEnvironmentVariables().stream())
+                + providers.stream().flatMap(provider -> provider.detectionEnvironmentVariables().stream())
                         .collect(Collectors.joining(", "))
-                + ")로 설정하세요");
+                + ")로 설정하세요" + uncountedKeyHint());
+    }
+
+    /**
+     * 자동 선택에 세지 않는 키({@code GOOGLE_API_KEY})만 있으면, 키가 없다는 말만으로는 왜 안 되는지 알 수 없어 회사를 지정하라고 덧붙인다.
+     */
+    private String uncountedKeyHint() {
+        List<LlmProviderFactory> uncounted = providers.stream()
+                .filter(provider -> value(provider.apiKeyEnvironmentVariables()).isPresent())
+                .toList();
+        if (uncounted.isEmpty()) {
+            return "";
+        }
+        String names = uncounted.stream()
+                .flatMap(provider -> provider.apiKeyEnvironmentVariables().stream())
+                .filter(name -> hasText(environment.get(name)))
+                .collect(Collectors.joining(", "));
+        return ". " + names + "는 다른 서비스와 같이 쓰는 이름이라 회사를 고르는 근거로 세지 않습니다. 이 키를 쓰려면 "
+                + uncounted.stream().map(provider -> PROVIDER_OPTION + " " + provider.id()).collect(Collectors.joining(" 또는 "))
+                + "를 주세요";
     }
 
     /** 1·2번으로 정한 회사. 키가 없으면 5번 규칙을 따른다 */
@@ -135,9 +157,14 @@ public final class ProviderResolver {
                 "알 수 없는 LLM 회사입니다: " + id.strip() + " (" + source + "). " + ids(providers) + " 중 하나를 쓰세요"));
     }
 
-    /** 회사의 키 환경변수 중 값이 있는 첫 이름의 값. 빈 값과 공백뿐인 값은 설정하지 않은 것으로 본다 */
+    /** 회사의 키 환경변수 중 값이 있는 첫 이름의 값 */
     private Optional<String> apiKey(LlmProviderFactory provider) {
-        return provider.apiKeyEnvironmentVariables().stream()
+        return value(provider.apiKeyEnvironmentVariables());
+    }
+
+    /** 환경변수 중 값이 있는 첫 이름의 값. 빈 값과 공백뿐인 값은 설정하지 않은 것으로 본다 */
+    private Optional<String> value(List<String> names) {
+        return names.stream()
                 .map(environment::get)
                 .filter(ProviderResolver::hasText)
                 .map(String::strip)

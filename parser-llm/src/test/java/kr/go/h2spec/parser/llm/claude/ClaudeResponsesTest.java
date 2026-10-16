@@ -3,7 +3,11 @@ package kr.go.h2spec.parser.llm.claude;
 import kr.go.h2spec.parser.llm.client.LlmException;
 import org.junit.jupiter.api.Test;
 
+import java.io.StringReader;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ClaudeResponsesTest {
 
@@ -17,5 +21,44 @@ class ClaudeResponsesTest {
         assertEquals("Claude API 오류 (HTTP 404): not_found_error: model: claude-sonet-5-5", e.getMessage());
         assertEquals(LlmException.Kind.SETTINGS, ClaudeResponses.errorTypeKind("not_found_error"));
         assertEquals(LlmException.Kind.BAD_REQUEST, ClaudeResponses.statusKind(400));
+    }
+
+    @Test
+    void 끝을_알리기_전에_끊긴_스트림은_다시_부르지_않는_중단이다() {
+        String cut = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\","
+                + "\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n";
+
+        LlmException e = assertThrows(LlmException.class, () -> ClaudeResponses.fromStream(new StringReader(cut)));
+
+        assertEquals(LlmException.Kind.INTERRUPTED, e.kind());
+        assertFalse(e.kind().retryable());
+        assertEquals(LlmException.Kind.INTERRUPTED, assertThrows(LlmException.class,
+                () -> ClaudeResponses.fromStream(new StringReader("event: ping\ndata: {not json\n\n"))).kind(),
+                "망가진 조각도 끊긴 스트림처럼 다시 부르지 않는다");
+    }
+
+    @Test
+    void 잔액_부족은_기다려도_풀리지_않는_잔액_문제로_가른다() {
+        LlmException e = ClaudeResponses.fromHttpError(402, "{\"type\":\"error\",\"error\":{\"type\":\"billing_error\","
+                + "\"message\":\"Your credit balance is too low to access the Anthropic API.\"}}", null);
+
+        assertEquals(LlmException.Kind.QUOTA, e.kind());
+        assertEquals(LlmException.Kind.QUOTA, ClaudeResponses.errorTypeKind("billing_error"), "스트림 중간에 와도 같다");
+        assertEquals(LlmException.Kind.QUOTA, ClaudeResponses.fromHttpError(400, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API.\"}}", null)
+                .kind(), "잔액 부족은 400으로도 온다");
+        assertFalse(e.kind().retryable());
+    }
+
+    @Test
+    void 모델이_받지_않는_추론_깊이의_400만_설정_오류로_가르고_다른_400은_요청_오류로_둔다() {
+        LlmException effort = ClaudeResponses.fromHttpError(400, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"invalid_request_error\",\"message\":\"output_config.effort: 'max' is not supported by this model\"}}", null);
+        LlmException other = ClaudeResponses.fromHttpError(400, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"invalid_request_error\",\"message\":\"prompt is too long: 1200000 tokens > 1000000 maximum\"}}", null);
+
+        assertEquals(LlmException.Kind.SETTINGS, effort.kind());
+        assertEquals(LlmException.Kind.BAD_REQUEST, other.kind());
+        assertEquals(LlmException.Kind.BAD_REQUEST, ClaudeResponses.fromHttpError(400, "<html>bad gateway</html>", null).kind());
     }
 }

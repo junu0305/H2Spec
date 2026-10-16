@@ -35,7 +35,7 @@ public final class ClaudeProviderFactory implements LlmProviderFactory {
 
     /**
      * {@code output_config.effort}의 값. Opus 5.5와 Sonnet 5.5는 다섯 값을 모두 받는다(2026-10 Claude 문서). 그보다 앞선 모델 가운데
-     * {@code xhigh}나 {@code max}를 받지 않는 모델은 회사가 400으로 거절하고, CLI가 그 이유를 알린다
+     * {@code xhigh}나 {@code max}를 받지 않는 모델은 회사가 400으로 거절하고, CLI가 그 이유를 알리고 실행을 멈춘다
      */
     @Override
     public List<String> effortLevels() {

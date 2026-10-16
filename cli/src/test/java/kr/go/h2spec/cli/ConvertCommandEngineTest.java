@@ -184,6 +184,13 @@ class ConvertCommandEngineTest {
         assertEquals(0, factory.calls, "틀린 값이면 llm 엔진을 만들지 않는다");
         assertEquals(List.of("--effort 값 'adaptive'은 claude가 받는 추론 깊이가 아닙니다. "
                 + "쓸 수 있는 값: low, medium, high, xhigh, max"), wrong.err().lines().toList());
+
+        // Gemini 기본 모델과 gemini-4-argon은 minimal을 받지 않는다. 거절 문구에 기대지 않고 부르기 전에 막는다
+        Run minimal = run(command(LlmProviders.ALL, Map.of("GEMINI_API_KEY", KEY), parser),
+                "--engine", "llm", "--effort", "minimal", "--input", doc.toString(), "--output", out("e"));
+        assertNotEquals(0, minimal.exit());
+        assertEquals(List.of("--effort 값 'minimal'은 gemini가 받는 추론 깊이가 아닙니다. 쓸 수 있는 값: low, medium, high"),
+                minimal.err().lines().toList());
     }
 
     @Test
@@ -194,7 +201,7 @@ class ConvertCommandEngineTest {
         }
         ParsedApi first = api("FirstApi");
         ParsedApi last = api("LastApi");
-        String auth = "LLM API 키 오류로 변환하지 못했습니다 (b.hwp, claude): invalid x-api-key";
+        String auth = "LLM API 키나 권한 오류로 변환하지 못했습니다 (b.hwp, claude): invalid x-api-key";
         FakeParser parser = new FakeParser(Map.of(
                 "a.hwp", () -> llmResult(false, new TokenUsage(10, 0, 0, 5), first),
                 "b.hwp", () -> {
@@ -207,7 +214,7 @@ class ConvertCommandEngineTest {
 
         assertEquals(1, run.exit());
         assertEquals(List.of("a.hwp", "b.hwp"), parser.parsed, "키 오류 뒤의 문서는 부르지 않는다");
-        assertEquals(List.of(NOTICE, auth, "API 키 오류라 남은 파일 1개는 변환하지 않고 멈춥니다"), run.err().lines().toList());
+        assertEquals(List.of(NOTICE, auth, "API 키나 권한 오류라 남은 파일 1개는 변환하지 않고 멈춥니다"), run.err().lines().toList());
         assertFalse(run.out().contains("개 중 "), "멈춘 실행은 변환 요약을 내지 않는다: " + run.out());
         assertTrue(Files.exists(tempDir.resolve("output/kr/go/h2spec/client/firstapi/FirstApiClient.java")));
         assertFalse(Files.exists(tempDir.resolve("output/kr/go/h2spec/client/lastapi")));
@@ -226,7 +233,7 @@ class ConvertCommandEngineTest {
         for (String name : List.of("a.hwp", "b.hwp")) {
             Files.writeString(inputDir.resolve(name), "fake");
         }
-        String settings = "LLM 설정 오류로 변환하지 못했습니다. 모델 이름(--model)이나 API 주소를 확인하세요 (a.hwp, claude): "
+        String settings = "LLM 설정 오류로 변환하지 못했습니다. 모델 이름(--model), 추론 깊이(--effort), API 주소를 확인하세요 (a.hwp, claude): "
                 + "Claude API 오류 (HTTP 404): not_found_error: model: claude-sonet-5-5";
         ParsedApi last = api("LastApi");
         FakeParser parser = new FakeParser(Map.of(
@@ -241,6 +248,31 @@ class ConvertCommandEngineTest {
         assertEquals(1, run.exit());
         assertEquals(List.of("a.hwp"), parser.parsed);
         assertEquals(List.of(NOTICE, settings, "LLM 설정 오류라 남은 파일 1개는 변환하지 않고 멈춥니다"), run.err().lines().toList());
+    }
+
+    @Test
+    void 잔액이나_사용_한도_문제도_남은_파일을_변환하지_않고_실행_전체를_멈춘다() throws Exception {
+        // 잔액이 떨어지면 기다려도 풀리지 않아 남은 문서도 모두 같은 이유로 실패한다
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        for (String name : List.of("a.hwp", "b.hwp")) {
+            Files.writeString(inputDir.resolve(name), "fake");
+        }
+        String quota = "LLM 계정의 잔액이 없거나 사용 한도를 넘어 변환하지 못했습니다 (a.hwp, claude): "
+                + "Claude API 오류 (HTTP 402): billing_error: Your credit balance is too low";
+        ParsedApi last = api("LastApi");
+        FakeParser parser = new FakeParser(Map.of(
+                "a.hwp", () -> {
+                    throw new SpecParseException(SpecParseException.Kind.QUOTA, quota);
+                },
+                "b.hwp", () -> llmResult(false, TokenUsage.NONE, last)));
+
+        Run run = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--input", inputDir.toString(), "--output", out("output"));
+
+        assertEquals(1, run.exit());
+        assertEquals(List.of("a.hwp"), parser.parsed);
+        assertEquals(List.of(NOTICE, quota, "LLM 잔액·사용 한도 문제라 남은 파일 1개는 변환하지 않고 멈춥니다"),
+                run.err().lines().toList());
     }
 
     /** 가짜 환경변수와 가짜 llm 엔진으로 convert 명령을 만든다. 실행 뒤 {@link #environment}와 {@link #factory}로 본다 */
@@ -382,7 +414,7 @@ class ConvertCommandEngineTest {
         SpecParseResult get() throws SpecParseException;
     }
 
-    /** 지금은 Claude뿐이라 아직 없는 회사까지 흉내 낸다. 클라이언트를 만들면 테스트가 실패한다 */
+    /** 회사 결정만 보는 가짜 회사. 클라이언트를 만들면 테스트가 실패한다 */
     private record FakeProvider(String id, List<String> apiKeyEnvironmentVariables) implements LlmProviderFactory {
 
         @Override

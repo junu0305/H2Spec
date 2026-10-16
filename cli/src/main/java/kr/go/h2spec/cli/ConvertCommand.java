@@ -108,7 +108,7 @@ public class ConvertCommand implements Callable<Integer> {
     private String model;
 
     @Option(names = "--effort", description = "llm 엔진의 추론 깊이 (기본: H2SPEC_LLM_EFFORT, 없으면 회사별 기본값. "
-            + "claude는 low, medium, high, xhigh, max이고 기본은 medium). 높을수록 출력 토큰(비용)과 시간이 는다")
+            + "기본은 medium. claude는 low~max, openai는 none~max, gemini는 low~high). 높을수록 출력 토큰(비용)과 시간이 는다")
     private String effort;
 
     @Option(names = "--no-cross-check", description = "llm 엔진의 결과를 rule 엔진의 결과와 대조하지 않는다")
@@ -234,6 +234,7 @@ public class ConvertCommand implements Callable<Integer> {
                     new ProviderResolver(providers, env).resolve(ProviderResolver.Engine.LLM, provider);
             LlmProviderFactory chosen = resolved.provider();
             LlmSettings settings = LlmSettings.of(modelOf(chosen, env), effortOf(chosen, env), resolved.apiKey())
+                    .withRequestTimeout(chosen.defaultRequestTimeout())
                     .withWorkspaceId(workspaceOf(chosen, env));
             LlmSpecParser.Options options = llmOptions();
             specParser = llmParsers.create(chosen, settings, options);
@@ -323,14 +324,18 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     /**
-     * 키 오류(AUTH)나 모델 이름·주소 오류(SETTINGS)로 실행을 멈춘다. 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다.
+     * 키 오류(AUTH), 모델 이름·주소 오류(SETTINGS), 잔액·사용 한도 문제(QUOTA)로 실행을 멈춘다. 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다.
      * 변환 요약을 내지 않으므로 남은 파일을 변환하지 않았다는 것을 따로 알린다.
      */
     private int abort(SpecParseException e, int remaining) {
         e.engine().ifPresent(this::reportEngine);
         err(e.getMessage());
         if (remaining > 0) {
-            String reason = e.kind() == SpecParseException.Kind.AUTH ? "API 키 오류" : "LLM 설정 오류";
+            String reason = switch (e.kind()) {
+                case AUTH -> "API 키나 권한 오류";
+                case QUOTA -> "LLM 잔액·사용 한도 문제";
+                default -> "LLM 설정 오류";
+            };
             err(reason + "라 남은 파일 " + remaining + "개는 변환하지 않고 멈춥니다");
         }
         return 1;
@@ -338,7 +343,8 @@ public class ConvertCommand implements Callable<Integer> {
 
     /** 다른 문서도 같은 이유로 실패하는 오류. 실행 전체를 멈춘다 */
     private static boolean stopsRun(SpecParseException e) {
-        return e.kind() == SpecParseException.Kind.AUTH || e.kind() == SpecParseException.Kind.SETTINGS;
+        return e.kind() == SpecParseException.Kind.AUTH || e.kind() == SpecParseException.Kind.SETTINGS
+                || e.kind() == SpecParseException.Kind.QUOTA;
     }
 
     private boolean isSupportedSpecFile(Path path) {
@@ -349,8 +355,9 @@ public class ConvertCommand implements Callable<Integer> {
     /**
      * 파일 하나(명세 문서 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다.
      *
-     * @throws SpecParseException 키 오류나 설정 오류({@link SpecParseException.Kind#AUTH}, {@link SpecParseException.Kind#SETTINGS})일
-     *                            때만. 부르는 쪽이 실행 전체를 멈춘다
+     * @throws SpecParseException 다른 문서도 같은 이유로 실패하는 오류({@link SpecParseException.Kind#AUTH},
+     *                            {@link SpecParseException.Kind#SETTINGS}, {@link SpecParseException.Kind#QUOTA})일 때만.
+     *                            부르는 쪽이 실행 전체를 멈춘다
      */
     private boolean convertFile(Path file) throws SpecParseException {
         try {
@@ -367,7 +374,7 @@ public class ConvertCommand implements Callable<Integer> {
             if (stopsRun(e)) {
                 throw e;
             }
-            // 429·5xx·네트워크(RETRYABLE)와 그 밖의 실패는 그 문서만 실패다. --engine llm을 고른 사용자의 뜻과 다르므로
+            // 429·5xx·네트워크·중단된 응답(RETRYABLE)과 그 밖의 실패는 그 문서만 실패다. --engine llm을 고른 사용자의 뜻과 다르므로
             // rule 엔진으로 대신 변환하지 않는다. rule 엔진은 FAILED만 낸다
             e.engine().ifPresent(this::reportEngine);
             err(e.getMessage());

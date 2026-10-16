@@ -63,7 +63,8 @@ import java.util.function.Consumer;
  *   <li>정규화({@link IrNormalizer}), 같은 Block 목록으로 돌린 rule 엔진과의 교차검증({@link CrossChecker})을 거친다.</li>
  * </ol>
  * 호출 실패와 쓸 수 없는 응답은 {@link SpecParseException}의 종류로 바꿔 CLI가 처리를 가르게 한다.
- * 키 오류는 {@code AUTH}, 모델 이름·주소 오류는 {@code SETTINGS}, 재시도한 뒤에도 남은 호출 한도·서버·네트워크 오류는 {@code RETRYABLE}, 나머지(잘못된 요청, 출력 잘림, 거절,
+ * 키·권한 오류는 {@code AUTH}, 모델 이름·추론 깊이·주소 오류는 {@code SETTINGS}, 잔액·사용 한도 문제는 {@code QUOTA}, 재시도한 뒤에도 남은
+ * 호출 한도·서버·네트워크 오류와 다시 부르지 않은 중단된 응답은 {@code RETRYABLE}, 나머지(잘못된 요청, 출력 잘림, 거절,
  * JSON 파싱 실패, 변환한 오퍼레이션 없음)는 {@code FAILED}다. 출력이 잘려도 나눠 불러 이어 가고, 다 적힌 오퍼레이션이 하나도 없을 때만
  * 실패로 알린다.
  * 메시지는 사용자에게 그대로 보여 줄 한 줄이고 API 키를 담지 않는다. 어댑터가 회사의 오류 글에서 키를 가리고, 키를 아는 경우 여기서도 한 번 더 가린다.
@@ -85,6 +86,12 @@ public final class LlmSpecParser implements SpecParser {
      * 출력 한도에 넉넉히 들어간다. rule 엔진이 이보다 많은 오퍼레이션을 찾은 문서는 처음부터 나눠 부른다.
      */
     public static final int DEFAULT_OPERATIONS_PER_CALL = 20;
+
+    /**
+     * 오퍼레이션 하나에 잡는 출력 토큰. 보이는 출력이 많아야 4천 토큰쯤이고 추론 토큰 몫을 더했다. 출력 한도가 작은 회사는 한 번에 적을
+     * 오퍼레이션 수를 이것으로 나눈 수까지 줄인다(Gemini 6만 5천 → 10개). 12만 8천이면 21개라 기본값 20개 그대로다
+     */
+    private static final int TOKENS_PER_OPERATION = 6_000;
 
     /** {@link SpecParseResult.Engine#name()}에 적는 엔진 이름 */
     private static final String ENGINE = "llm";
@@ -164,12 +171,14 @@ public final class LlmSpecParser implements SpecParser {
      *
      * @param provider 회사 ({@code ProviderResolver}가 정한 것)
      * @param settings 모델, 추론 깊이, 키, 대기 시간, 재시도 횟수
-     * @param options  출력 한도, 결과 캐시, 교차검증, 다시 부르기, 경고를 받을 곳
+     * @param options  출력 한도, 결과 캐시, 교차검증, 다시 부르기, 경고를 받을 곳. 출력 상한과 한 번에 적을 오퍼레이션 수는 회사 모델의
+     *                 출력 한도 안으로 줄인다({@link Options#fittedTo})
      * @return llm 엔진
      */
     public static LlmSpecParser of(LlmProviderFactory provider, LlmSettings settings, Options options) {
-        return new LlmSpecParser(provider.create(settings), provider.id(), settings.model(), settings.effort(), options,
-                settings.apiKey(), new DocumentSerializer(), LlmSpecParser::runRuleEngine);
+        return new LlmSpecParser(provider.create(settings), provider.id(), settings.model(), settings.effort(),
+                options.fittedTo(provider.maxOutputTokens()), settings.apiKey(), new DocumentSerializer(),
+                LlmSpecParser::runRuleEngine);
     }
 
     /**
@@ -500,14 +509,20 @@ public final class LlmSpecParser implements SpecParser {
         SpecParseResult.Engine used = spent.equals(SpecParseResult.TokenUsage.NONE) ? null : engine(false, spent);
         return switch (e.kind()) {
             case AUTH -> new SpecParseException(SpecParseException.Kind.AUTH,
-                    "LLM API 키 오류로 변환하지 못했습니다" + where + detail, cause(e), used);
+                    "LLM API 키나 권한 오류로 변환하지 못했습니다" + where + detail, cause(e), used);
+            case QUOTA -> new SpecParseException(SpecParseException.Kind.QUOTA,
+                    "LLM 계정의 잔액이 없거나 사용 한도를 넘어 변환하지 못했습니다" + where + detail, cause(e), used);
             case SETTINGS -> new SpecParseException(SpecParseException.Kind.SETTINGS,
-                    "LLM 설정 오류로 변환하지 못했습니다. 모델 이름(--model)이나 API 주소를 확인하세요" + where + detail,
+                    "LLM 설정 오류로 변환하지 못했습니다. 모델 이름(--model), 추론 깊이(--effort), API 주소를 확인하세요"
+                            + where + detail,
                     cause(e), used);
             case RATE_LIMITED -> new SpecParseException(SpecParseException.Kind.RETRYABLE,
                     "LLM 호출 한도에 걸려 변환하지 못했습니다. 잠시 뒤 다시 실행하세요" + where + detail, cause(e), used);
             case UNAVAILABLE -> new SpecParseException(SpecParseException.Kind.RETRYABLE,
                     "LLM 서버나 네트워크 오류로 변환하지 못했습니다. 잠시 뒤 다시 실행하세요" + where + detail, cause(e), used);
+            case INTERRUPTED -> new SpecParseException(SpecParseException.Kind.RETRYABLE,
+                    "LLM 응답을 끝까지 받지 못해 변환하지 못했습니다. 회사가 끝까지 생성해 과금했을 수 있어 다시 부르지 않았습니다"
+                            + where + detail, cause(e), used);
             case BAD_REQUEST -> new SpecParseException(SpecParseException.Kind.FAILED,
                     "LLM이 요청을 받지 않아 변환하지 못했습니다" + where + detail, cause(e), used);
         };
@@ -766,6 +781,19 @@ public final class LlmSpecParser implements SpecParser {
          */
         public Options withRetryOnValidation(boolean enabled) {
             return new Options(maxOutputTokens, cache, crossCheck, warnings, enabled, operationsPerCall);
+        }
+
+        /**
+         * 회사 모델의 출력 한도에 맞춘 설정. 출력 상한은 한도를 넘지 않게 하고, 한 번에 적을 오퍼레이션 수는 한도 안에 들어가도록 줄인다.
+         * 한도보다 크게 보내면 회사가 거절하거나, 나눠 불러도 매번 잘려 잘린 출력만큼 과금되기 때문이다.
+         *
+         * @param providerMaxOutputTokens 회사 모델의 출력 토큰 한도
+         * @return 맞춘 설정. 이미 한도 안이면 같은 값이다
+         */
+        public Options fittedTo(int providerMaxOutputTokens) {
+            int tokens = Math.min(maxOutputTokens, providerMaxOutputTokens);
+            int perCall = Math.min(operationsPerCall, Math.max(1, tokens / TOKENS_PER_OPERATION));
+            return new Options(tokens, cache, crossCheck, warnings, retryOnValidation, perCall);
         }
 
         /**

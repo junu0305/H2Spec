@@ -64,7 +64,7 @@ public final class ClaudeResponses {
             }
         }
         // 정상 응답은 message_stop으로 끝난다. 그 전에 본문이 끝났으면 연결이 중간에 끊긴 것이다
-        throw new LlmException(Kind.UNAVAILABLE, "Claude API 응답 스트림이 message_stop 전에 끝났습니다");
+        throw new LlmException(Kind.INTERRUPTED, "Claude API 응답 스트림이 message_stop 전에 끝났습니다");
     }
 
     /**
@@ -77,13 +77,26 @@ public final class ClaudeResponses {
      */
     public static LlmException fromHttpError(int statusCode, String body, Duration retryAfter) {
         String detail = body == null ? "" : describeError(body);
-        return new LlmException(statusKind(statusCode),
+        Kind kind = statusKind(statusCode);
+        // 그 모델이 받지 않는 추론 깊이와 잔액 부족("Your credit balance is too low …")은 400으로도 온다.
+        // 문서마다 같은 400이 되므로 각각 설정 오류와 잔액 문제로 보고 실행을 멈추게 한다
+        String message = readQuietly(body == null ? "" : body).path("error").path("message").asText("");
+        if (kind == Kind.BAD_REQUEST && message.contains("effort")) {
+            kind = Kind.SETTINGS;
+        } else if (kind == Kind.BAD_REQUEST && message.contains("credit balance")) {
+            kind = Kind.QUOTA;
+        }
+        return new LlmException(kind,
                 "Claude API 오류 (HTTP " + statusCode + ")" + (detail.isEmpty() ? "" : ": " + detail), null, retryAfter);
     }
 
     static Kind statusKind(int statusCode) {
         if (statusCode == 401 || statusCode == 403) {
             return Kind.AUTH;
+        }
+        // billing_error. 잔액이 없다
+        if (statusCode == 402) {
+            return Kind.QUOTA;
         }
         if (statusCode == 429) {
             return Kind.RATE_LIMITED;
@@ -106,7 +119,8 @@ public final class ClaudeResponses {
             case "authentication_error", "permission_error" -> Kind.AUTH;
             case "rate_limit_error" -> Kind.RATE_LIMITED;
             case "not_found_error" -> Kind.SETTINGS;
-            case "invalid_request_error", "request_too_large", "billing_error" -> Kind.BAD_REQUEST;
+            case "billing_error" -> Kind.QUOTA;
+            case "invalid_request_error", "request_too_large" -> Kind.BAD_REQUEST;
             // overloaded_error·api_error·timeout_error. 스트림 중간의 오류는 거의 일시적인 서버 문제라 모르는 종류도 다시 부른다
             default -> Kind.UNAVAILABLE;
         };
@@ -143,8 +157,8 @@ public final class ClaudeResponses {
             JsonNode data = MAPPER.readTree(event.data());
             return data == null ? MissingNode.getInstance() : data;
         } catch (JsonProcessingException e) {
-            // 서버나 중간 프록시가 스트림을 망가뜨린 경우라 다시 부르면 나을 수 있다
-            throw new LlmException(Kind.UNAVAILABLE,
+            // 서버나 중간 프록시가 스트림을 망가뜨린 경우다. 회사는 끝까지 생성해 과금할 수 있어 끊긴 스트림처럼 다시 부르지 않는다
+            throw new LlmException(Kind.INTERRUPTED,
                     "Claude API 응답 스트림의 " + event.name() + " 이벤트를 해석할 수 없습니다", e);
         }
     }
@@ -222,10 +236,10 @@ public final class ClaudeResponses {
 
         LlmResponse response() throws LlmException {
             if (!started) {
-                throw new LlmException(Kind.UNAVAILABLE, "Claude API 응답 스트림에 message_start가 없습니다");
+                throw new LlmException(Kind.INTERRUPTED, "Claude API 응답 스트림에 message_start가 없습니다");
             }
             if (stopReason == null) {
-                throw new LlmException(Kind.UNAVAILABLE, "Claude API 응답 스트림에 stop_reason이 없습니다");
+                throw new LlmException(Kind.INTERRUPTED, "Claude API 응답 스트림에 stop_reason이 없습니다");
             }
             return new LlmResponse(text.toString(), model, usage(usage), finish(stopReason));
         }

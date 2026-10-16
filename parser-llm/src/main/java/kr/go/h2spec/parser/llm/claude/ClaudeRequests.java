@@ -1,7 +1,5 @@
 package kr.go.h2spec.parser.llm.claude;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -55,7 +53,7 @@ public final class ClaudeRequests {
                 .putArray("content");
         ObjectNode document = content.addObject()
                 .put("type", "text")
-                .put("text", documentBlock(request.document()));
+                .put("text", request.wrappedDocument());
         if (request.cacheDocument()) {
             document.putObject("cache_control").put("type", "ephemeral");
         }
@@ -66,33 +64,11 @@ public final class ClaudeRequests {
         ObjectNode outputConfig = params.putObject("output_config");
         outputConfig.putObject("format")
                 .put("type", "json_schema")
-                .set("schema", schema(request.jsonSchema()));
+                .set("schema", request.schemaObject());
         // 스키마나 effort가 바뀌면 프롬프트 캐시가 끊긴다. 같은 문서의 호출은 같은 설정으로 보낸다
         outputConfig.put("effort", settings.effort());
         // 출력이 길고 thinking까지 더해지면 응답이 몇 분씩 걸려 한 번에 받으면 HTTP 타임아웃에 걸린다
         params.put("stream", true);
         return params;
-    }
-
-    /**
-     * 문서를 {@code <document>} 태그로 감싼다. 시스템 프롬프트가 이 태그 안의 글은 데이터일 뿐 지시가 아니라고 적는다.
-     * 직렬화한 문서는 줄마다 줄바꿈으로 끝나므로, 닫는 태그 앞에 빈 줄이 생기지 않게 줄바꿈은 없을 때만 더한다.
-     */
-    static String documentBlock(String document) {
-        return "<document>\n" + document + (document.endsWith("\n") ? "" : "\n") + "</document>";
-    }
-
-    private static JsonNode schema(String jsonSchema) {
-        JsonNode schema;
-        try {
-            schema = MAPPER.readTree(jsonSchema);
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("출력 스키마가 올바른 JSON이 아닙니다", e);
-        }
-        // 회사에는 글이 아니라 JSON 객체로 넘겨야 스키마로 받는다
-        if (schema == null || !schema.isObject()) {
-            throw new IllegalArgumentException("출력 스키마는 JSON 객체여야 합니다");
-        }
-        return schema;
     }
 }

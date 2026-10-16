@@ -1,6 +1,8 @@
 package kr.go.h2spec.parser.llm.client;
 
 import kr.go.h2spec.parser.llm.claude.ClaudeProviderFactory;
+import kr.go.h2spec.parser.llm.gemini.GeminiProviderFactory;
+import kr.go.h2spec.parser.llm.openai.OpenAiProviderFactory;
 
 import java.util.List;
 import java.util.Locale;
@@ -14,8 +16,9 @@ import java.util.Optional;
  */
 public final class LlmProviders {
 
-    /** 회사를 더하면 여기에 한 줄을 더한다. 지금은 Claude만 있다. 이 순서가 안내 메시지에 회사를 적는 순서다 */
-    public static final List<LlmProviderFactory> ALL = List.of(new ClaudeProviderFactory());
+    /** 회사를 더하면 여기에 한 줄을 더한다. 이 순서가 안내 메시지에 회사를 적는 순서다 */
+    public static final List<LlmProviderFactory> ALL =
+            List.of(new ClaudeProviderFactory(), new OpenAiProviderFactory(), new GeminiProviderFactory());
 
     private LlmProviders() {
     }

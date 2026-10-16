@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-description = '명세 문서를 LLM(지금은 Claude)으로 해석해 중간 규격(IR) JSON으로 변환하는 llm 엔진'
+description = '명세 문서를 LLM(Claude·OpenAI·Gemini)으로 해석해 중간 규격(IR) JSON으로 변환하는 llm 엔진'
 
 dependencies {
     // Block·ParsedApi를 주고받는 공개 API라 api다. Jackson도 parser의 api로 함께 온다

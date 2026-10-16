@@ -108,7 +108,8 @@ class LlmSpecParserTest {
     // ---- 실패 처리 ----
 
     @ParameterizedTest
-    @CsvSource({"AUTH, AUTH", "SETTINGS, SETTINGS", "RATE_LIMITED, RETRYABLE", "UNAVAILABLE, RETRYABLE", "BAD_REQUEST, FAILED"})
+    @CsvSource({"AUTH, AUTH", "SETTINGS, SETTINGS", "QUOTA, QUOTA", "RATE_LIMITED, RETRYABLE", "UNAVAILABLE, RETRYABLE",
+            "INTERRUPTED, RETRYABLE", "BAD_REQUEST, FAILED"})
     void 호출_실패를_CLI가_가르는_실패_종류로_바꾸고_다시_부르지_않는다(LlmException.Kind kind, SpecParseException.Kind expected) {
         LlmException failure = new LlmException(kind, "Claude API 오류 (HTTP 4xx): 테스트 오류");
         ScriptedLlmClient client = new ScriptedLlmClient().fail(failure);
@@ -198,6 +199,26 @@ class LlmSpecParserTest {
             assertEquals(withoutParsedAt(whole.apis().get(i).ir()), withoutParsedAt(split.apis().get(i).ir()),
                     "나눠 불러도 한 번에 부른 것과 같은 IR을 낸다");
         }
+    }
+
+    @Test
+    void 회사의_출력_한도가_작으면_출력_상한과_한_번에_적을_오퍼레이션_수를_그_한도에_맞춘다() throws Exception {
+        // 출력 한도가 1만 2천 토큰인 회사는 오퍼레이션 6천 토큰씩으로 잡아 2개씩 부른다. 측정소정보 문서는 3개라 처음부터 나눠 부른다
+        String document = "msrstn-info.docx";
+        ObjectNode recorded = (ObjectNode) MAPPER.readTree(TestDocuments.recording(TestDocuments.PROVIDER,
+                TestDocuments.recordingName(document)));
+        ScriptedLlmClient client = new ScriptedLlmClient().reply(complete(part(recorded, 0, 2, true)),
+                complete(part(recorded, 2, 3, false)), complete(part(recorded, 3, 3, false)));
+
+        SpecParseResult result = LlmSpecParser.of(factory(client, new ArrayList<>(), 12_000),
+                LlmSettings.of(MODEL, EFFORT, "test-key"), options()).extract(TestDocuments.path(document));
+
+        assertEquals(3, client.calls());
+        assertTrue(client.requests().get(0).instruction().contains("처음 2개까지만 적어라"), client.requests().get(0).instruction());
+        assertEquals(List.of(12_000, 12_000, 12_000),
+                client.requests().stream().map(LlmRequest::maxOutputTokens).toList(), "회사가 받지 않는 출력 상한은 보내지 않는다");
+        assertEquals(List.of("MsrstnList", "NearbyMsrstnList", "TMStdrCrdnt"),
+                result.apis().stream().map(ParsedApi::apiId).toList());
     }
 
     /** 녹화 응답에서 오퍼레이션 일부만 담은 응답. 첫 호출이 아니면 지시대로 문서 공통 값을 비운다 */
@@ -336,7 +357,8 @@ class LlmSpecParserTest {
                 "프록시 오류: x-api-key " + apiKey + "가 틀렸습니다", new IOException("머리 x-api-key: " + apiKey)));
 
         SpecParseException e = assertThrows(SpecParseException.class,
-                () -> LlmSpecParser.of(factory(client, new ArrayList<>()), LlmSettings.of(MODEL, EFFORT, apiKey), options())
+                () -> LlmSpecParser.of(factory(client, new ArrayList<>(), 128_000), LlmSettings.of(MODEL, EFFORT, apiKey),
+                        options())
                         .extract(BLOCKS, FILE, "DOCX"));
 
         assertEquals(SpecParseException.Kind.AUTH, e.kind());
@@ -366,8 +388,13 @@ class LlmSpecParserTest {
     }
 
     /** 만든 설정을 기록하고 정해 둔 클라이언트를 돌려주는 회사 */
-    private static LlmProviderFactory factory(LlmClient client, List<LlmSettings> created) {
+    private static LlmProviderFactory factory(LlmClient client, List<LlmSettings> created, int maxOutputTokens) {
         return new LlmProviderFactory() {
+            @Override
+            public int maxOutputTokens() {
+                return maxOutputTokens;
+            }
+
             @Override
             public String id() {
                 return "fake";

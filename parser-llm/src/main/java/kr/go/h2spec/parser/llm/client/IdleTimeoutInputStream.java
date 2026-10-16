@@ -12,8 +12,9 @@ import java.util.concurrent.TimeUnit;
  * 다음 데이터가 정한 시간 안에 오지 않으면 스스로 닫히는 입력 스트림. 스트리밍 응답 본문을 감싸 쓴다.
  * <p>
  * JDK {@code HttpClient}의 요청 타임아웃은 응답 머리를 받을 때까지만 재고 본문에는 걸리지 않는다. 반쯤 끊긴 연결에서 본문이 멈추면
- * 읽기가 끝없이 기다리므로 읽기 사이의 빈 시간을 따로 잰다. 응답 전체 시간은 재지 않는다. thinking이 길면 응답이 몇 분씩 걸리지만,
- * 그동안에도 회사가 ping 이벤트를 보내 데이터는 계속 온다.
+ * 읽기가 끝없이 기다리므로 읽기 사이의 빈 시간을 따로 잰다. 응답 전체 시간은 재지 않는다. thinking이 길면 응답이 몇 분씩 걸린다.
+ * Claude는 그동안에도 ping 이벤트를 보내 데이터가 계속 오지만, 추론하는 동안 아무것도 보내지 않는 회사도 있어 대기 시간은 회사마다
+ * 정한다({@link LlmProviderFactory#defaultRequestTimeout()}).
  * <p>
  * 시간이 지나면 다른 스레드에서 {@link #close()}를 부르고 {@link #timedOut()}을 true로 둔다. JDK의 응답 본문 스트림은 닫힐 때
  * 기다리던 읽기를 깨워 {@link IOException}으로 끝낸다. 읽는 쪽은 그 예외가 멈춤 때문인지를 {@link #timedOut()}으로 가린다.
