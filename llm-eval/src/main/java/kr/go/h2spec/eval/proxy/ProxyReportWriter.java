@@ -31,7 +31,7 @@ public final class ProxyReportWriter {
     /** 근거 파일 이름 */
     public static final String EVIDENCE = "proxy.json";
     private static final String HEURISTIC_NOTE = "원문 블록과 rule 엔진 결과를 패턴으로 비교해 센 휴리스틱이라 정확하지 않다. "
-            + "llm 엔진이 필요한 근거와 generator가 아직 못 하는 일(인증 방식, 루트 없는 JSON)의 규모를 보는 데 쓴다.";
+            + "llm 엔진이 필요한 근거와 rule 엔진이 아직 못 하는 일(인증 방식, 루트 없는 JSON)의 규모를 보는 데 쓴다.";
     /** 지표마다 요약표에 나누어 적을 세부 종류 */
     private static final Map<Proxy, List<String>> KINDS = Map.of(
             Proxy.JSON_EXAMPLE_XML_IR, List.of(ProxyEvaluator.JSON_ONLY),

@@ -16,6 +16,8 @@ import java.util.List;
 /** WebClient에서 공공데이터 API의 HTTP 200 위장 에러를 감지하는 필터. */
 public class PublicDataErrorFilter implements ExchangeFilterFunction {
     private final PublicDataErrorDetector detector;
+    /** 예외에서 값으로 가릴 인증키. 없으면 serviceKey 값만 가린다 */
+    private final String serviceKey;
 
     public PublicDataErrorFilter() {
         this("00");
@@ -23,6 +25,7 @@ public class PublicDataErrorFilter implements ExchangeFilterFunction {
 
     public PublicDataErrorFilter(String successCode) {
         this.detector = new PublicDataErrorDetector(successCode);
+        this.serviceKey = null;
     }
 
     /**
@@ -33,7 +36,20 @@ public class PublicDataErrorFilter implements ExchangeFilterFunction {
      * @param resultCodeKeys 결과코드가 담기는 XML 요소나 JSON 키의 이름(예: {@code resultCd}). 경로가 아니라 이름만 준다
      */
     public PublicDataErrorFilter(String successCode, List<String> resultCodeKeys) {
+        this(successCode, resultCodeKeys, null);
+    }
+
+    /**
+     * 인증키를 serviceKey가 아닌 이름의 질의(apiKey 등)나 주소 경로·요청 헤더로 보내는 API에 쓴다.
+     * 예외의 요청 URI·결과메시지·바디 스니펫에서 키 값을 가린다({@link ServiceKeyMasker#mask(String, String)}).
+     *
+     * @param successCode 정상 처리를 뜻하는 결과코드
+     * @param resultCodeKeys 결과코드가 담기는 XML 요소나 JSON 키의 이름. 기본 이름만 찾으면 빈 목록
+     * @param serviceKey 요청에 넣는 인증키
+     */
+    public PublicDataErrorFilter(String successCode, List<String> resultCodeKeys, String serviceKey) {
         this.detector = new PublicDataErrorDetector(successCode, resultCodeKeys);
+        this.serviceKey = serviceKey;
     }
 
     @Override
@@ -64,13 +80,18 @@ public class PublicDataErrorFilter implements ExchangeFilterFunction {
         if (!content.isEmpty()) {
             PublicDataErrorDetector.DetectionResult result = detector.detect(content);
             if (result.isFailure()) {
-                throw new PublicDataApiException(request.url().toString(), response.statusCode().value(),
-                        result.resultCode(), result.resultMsg(), truncate(content, 500));
+                // 키가 잘린 채 남지 않도록 자르기 전에 가린다
+                throw new PublicDataApiException(mask(request.url().toString()), response.statusCode().value(),
+                        result.resultCode(), mask(result.resultMsg()), truncate(mask(content), 500));
             }
         }
         return response.mutate()
                 .body(Flux.just(DefaultDataBufferFactory.sharedInstance.wrap(rawBody)))
                 .build();
+    }
+
+    private String mask(String text) {
+        return ServiceKeyMasker.mask(text, serviceKey);
     }
 
     private String truncate(String value, int maxLength) {

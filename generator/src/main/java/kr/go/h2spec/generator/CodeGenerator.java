@@ -1,5 +1,6 @@
 package kr.go.h2spec.generator;
 
+import kr.go.h2spec.generator.emit.AuthKey;
 import kr.go.h2spec.generator.emit.ClientEmitter;
 import kr.go.h2spec.generator.emit.DtoEmitter;
 import kr.go.h2spec.generator.emit.JavaNameRules;
@@ -42,8 +43,8 @@ public class CodeGenerator {
      */
     public List<Path> generate(IrSpec ir, Path outputDir) throws IOException {
         validateNames(ir);
-        DtoNode root = new DtoTreeBuilder().build(ir.api().responseFields());
-        validateFieldNames(root, root.name());
+        DtoNode root = new DtoTreeBuilder().build(ir.api().responseFields(), ir.api().responseRootless());
+        validateFieldNames(root, root.name() == null ? "" : root.name());
 
         // 셋을 모두 메모리에 만든 뒤에 쓴다. DTO를 먼저 써 두면 ClientEmitter가 실패할 때(serviceKey 누락 등) DTO만 남는다.
         // UTF-8로 쓸 수 없는 글(짝 없는 서로게이트)도 쓰기 전에 드러나도록 바이트까지 만들어 둔다.
@@ -88,15 +89,20 @@ public class CodeGenerator {
                     + quote(formatHint.value()) + " — 영문자·숫자·.·_·-만 쓸 수 있습니다.");
         }
         // 힌트가 가리킨 파라미터는 메서드 인자에서 빠지고 쿼리에 값이 붙는다. 경로 변수면 주소의 {이름}이 남고,
-        // 인증키(serviceKey)면 키 자리에 형식 값이 들어간다
+        // 인증키(serviceKey나 api.auth가 가리키는 파라미터)면 키 자리에 형식 값이 들어간다
         if (formatHint != null) {
             for (RequestParameter p : ir.api().requestParameters()) {
-                if (p.name().equals(formatHint.name())
-                        && (!"query".equals(p.in()) || "serviceKey".equalsIgnoreCase(p.name()))) {
+                if (p.name().equals(formatHint.name()) && (!"query".equals(p.in())
+                        || "serviceKey".equalsIgnoreCase(p.name()) || AuthKey.isKey(ir.api(), p))) {
                     throw new IllegalArgumentException("generatorHints.responseFormatParameter가 가리킬 수 없는 파라미터입니다: "
-                            + quote(p.name()) + " — serviceKey가 아닌 쿼리 파라미터여야 합니다.");
+                            + quote(p.name()) + " — 인증키가 아닌 쿼리 파라미터여야 합니다.");
                 }
             }
+        }
+        // XML 문서는 루트 요소가 늘 하나다. CLI의 --format이 JSON IR을 XML로 바꾼 경우도 여기서 걸린다
+        if (ir.api().responseRootless() && !"JSON".equals(ir.api().responseFormat())) {
+            throw new IllegalArgumentException("api.responseRootless는 JSON 응답에만 쓸 수 있습니다 (api.responseFormat="
+                    + quote(ir.api().responseFormat()) + ") — XML 응답은 루트 요소가 하나입니다.");
         }
         // 원래 이름은 어노테이션과 URL의 문자열 리터럴에 그대로 들어간다
         for (RequestParameter p : ir.api().requestParameters()) {
@@ -128,24 +134,24 @@ public class CodeGenerator {
     }
 
     // 노드마다 클래스 하나가 되고(루트는 루트 클래스, 내부 노드는 중첩 클래스) 자식 노드가 그 클래스의 필드다.
-    // 루트 이름은 어노테이션 문자열에만 들어가므로 Java 이름을 보지 않는다.
+    // 루트 이름은 어노테이션 문자열에만 들어가므로 Java 이름을 보지 않는다. 루트 없는 응답은 루트 이름이 없어 path가 비어 있다.
     private void validateFieldNames(DtoNode node, String path) {
         for (DtoNode child : node.children().values()) {
             if (!JavaNameRules.hasValidJavaName(child.name())) {
                 throw new IllegalArgumentException("응답 필드 이름을 Java 이름으로 쓸 수 없습니다: " + quote(child.name())
-                        + " (" + path + "." + child.name() + ") → " + quote(JavaNameRules.javaName(child.name()))
+                        + " (" + join(path, child.name()) + ") → " + quote(JavaNameRules.javaName(child.name()))
                         + " — 식별자가 아니거나 예약어입니다.");
             }
             // getter가 Object의 final 메서드 getClass()가 되는 이름("_class" → Class)은 컴파일되지 않는다
             if (JavaNameRules.accessorKey(child.name()).equals("Class")) {
                 throw new IllegalArgumentException("응답 필드 이름의 getter가 Object.getClass()와 겹칩니다: " + quote(child.name())
-                        + " (" + path + "." + child.name() + ") — IR 경로 세그먼트 이름을 바꿔 주세요.");
+                        + " (" + join(path, child.name()) + ") — IR 경로 세그먼트 이름을 바꿔 주세요.");
             }
         }
         Map<String, List<String>> collisions = JavaNameRules.javaNameCollisions(node.children().keySet());
         if (!collisions.isEmpty()) {
             Map.Entry<String, List<String>> first = collisions.entrySet().iterator().next();
-            List<String> paths = first.getValue().stream().map(name -> path + "." + name).toList();
+            List<String> paths = first.getValue().stream().map(name -> join(path, name)).toList();
             throw new IllegalArgumentException("응답 필드의 Java 이름 충돌: " + quote(first.getKey())
                     + " (" + String.join(", ", paths) + ") — 한 클래스의 필드가 되므로 IR 경로 세그먼트 이름을 구분해 주세요.");
         }
@@ -153,15 +159,19 @@ public class CodeGenerator {
         Map<String, List<String>> accessors = JavaNameRules.accessorNameCollisions(node.children().keySet());
         if (!accessors.isEmpty()) {
             Map.Entry<String, List<String>> first = accessors.entrySet().iterator().next();
-            List<String> paths = first.getValue().stream().map(name -> path + "." + name).toList();
+            List<String> paths = first.getValue().stream().map(name -> join(path, name)).toList();
             throw new IllegalArgumentException("응답 필드의 getter 이름 충돌: " + quote("get" + first.getKey())
                     + " (" + String.join(", ", paths) + ") — 한 클래스의 getter·setter가 되므로 IR 경로 세그먼트 이름을 구분해 주세요.");
         }
         for (DtoNode child : node.children().values()) {
             if (!child.isLeaf()) {
-                validateFieldNames(child, path + "." + child.name());
+                validateFieldNames(child, join(path, child.name()));
             }
         }
+    }
+
+    private static String join(String path, String name) {
+        return path.isEmpty() ? name : path + "." + name;
     }
 
     /** 메시지에 IR 값을 보일 때 제어문자를 escape해서 보인다. 터미널 제어 문자가 그대로 출력되지 않게 한다 */

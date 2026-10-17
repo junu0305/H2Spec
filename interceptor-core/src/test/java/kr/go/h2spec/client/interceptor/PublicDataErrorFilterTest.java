@@ -73,6 +73,23 @@ class PublicDataErrorFilterTest {
                 apply(withKey, "{\"result\":{\"resultCd\":\"00\"}}").bodyToMono(String.class).block());
     }
 
+    @Test
+    void 키를_주면_예외에서_경로에_든_키_값을_가린다() {
+        PublicDataErrorFilter withKey = new PublicDataErrorFilter("00", List.of(), "SECRET/KEY=");
+        ClientRequest keyed = ClientRequest.create(HttpMethod.GET, URI.create("http://api.example/svc/SECRET%2FKEY%3D"))
+                .build();
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .body("<response><header><resultCode>30</resultCode><resultMsg>SECRET/KEY=</resultMsg></header></response>")
+                .build();
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class,
+                () -> withKey.filter(keyed, ignored -> Mono.just(response)).block());
+
+        assertEquals("http://api.example/svc/****", e.getRequestUri());
+        assertFalse(e.getMessage().contains("SECRET"), e.getMessage());
+        assertFalse(e.getRawBodySnippet().contains("SECRET"), e.getRawBodySnippet());
+    }
+
     private ClientResponse apply(String body) {
         return apply(filter, body);
     }

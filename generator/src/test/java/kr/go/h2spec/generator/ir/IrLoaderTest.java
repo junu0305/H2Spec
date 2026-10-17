@@ -46,6 +46,40 @@ class IrLoaderTest {
     }
 
     @Test
+    void api_auth와_responseRootless를_읽고_없으면_null과_false로_둔다() throws Exception {
+        ObjectNode tree = schemaExampleTree();
+        ObjectNode api = (ObjectNode) tree.path("api");
+        api.putObject("auth").put("kind", "PATH_KEY").put("name", "your_appkey");
+        api.put("responseRootless", true);
+        Path file = writeVariant(tree, "auth-rootless.json");
+
+        IrSpec declared = new IrLoader().load(file);
+        IrSpec legacy = new IrLoader().load(resource("/ir/schema-example.json"));
+
+        assertEquals(new ApiAuth("PATH_KEY", "your_appkey"), declared.api().auth());
+        assertTrue(declared.api().responseRootless());
+        assertNull(legacy.api().auth());
+        assertFalse(legacy.api().responseRootless());
+    }
+
+    @Test
+    void with_메서드는_auth와_responseRootless를_남긴다() {
+        // CLI의 --format·--success-code가 이 메서드로 IR을 다시 만든다. 새 필드를 잃으면 다른 자리에 키를 넣는 코드가 나온다
+        ApiSpec api = new ApiSpec("Id", "이름", "설명", "http://x", "/y", "GET", "JSON", List.of(), List.of(),
+                new ErrorSpec("00"), new ApiAuth("SERVICE_KEY_QUERY", "apiKey"), true);
+
+        ApiSpec formatted = api.withResponseFormat("XML");
+        ApiSpec coded = api.withErrorSpec(new ErrorSpec("INFO-00"));
+
+        assertEquals("XML", formatted.responseFormat());
+        assertEquals("INFO-00", coded.errorSpec().successResultCode());
+        for (ApiSpec changed : List.of(formatted, coded)) {
+            assertEquals(api.auth(), changed.auth());
+            assertTrue(changed.responseRootless());
+        }
+    }
+
+    @Test
     void 필수필드_누락시_필드명을_알려준다() throws Exception {
         Path bad = tempDir.resolve("bad.json");
         Files.writeString(bad, """

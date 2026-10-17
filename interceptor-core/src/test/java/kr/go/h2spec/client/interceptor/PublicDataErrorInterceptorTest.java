@@ -199,6 +199,37 @@ class PublicDataErrorInterceptorTest {
     }
 
     @Test
+    void 키를_주면_경로와_다른_이름의_질의에_든_키_값을_모든_예외_필드에서_가린다() {
+        // serviceKey가 아닌 자리(주소 경로, apiKey 질의)는 이름으로 찾을 수 없다. 오류 바디가 요청 주소를 에코하는 기관도 있다
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of(), "SECRET/KEY=");
+        URI uri = URI.create("http://api.example/svc/SECRET%2FKEY%3D?apiKey=SECRET%2FKEY%3D&pageNo=1");
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(withKey, uri, """
+                <response><header><resultCode>30</resultCode>\
+                <resultMsg>등록되지 않은 키: SECRET/KEY=</resultMsg></header></response>"""));
+
+        assertEquals("http://api.example/svc/****?apiKey=****&pageNo=1", e.getRequestUri());
+        for (String text : List.of(e.getMessage(), e.getResultMsg(), e.getRawBodySnippet())) {
+            assertFalse(text.contains("SECRET"), text);
+        }
+        assertEquals("30", e.getResultCode());
+    }
+
+    @Test
+    void 키를_가린_뒤에_바디를_잘라_잘린_키가_남지_않는다() {
+        // 자른 뒤에 가리면 500자 경계에 걸린 키의 앞부분이 남는다
+        String key = "SECRETKEY1234567890";
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of(), key);
+        String head = "<response><header><resultCode>30</resultCode></header><body>";
+        // 키가 495번째 글자에서 시작해 500자 경계에 걸친다
+        String body = head + "x".repeat(495 - head.length()) + key + "</body></response>";
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class, () -> intercept(withKey, body));
+
+        assertFalse(e.getRawBodySnippet().contains("SECR"), e.getRawBodySnippet());
+    }
+
+    @Test
     void 숫자로만_된_결과코드는_앞자리_0을_떼고_성공코드와_비교한다() {
         // 기상청 중기예보는 표에 00, 응답 예제에 0을 적는다. 0, 00, 000은 같은 수다
         assertDoesNotThrow(() -> intercept(xmlWithResultCode("0")));

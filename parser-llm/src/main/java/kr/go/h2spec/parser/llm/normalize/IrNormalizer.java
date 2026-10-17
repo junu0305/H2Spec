@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import kr.go.h2spec.generator.emit.AuthKey;
 import kr.go.h2spec.generator.emit.JavaNameRules;
+import kr.go.h2spec.generator.ir.ApiAuth;
 import kr.go.h2spec.parser.IrConventions;
 import kr.go.h2spec.parser.llm.schema.LlmAuth;
 import kr.go.h2spec.parser.llm.schema.LlmErrorCode;
@@ -35,8 +37,8 @@ import java.util.regex.Pattern;
  * rule 엔진과 같은 규칙(주소 나누기, apiId, 게이트웨이 serviceKey, 경로 변수, 결과코드 필드, 기본값)은 {@link IrConventions}를
  * 그대로 부른다. 같은 칸에서는 엔진이 달라도 같은 IR이 나와야 생성 클래스명과 파일 경로가 바뀌지 않는다.
  * <p>
- * 지원 범위 밖(GET이 아닌 메서드, 헤더·본문 파라미터, 이름이 serviceKey가 아닌 인증키, 루트가 여럿인 응답)인 오퍼레이션은
- * generator에서 실패하게 두지 않고 이유를 알려 건너뛴다. 다만 버리지는 않는다. 정규화한 IR을 이유와 함께 돌려주어
+ * 지원 범위 밖(GET이 아닌 메서드, 인증키가 아닌 헤더·본문 파라미터, 질의·주소 경로·헤더에 넣는 키가 아닌 인증,
+ * 루트 요소가 하나가 아닌 XML 응답)인 오퍼레이션은 generator에서 실패하게 두지 않고 이유를 알려 건너뛴다. 다만 버리지는 않는다. 정규화한 IR을 이유와 함께 돌려주어
  * 교차검증과 평가가 "건너뛰기 전"의 추출 결과를 볼 수 있게 한다.
  * <p>
  * {@code reviewNotes}는 출처별로 {@code [LLM]}, {@code [검증]}, {@code [정규화]} 순으로 모은다. {@code [교차검증]}은
@@ -70,7 +72,7 @@ public final class IrNormalizer {
             + "|정해져 있지 않|없(?!이))");
     private static final String NO_SUCCESS_CODE_NOTE = "문서에서 성공코드를 찾지 못해 00으로 둠";
     private static final String AUTH_SCOPE =
-            "generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다";
+            "generator는 질의·주소 경로·요청 헤더에 넣는 인증키 하나만 받고, 질의·경로의 키는 요청 파라미터에 있어야 한다";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final LlmMetadata llm;
@@ -112,7 +114,9 @@ public final class IrNormalizer {
         operation.address().selectionNotes().forEach(addressNotes::add);
 
         String httpMethod = httpMethod(source.httpMethod(), outOfScope);
-        ArrayNode parameters = requestParameters(operation, parts.endpoint(), notes, outOfScope);
+        List<String> header = new ArrayList<>();
+        List<String> body = new ArrayList<>();
+        ArrayNode parameters = requestParameters(operation, parts.endpoint(), notes, header, body);
         if (IrConventions.needsGatewayServiceKey(operation.address().url(), names(parameters))) {
             // 경로 변수 파라미터보다 먼저 넣어야 경로 변수 다음 자리가 된다 (rule 엔진과 같은 자리)
             IrConventions.insertGatewayServiceKey(parameters);
@@ -120,7 +124,14 @@ public final class IrNormalizer {
         }
         operation.address().correctionNotes().forEach(addressNotes::add);
         IrConventions.addPathParameters(parameters, parts.endpoint());
-        String authType = authType(source.auth(), parameters, outOfScope);
+        // 위치 노트가 인증 노트보다 앞이다. 헤더의 인증키는 인증 방식을 정한 뒤에야 위치 미지원에서 뺄 수 있다
+        List<String> authOutOfScope = new ArrayList<>();
+        Auth auth = auth(source.auth(), parameters, authOutOfScope);
+        if (auth.node() != null && ApiAuth.HEADER.equals(auth.node().get("kind").asText())) {
+            removeHeader(parameters, header, auth.node().get("name").asText());
+        }
+        unsupportedLocations(header, body, outOfScope);
+        outOfScope.addAll(authOutOfScope);
         JsonNode formatParameter = hintedFormatParameter(source, parameters);
         // 형식 노트와 교차검증(formatSelectable)이 같은 기준을 쓴다
         boolean clientSetsFormat = clientSetsFormat(LlmText.oneLine(source.formatParameter()), formatParameter, parameters);
@@ -130,7 +141,8 @@ public final class IrNormalizer {
                 || source.responseStructure() == LlmOperation.ResponseStructure.STANDARD_ASSUMED) {
             notes.add(STANDARD_ASSUMED_NOTE);
         }
-        ArrayNode fields = responseFields(operation, notes, outOfScope);
+        ArrayNode fields = responseFields(operation, notes);
+        boolean rootless = rootless(operation, responseFormat, outOfScope);
         SuccessCodeSelector.Selection success = SuccessCodeSelector.select(operation.successCodes());
         if (success.defaulted()) {
             notes.add(NO_SUCCESS_CODE_NOTE);
@@ -144,8 +156,14 @@ public final class IrNormalizer {
         api.put("endpoint", parts.endpoint());
         api.put("httpMethod", httpMethod);
         api.put("description", LlmText.oneLine(source.description()));
-        api.put("authType", authType);
+        api.put("authType", auth.type());
+        if (auth.node() != null) {
+            api.set("auth", auth.node());
+        }
         api.put("responseFormat", responseFormat);
+        if (rootless) {
+            api.put("responseRootless", true);
+        }
         api.set("requestParameters", parameters);
         api.set("responseFields", fields);
         api.set("errorSpec", errorSpec(operation, validation.errorCodes(), success.code()));
@@ -195,11 +213,13 @@ public final class IrNormalizer {
 
     // ---- 요청 파라미터 ----
 
+    /**
+     * @param header 위치가 헤더인 파라미터 이름을 모은다. 인증키를 헤더로 보내면 그 헤더는 뒤에서 api.auth로 옮긴다
+     * @param body   위치가 본문인 파라미터 이름을 모은다
+     */
     private ArrayNode requestParameters(ValidatedOperation operation, String endpoint, GroupedNotes notes,
-                                        List<String> outOfScope) {
+                                        List<String> header, List<String> body) {
         ArrayNode parameters = objectMapper.createArrayNode();
-        List<String> header = new ArrayList<>();
-        List<String> body = new ArrayList<>();
         for (Parameter parameter : operation.requestParameters()) {
             LlmRequestParameter source = parameter.source();
             String name = parameter.name();
@@ -240,6 +260,10 @@ public final class IrNormalizer {
                 node.put("default", defaultValue);
             }
         }
+        return parameters;
+    }
+
+    private static void unsupportedLocations(List<String> header, List<String> body, List<String> outOfScope) {
         if (!header.isEmpty() || !body.isEmpty()) {
             List<String> where = new ArrayList<>();
             if (!header.isEmpty()) {
@@ -251,7 +275,17 @@ public final class IrNormalizer {
             outOfScope.add("요청 파라미터 위치 미지원 (" + String.join(" / ", where)
                     + "): generator는 query·path 파라미터만 받는다");
         }
-        return parameters;
+    }
+
+    /** 헤더로 보내는 인증키는 api.auth에 적으므로 요청 파라미터에서 뺀다. generator는 위치가 헤더인 파라미터를 받지 않는다 */
+    private static void removeHeader(ArrayNode parameters, List<String> header, String name) {
+        for (int i = parameters.size() - 1; i >= 0; i--) {
+            JsonNode parameter = parameters.get(i);
+            if ("header".equals(parameter.get("in").asText()) && name.equals(parameter.get("name").asText())) {
+                parameters.remove(i);
+            }
+        }
+        header.removeIf(name::equals);
     }
 
     /** 경로 변수는 늘 필수다. 표기가 없는 파라미터는 선택으로 두고 알린다 */
@@ -267,21 +301,61 @@ public final class IrNormalizer {
     }
 
     /**
-     * 인증 방식. 게이트웨이 serviceKey는 부르기 전에 보충했다. 이름이 serviceKey(대소문자 무시, KASI 문서는
-     * {@code ServiceKey})인 query 파라미터가 있어야 받는다. generator는 {@code authType}을 읽지 않고 serviceKey라는 이름만
-     * 찾기 때문이다({@code ClientEmitter}). 그 밖의 인증은 generator가 받지 못해 지원 범위 밖이다.
+     * IR의 인증 방식.
+     *
+     * @param type IR의 authType
+     * @param node IR의 api.auth. 이름이 serviceKey인 query 파라미터면 적지 않아도 generator가 그 파라미터를 키로 보내므로 null이다
      */
-    // TODO(인증 확장): generator가 다른 인증을 받게 되면 여기서 지원 범위 밖으로 건너뛰지 않고 IR에 인증 정보를 적는다.
-    //   자세한 내용은 generator의 ClientEmitter.findServiceKeyParam
-    private String authType(LlmAuth auth, ArrayNode parameters, List<String> outOfScope) {
+    private record Auth(String type, ObjectNode node) {
+    }
+
+    /**
+     * 인증 방식. 게이트웨이 serviceKey는 부르기 전에 보충했다. 이름이 serviceKey(대소문자 무시, KASI 문서는
+     * {@code ServiceKey})인 query 파라미터가 있으면 auth와 상관없이 그 파라미터로 보낸다(rule 엔진의 IR과 같다).
+     * 없으면 LLM이 밝힌 자리를 api.auth로 적는다: 이름이 다른 쿼리 키(apiKey)와 경로 변수의 키는 그 이름의 요청 파라미터가
+     * 있어야 하고, 헤더 키는 헤더 이름으로 쓸 수 있는 이름이어야 한다. 그 밖의 인증은 generator가 받지 못해 지원 범위 밖이다.
+     */
+    private Auth auth(LlmAuth auth, ArrayNode parameters, List<String> outOfScope) {
         for (JsonNode parameter : parameters) {
             if ("query".equals(parameter.get("in").asText())
                     && IrConventions.SERVICE_KEY.equalsIgnoreCase(parameter.get("name").asText())) {
-                return SERVICE_KEY_AUTH;
+                return new Auth(SERVICE_KEY_AUTH, null);
             }
         }
-        outOfScope.add("인증 방식 미지원 (" + authDetail(auth) + "): " + AUTH_SCOPE);
-        return auth == null || auth.kind() == null ? LlmAuth.Kind.UNKNOWN.name() : auth.kind().name();
+        LlmAuth.Kind kind = auth == null || auth.kind() == null ? LlmAuth.Kind.UNKNOWN : auth.kind();
+        String name = auth == null ? "" : LlmText.oneLine(auth.parameterName());
+        String placement = switch (kind) {
+            case SERVICE_KEY_QUERY -> hasParameter(parameters, "query", name) ? ApiAuth.QUERY : null;
+            case PATH_KEY -> hasParameter(parameters, "path", name) ? ApiAuth.PATH : null;
+            case HEADER_KEY -> headerKey(auth).isEmpty() ? null : ApiAuth.HEADER;
+            case NONE, OTHER, UNKNOWN -> null;
+        };
+        if (placement == null) {
+            outOfScope.add("인증 방식 미지원 (" + authDetail(auth) + "): " + AUTH_SCOPE);
+            return new Auth(kind.name(), null);
+        }
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("kind", placement);
+        node.put("name", name);
+        return new Auth(placement.equals(ApiAuth.QUERY) ? SERVICE_KEY_AUTH : kind.name(), node);
+    }
+
+    /** 헤더로 보내는 인증키의 헤더 이름. 헤더 키가 아니거나 헤더 이름으로 쓸 수 없으면 빈 문자열 */
+    private static String headerKey(LlmAuth auth) {
+        if (auth == null || auth.kind() != LlmAuth.Kind.HEADER_KEY) {
+            return "";
+        }
+        String name = LlmText.oneLine(auth.parameterName());
+        return AuthKey.isHeaderName(name) ? name : "";
+    }
+
+    private static boolean hasParameter(ArrayNode parameters, String in, String name) {
+        for (JsonNode parameter : parameters) {
+            if (in.equals(parameter.get("in").asText()) && !name.isEmpty() && name.equals(parameter.get("name").asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String authDetail(LlmAuth auth) {
@@ -437,13 +511,11 @@ public final class IrNormalizer {
         return false;
     }
 
-    private ArrayNode responseFields(ValidatedOperation operation, GroupedNotes notes, List<String> outOfScope) {
+    private ArrayNode responseFields(ValidatedOperation operation, GroupedNotes notes) {
         String fieldName = operation.resultCodeField();
         String fieldLeaf = fieldName.substring(fieldName.lastIndexOf('.') + 1);
         ArrayNode fields = objectMapper.createArrayNode();
-        Set<String> roots = new LinkedHashSet<>();
         for (Field field : operation.responseFields()) {
-            roots.add(field.root());
             String leaf = field.leaf();
             boolean resultCode = IrConventions.isResultCodeField(leaf) || leaf.equals(fieldLeaf);
             String type = type(field.source().type());
@@ -463,12 +535,35 @@ public final class IrNormalizer {
                 node.put("isResultIndicator", true);
             }
         }
-        // TODO(루트 여럿): generator가 루트 없는 응답을 받게 되면 건너뛰지 않는다. 자세한 내용은 generator의 DtoTreeBuilder.build
-        if (roots.size() > 1) {
-            outOfScope.add("응답 루트가 둘 이상 (" + String.join(", ", roots)
-                    + "): generator는 루트 하나로 감싼 응답만 받는다");
-        }
         return fields;
+    }
+
+    /**
+     * 응답이 루트 하나로 감싸이지 않는지(IR의 api.responseRootless). 경로의 첫 칸이 모두 같은 이름이고 그 아래에 필드가 있으면 그 칸이
+     * 응답을 감싼 루트다({"response": {…}}). 첫 칸이 여럿이거나({"header": …, "body": …}), 첫 칸이 리스트이거나 값이면
+     * ({"totCnt": 1, "data": […]}) 맨 바깥에 필드가 바로 오는 응답이다. JSON은 그대로 받고, XML은 루트 요소가 늘 하나라 경로가 틀린 것이어서
+     * 지원 범위 밖으로 둔다.
+     */
+    private static boolean rootless(ValidatedOperation operation, String responseFormat, List<String> outOfScope) {
+        Set<String> roots = new LinkedHashSet<>();
+        boolean wrapped = true;
+        for (Field field : operation.responseFields()) {
+            roots.add(field.root());
+            String path = field.path();
+            int dot = path.indexOf('.');
+            if (dot < 0 || path.substring(0, dot).endsWith("[]")) {
+                wrapped = false;
+            }
+        }
+        if (roots.size() <= 1 && wrapped) {
+            return false;
+        }
+        if (JSON.equals(responseFormat)) {
+            return true;
+        }
+        outOfScope.add("XML 응답 경로의 첫 칸이 루트 요소 하나가 아님 (" + String.join(", ", roots)
+                + "): XML 문서는 루트 요소 하나로 감싼다");
+        return false;
     }
 
     /**

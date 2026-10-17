@@ -7,6 +7,8 @@ subprojects {
 
     group = 'kr.go.h2spec'
     // JitPack은 태그 이름을 -Pversion 으로 넘긴다. 넘어온 값이 있으면 그것을 쓴다.
+    // TODO(interceptor-core 배포): v0.1.0 뒤의 interceptor-core API를 생성 코드가 부르므로 새 태그를 내야 한다. 내면 이 기본값도 다음 판으로
+    //   올린다. 자세한 내용은 generator의 ClientEmitter.appendDefaultRestTemplateFactory
     version = rootProject.version == Project.DEFAULT_VERSION ? '0.1.0-SNAPSHOT' : rootProject.version
 
     java {

@@ -100,18 +100,79 @@ class IrNormalizerTest {
     }
 
     @Test
-    void 헤더_키와_인증_없음은_지원_범위_밖이다() {
-        NormalizedOperation none = normalize(document(ORGANIZATION_URL), extraction(documentOperation(ORGANIZATION_URL)
-                .auth(LlmAuth.Kind.NONE, "")));
-        assertTrue(none.skipReason().startsWith("인증 방식 미지원 (인증키 없음)"), none.skipReason());
+    void 이름이_다른_쿼리_키와_경로_변수의_키는_api_auth에_적는다() {
+        NormalizedOperation query = normalize(document(ORGANIZATION_URL, row("apiKey", "인증키", "100", "1", "", "")),
+                extraction(documentOperation(ORGANIZATION_URL, query("apiKey"))
+                        .auth(LlmAuth.Kind.SERVICE_KEY_QUERY, "apiKey")));
+        String url = "https://openapi.example.kr/svc/getList/{appkey}";
+        NormalizedOperation path = normalize(document(url, row("appkey", "인증키", "100", "1", "", "")),
+                extraction(documentOperation(url,
+                        parameter("appkey", Location.PATH, LlmValueType.STRING, Requirement.REQUIRED, "", "", false))
+                        .auth(LlmAuth.Kind.PATH_KEY, "appkey")));
 
+        assertTrue(query.converted(), query.skipReason());
+        assertEquals("{\"kind\":\"SERVICE_KEY_QUERY\",\"name\":\"apiKey\"}", api(query).get("auth").toString());
+        assertEquals("SERVICE_KEY_QUERY_PARAM", api(query).get("authType").asText());
+        assertTrue(path.converted(), path.skipReason());
+        assertEquals("{\"kind\":\"PATH_KEY\",\"name\":\"appkey\"}", api(path).get("auth").toString());
+        assertEquals("PATH_KEY", api(path).get("authType").asText());
+    }
+
+    @Test
+    void 이름이_serviceKey인_쿼리_파라미터가_있으면_api_auth를_적지_않는다() {
+        // generator는 api.auth가 없으면 serviceKey를 질의로 보낸다. 지금까지 만든 IR과 같은 IR이 나온다
+        NormalizedOperation normalized = normalize(standardOperation());
+
+        assertTrue(normalized.converted());
+        assertFalse(api(normalized).has("auth"));
+        assertEquals("SERVICE_KEY_QUERY_PARAM", api(normalized).get("authType").asText());
+    }
+
+    @Test
+    void 헤더로_보내는_인증키는_api_auth로_옮기고_요청_파라미터에서_뺀다() {
         NormalizedOperation header = normalize(document(ORGANIZATION_URL, row("X-Api-Key", "인증키", "100", "1", "", "")),
                 extraction(documentOperation(ORGANIZATION_URL,
                         parameter("X-Api-Key", Location.HEADER, LlmValueType.STRING, Requirement.REQUIRED, "", "", false))
                         .auth(LlmAuth.Kind.HEADER_KEY, "X-Api-Key")));
-        assertEquals("요청 파라미터 위치 미지원 (헤더: X-Api-Key): generator는 query·path 파라미터만 받는다; "
-                + "인증 방식 미지원 (헤더의 X-Api-Key): generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다",
-                header.skipReason(), "이유가 여럿이면 모두 적는다");
+
+        assertTrue(header.converted(), header.skipReason());
+        assertEquals("{\"kind\":\"HEADER_KEY\",\"name\":\"X-Api-Key\"}", api(header).get("auth").toString());
+        assertEquals("HEADER_KEY", api(header).get("authType").asText());
+        assertEquals(List.of(), parameterNames(header), "generator는 위치가 헤더인 파라미터를 받지 않는다");
+    }
+
+    @Test
+    void 인증_없음과_찾지_못한_키는_지원_범위_밖이다() {
+        NormalizedOperation none = normalize(document(ORGANIZATION_URL), extraction(documentOperation(ORGANIZATION_URL)
+                .auth(LlmAuth.Kind.NONE, "")));
+        NormalizedOperation missing = normalize(document(ORGANIZATION_URL), extraction(documentOperation(ORGANIZATION_URL)
+                .auth(LlmAuth.Kind.SERVICE_KEY_QUERY, "apiKey")));
+        NormalizedOperation header = normalize(document(ORGANIZATION_URL, row("X Api Key", "인증키", "100", "1", "", "")),
+                extraction(documentOperation(ORGANIZATION_URL,
+                        parameter("X Api Key", Location.HEADER, LlmValueType.STRING, Requirement.REQUIRED, "", "", false))
+                        .auth(LlmAuth.Kind.HEADER_KEY, "X Api Key")));
+
+        assertTrue(none.skipReason().startsWith("인증 방식 미지원 (인증키 없음)"), none.skipReason());
+        assertEquals("인증 방식 미지원 (쿼리 파라미터 apiKey): generator는 질의·주소 경로·요청 헤더에 넣는 인증키 하나만 받고, "
+                + "질의·경로의 키는 요청 파라미터에 있어야 한다", missing.skipReason(), "요청 파라미터에 없는 키는 보낼 자리가 없다");
+        assertEquals("요청 파라미터 위치 미지원 (헤더: X Api Key): generator는 query·path 파라미터만 받는다; "
+                + "인증 방식 미지원 (헤더의 X Api Key): generator는 질의·주소 경로·요청 헤더에 넣는 인증키 하나만 받고, "
+                + "질의·경로의 키는 요청 파라미터에 있어야 한다", header.skipReason(), "헤더 이름으로 쓸 수 없는 이름. 이유가 여럿이면 모두 적는다");
+    }
+
+    @Test
+    void 게이트웨이가_serviceKey를_받으면_헤더_키라고_해도_헤더_파라미터를_빼지_않고_지원_범위_밖으로_둔다() {
+        // serviceKey를 보충해 질의로 보내므로 헤더 키는 api.auth가 되지 않는다. 그 헤더를 빼고 변환하면 문서의 인증을 조용히 버린다
+        String gateway = SampleDocument.URL;
+        NormalizedOperation normalized = normalize(document(gateway, row("X-Api-Key", "인증키", "100", "1", "", "")),
+                extraction(documentOperation(gateway,
+                        parameter("X-Api-Key", Location.HEADER, LlmValueType.STRING, Requirement.REQUIRED, "", "", false))
+                        .auth(LlmAuth.Kind.HEADER_KEY, "X-Api-Key")));
+
+        assertEquals("요청 파라미터 위치 미지원 (헤더: X-Api-Key): generator는 query·path 파라미터만 받는다",
+                normalized.skipReason());
+        assertFalse(api(normalized).has("auth"));
+        assertEquals(List.of("serviceKey", "X-Api-Key"), parameterNames(normalized));
     }
 
     // ---- api.requestParameters ----
@@ -319,7 +380,52 @@ class IrNormalizerTest {
     }
 
     @Test
-    void 응답_루트가_둘_이상이면_지원_범위_밖이다() {
+    void 맨_바깥에_키가_여럿인_JSON_응답은_루트_없는_응답으로_적는다() {
+        List<Block> blocks = new ArrayList<>(SampleDocument.standard());
+        blocks.set(9, table(row("응답메시지"), row("{\n\"header\": {\"resultCode\": \"00\"},\n\"body\": {\"totalCount\": 1}\n}")));
+
+        NormalizedOperation normalized = normalize(blocks, extraction(standardOperation()
+                .format(ResponseFormat.JSON, DefaultResponseFormat.UNKNOWN, "returnType")
+                .fields(field("header.resultCode", RESPONSE_EXAMPLE), field("body.totalCount", RESPONSE_EXAMPLE))));
+
+        assertTrue(normalized.converted(), normalized.skipReason());
+        assertTrue(api(normalized).get("responseRootless").asBoolean());
+        assertEquals("header.resultCode", api(normalized).get("responseFields").get(0).get("path").asText());
+    }
+
+    @Test
+    void 맨_바깥_키가_하나여도_리스트나_값이면_루트_없는_JSON_응답이다() {
+        // {"data": […]}는 응답을 감싼 루트가 아니라 배열 필드다. 루트로 보면 생성 DTO가 배열을 객체로 읽으려다 실패한다
+        List<Block> blocks = new ArrayList<>(SampleDocument.standard());
+        blocks.set(9, table(row("응답메시지"), row("{\n\"data\": [{\"stationName\": \"종로구\"}]\n}")));
+        List<Block> leafBlocks = new ArrayList<>(SampleDocument.standard());
+        leafBlocks.set(9, table(row("응답메시지"), row("{\n\"totalCount\": 1\n}")));
+
+        NormalizedOperation list = normalize(blocks, extraction(standardOperation()
+                .format(ResponseFormat.JSON, DefaultResponseFormat.UNKNOWN, "returnType")
+                .fields(field("data[].stationName", RESPONSE_EXAMPLE))));
+        NormalizedOperation leaf = normalize(leafBlocks, extraction(standardOperation()
+                .format(ResponseFormat.JSON, DefaultResponseFormat.UNKNOWN, "returnType")
+                .fields(field("totalCount", RESPONSE_EXAMPLE))));
+
+        assertTrue(api(list).get("responseRootless").asBoolean(), list.skipReason());
+        assertTrue(api(leaf).get("responseRootless").asBoolean(), leaf.skipReason());
+    }
+
+    @Test
+    void 루트_하나로_감싼_응답은_responseRootless를_적지_않는다() {
+        NormalizedOperation xml = normalize(standardOperation());
+        NormalizedOperation json = normalize(standardOperation()
+                .format(ResponseFormat.JSON, DefaultResponseFormat.UNKNOWN, "returnType"));
+
+        assertFalse(api(xml).has("responseRootless"));
+        assertFalse(api(json).has("responseRootless"));
+        assertTrue(json.converted(), json.skipReason());
+    }
+
+    @Test
+    void XML_응답_경로의_첫_칸이_여럿이면_지원_범위_밖이다() {
+        // XML 문서는 루트 요소가 하나라 첫 칸이 여럿인 경로는 틀린 것이다
         List<Block> blocks = new ArrayList<>(SampleDocument.standard());
         blocks.set(9, table(row("응답메시지"), row("{\n\"header\": {\"resultCode\": \"00\"},\n\"body\": {\"totalCount\": 1}\n}")));
 
@@ -327,8 +433,9 @@ class IrNormalizerTest {
                 field("header.resultCode", RESPONSE_EXAMPLE), field("body.totalCount", RESPONSE_EXAMPLE))));
 
         assertTrue(normalized.outOfScope());
-        assertEquals("응답 루트가 둘 이상 (header, body): generator는 루트 하나로 감싼 응답만 받는다",
+        assertEquals("XML 응답 경로의 첫 칸이 루트 요소 하나가 아님 (header, body): XML 문서는 루트 요소 하나로 감싼다",
                 normalized.skipReason());
+        assertFalse(api(normalized).has("responseRootless"));
         assertEquals("header.resultCode", api(normalized).get("responseFields").get(0).get("path").asText());
     }
 

@@ -16,8 +16,8 @@ import java.util.Set;
 public class ClientEmitter {
 
     private static final String INDENT = "    ";
-    /** 인증키 파라미터 이름. 문서마다 대소문자가 달라(serviceKey / ServiceKey) 무시하고 비교한다 */
-    private static final String SERVICE_KEY_PARAM = "serviceKey";
+    /** 생성자로 받은 인증키를 담는 필드. 문서의 인증키 이름과 상관없이 이 이름이다 */
+    private static final String KEY_FIELD = "serviceKey";
     /** 응답 포맷을 고르는 요청 파라미터. 이름이 기관마다 다르다 */
     private static final Set<String> RESPONSE_FORMAT_PARAMS = Set.of("returnType", "dataType", "resultType");
     /**
@@ -29,12 +29,18 @@ public class ClientEmitter {
     private static final String METHOD_NAME_PREFIX = "call";
     /**
      * 생성 클래스가 이미 갖는 메서드(생성하는 헬퍼와 Object의 메서드)의 이름과 인자 타입. 엔드포인트로 만든 메서드가 이와 같으면
-     * 컴파일되지 않으므로({@code /encode}에 문자열 인자 하나, 인자 없는 {@code /getClass}) 접두사를 붙인다. 인자가 다르면 겹치지 않아 그대로 둔다
+     * 컴파일되지 않으므로({@code /encode}에 문자열 인자 하나, 인자 없는 {@code /getClass}) 접두사를 붙인다. 인자가 다르면 겹치지 않아 그대로 둔다.
+     * 질의 구분자 헬퍼({@code separator(StringBuilder)})는 메서드 인자에 StringBuilder가 없어 겹치지 않는다
      */
-    private static final Set<String> RESERVED_SIGNATURES = Set.of("encode(String)", "defaultRestTemplate()",
+    private static final Set<String> RESERVED_SIGNATURES = Set.of("encode(String)",
             "getClass()", "hashCode()", "toString()", "notify()", "notifyAll()", "wait()", "finalize()");
     /** 경로 변수가 있으면 생성하는 헬퍼 */
     private static final String ENCODE_PATH_SIGNATURE = "encodePath(String)";
+    /** 인증키를 질의로 보내면 생성하는 헬퍼 */
+    private static final String ENCODE_KEY_SIGNATURE = "encodeKey(String)";
+    /** RestTemplate을 만드는 헬퍼. 키 값으로 가리는 클라이언트는 키를 받아 인터셉터에 넘긴다 */
+    private static final String DEFAULT_REST_TEMPLATE_SIGNATURE = "defaultRestTemplate()";
+    private static final String KEYED_REST_TEMPLATE_SIGNATURE = "defaultRestTemplate(String)";
     /**
      * URL의 질의에 그대로 쓸 수 있는 글자({@code URI.create}가 받는 글자 가운데 질의를 깨지 않는 것). 그 밖의 ASCII 글자(공백,
      * {@code & = + # %} 등)는 파라미터 이름을 질의에 넣을 때 퍼센트 인코딩한다. 한글 같은 비ASCII 글자는 {@code URI.create}가 받으므로
@@ -68,44 +74,28 @@ public class ClientEmitter {
         String className = JavaNames.pascal(ir.api().apiId()) + "Client";
         String responseClassName = JavaNames.pascal(ir.api().apiId()) + "Response";
         boolean isXml = "XML".equals(ir.api().responseFormat());
-        RequestParameter serviceKeyParam = findServiceKeyParam(ir);
+        AuthKey key = AuthKey.of(ir.api());
         List<RequestParameter> params = methodParameters(ir);
         validateNoClashWithMethodBody(params, mapperVar(isXml));
         List<String> resultCodeKeys = extraResultCodeKeys(ir);
 
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(ir.generatorHints().targetPackage()).append(";\n\n");
-        appendImports(sb, ir, responseClassName, isXml, !resultCodeKeys.isEmpty());
+        appendImports(sb, ir, responseClassName, isXml, !resultCodeKeys.isEmpty() || key.masksByValue(), key);
         appendClassJavadoc(sb, ir);
         sb.append("public class ").append(className).append(" {\n\n");
         appendFields(sb, ir, isXml);
         sb.append("\n");
-        appendConstructors(sb, className, serviceKeyParam);
+        appendConstructors(sb, className, key);
         sb.append("\n");
-        appendDefaultRestTemplateFactory(sb, resultCodeKeys);
+        appendDefaultRestTemplateFactory(sb, resultCodeKeys, key.masksByValue());
         sb.append("\n");
-        appendApiMethod(sb, ir, params, responseClassName, isXml);
+        appendApiMethod(sb, ir, params, responseClassName, isXml, key);
         sb.append("\n");
-        appendEncodeHelper(sb, hasPathParameter(ir));
+        boolean keyInQuery = key.placement() == AuthKey.Placement.QUERY;
+        appendEncodeHelper(sb, keyInQuery, hasPathParameter(ir), !keyInQuery && hasQueryItems(ir, params));
         sb.append("}\n");
         return sb.toString();
-    }
-
-    // TODO(인증 확장): generator는 이름이 serviceKey(대소문자 무시)인 쿼리 파라미터만 인증키로 받고, 그 밖의 인증은 여기서 실패한다.
-    //   샘플 문서에서 걸리는 오퍼레이션: jeju-folksong(쿼리 authApiKey), nongsaro-eco-farming 2개(쿼리 apiKey),
-    //   jejudatahub-wifi-usage(주소 경로 {your_appkey}). 요청 헤더로 받는 키도 같은 일이다.
-    //   지금 두 엔진의 처리: rule 엔진은 authType을 늘 SERVICE_KEY_QUERY_PARAM으로 적고 IR을 만들어 코드 생성 때 이 예외로 실패하고,
-    //   llm 엔진은 IrNormalizer.authType에서 지원 범위 밖으로 미리 건너뛴다(LlmAuth로 종류와 이름은 이미 안다).
-    //   고칠 것: IR에 인증 정보(종류: 쿼리·경로·헤더, 파라미터 이름)를 담는 자리를 정하고, 여기서 그 이름·위치로 키를 넣는다.
-    //   OpenApiEmitter의 securityScheme, rule 엔진 IrAssembler의 authType, IrNormalizer의 지원 범위 판정,
-    //   llm-eval DetailMetric의 인증 방식 비교도 함께 바꾼다. 관련 자리는 "TODO(인증 확장)"으로 찾는다.
-    private RequestParameter findServiceKeyParam(IrSpec ir) {
-        for (RequestParameter p : ir.api().requestParameters()) {
-            if (SERVICE_KEY_PARAM.equalsIgnoreCase(p.name())) {
-                return p;
-            }
-        }
-        throw new IllegalArgumentException("requestParameters에 serviceKey 파라미터가 없습니다.");
     }
 
     /**
@@ -116,7 +106,7 @@ public class ClientEmitter {
         String formatParam = formatParamName(ir);
         List<RequestParameter> result = new ArrayList<>();
         for (RequestParameter p : ir.api().requestParameters()) {
-            if (!isHidden(p.name(), formatParam)) {
+            if (!isHidden(ir, p, formatParam)) {
                 result.add(p);
             }
         }
@@ -124,12 +114,12 @@ public class ClientEmitter {
     }
 
     /**
-     * 메서드 시그니처에서 감추는 파라미터. serviceKey는 생성자로 받고, 포맷 파라미터는
+     * 메서드 시그니처에서 감추는 파라미터. 인증키는 생성자로 받고, 포맷 파라미터는
      * 생성 시점에 확정한 값으로 박는다 — 호출자가 매퍼와 어긋나는 값을 넣을 수 없게 한다.
      */
-    private static boolean isHidden(String name, String formatParam) {
-        return SERVICE_KEY_PARAM.equalsIgnoreCase(name) || RESPONSE_FORMAT_PARAMS.contains(name)
-                || name.equals(formatParam);
+    private static boolean isHidden(IrSpec ir, RequestParameter p, String formatParam) {
+        return AuthKey.isKey(ir.api(), p) || RESPONSE_FORMAT_PARAMS.contains(p.name())
+                || p.name().equals(formatParam);
     }
 
     private static String mapperVar(boolean isXml) {
@@ -215,12 +205,12 @@ public class ClientEmitter {
 
     // java.* 그룹 → jackson/spring 그룹(XmlMapper 또는 ObjectMapper 선택) → 프로젝트 내부 그룹. 그룹마다 빈 줄.
     private void appendImports(StringBuilder sb, IrSpec ir, String responseClassName, boolean isXml,
-                               boolean hasResultCodeKeys) {
+                               boolean usesList, AuthKey key) {
         sb.append("import java.io.IOException;\n");
         sb.append("import java.net.URI;\n");
         sb.append("import java.net.URLEncoder;\n");
         sb.append("import java.nio.charset.StandardCharsets;\n");
-        if (hasResultCodeKeys) {
+        if (usesList) {
             sb.append("import java.util.List;\n");
         }
         sb.append("\n");
@@ -230,6 +220,9 @@ public class ClientEmitter {
         } else {
             sb.append("import com.fasterxml.jackson.databind.DeserializationFeature;\n");
             sb.append("import com.fasterxml.jackson.databind.ObjectMapper;\n");
+        }
+        if (key.placement() == AuthKey.Placement.HEADER) {
+            sb.append("import org.springframework.http.RequestEntity;\n");
         }
         sb.append("import org.springframework.http.client.BufferingClientHttpRequestFactory;\n");
         sb.append("import org.springframework.http.client.SimpleClientHttpRequestFactory;\n");
@@ -260,23 +253,30 @@ public class ClientEmitter {
         if (isXml) {
             sb.append(INDENT).append("private final XmlMapper xmlMapper = new XmlMapper();\n");
         } else {
-            // DTO의 @JsonRootName과 짝. 공공데이터 JSON 응답은 {"response":{...}}처럼 루트를 키로 감싼다
-            // TODO(루트 여럿): 루트 없는 응답이면 풀지 않아야 한다. 자세한 내용은 DtoTreeBuilder.build
             sb.append(INDENT).append("private final ObjectMapper objectMapper = new ObjectMapper()\n");
-            sb.append(INDENT.repeat(3))
-              .append(".enable(DeserializationFeature.UNWRAP_ROOT_VALUE);\n");
+            // DTO의 @JsonRootName과 짝. 공공데이터 JSON 응답은 {"response":{...}}처럼 루트를 키로 감싼다.
+            // 맨 바깥에 필드가 바로 오는 응답({"header": …, "body": …})은 DTO가 응답 전체라 풀 루트가 없다
+            if (!ir.api().responseRootless()) {
+                sb.append(INDENT.repeat(3)).append(".enable(DeserializationFeature.UNWRAP_ROOT_VALUE)\n");
+            }
+            // XML을 JSON으로 옮겨 주는 기관은 결과가 1건이면 배열 대신 객체({"item": {…}})를, 없으면 빈 글({"items": ""})을 준다.
+            // XML의 반복 요소는 건수와 상관없이 같은 모양이라 XmlMapper에는 필요 없다
+            sb.append(INDENT.repeat(3)).append(".enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY)\n");
+            sb.append(INDENT.repeat(3)).append(".enable(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT);\n");
         }
         sb.append(INDENT).append("private final String serviceKey;\n");
     }
 
-    private void appendConstructors(StringBuilder sb, String className, RequestParameter serviceKeyParam) {
+    private void appendConstructors(StringBuilder sb, String className, AuthKey key) {
         String indent2 = INDENT.repeat(2);
         sb.append(INDENT).append("/**\n");
-        sb.append(INDENT).append(" * @param serviceKey ").append(JavaText.comment(serviceKeyParam.description()))
+        sb.append(INDENT).append(" * @param serviceKey ").append(JavaText.comment(key.description()))
           .append("\n");
         sb.append(INDENT).append(" */\n");
         sb.append(INDENT).append("public ").append(className).append("(String serviceKey) {\n");
-        sb.append(indent2).append("this(serviceKey, defaultRestTemplate());\n");
+        sb.append(indent2).append(key.masksByValue()
+                ? "this(serviceKey, defaultRestTemplate(serviceKey));\n"
+                : "this(serviceKey, defaultRestTemplate());\n");
         sb.append(INDENT).append("}\n");
         sb.append("\n");
         sb.append(INDENT).append("public ").append(className).append("(String serviceKey, RestTemplate restTemplate) {\n");
@@ -287,14 +287,23 @@ public class ClientEmitter {
 
     // 결과코드 이름은 상수로 두지 않고 인자에 바로 쓴다. List 상수는 static 초기화 블록을 만들어서,
     // 생성 클라이언트에 static 블록이 없음을 보는 안전장치 테스트(CodeGeneratorSafetyTest)가 끼워 넣은 코드와 구별하지 못한다.
-    private void appendDefaultRestTemplateFactory(StringBuilder sb, List<String> resultCodeKeys) {
+    // 키 값으로 가리는 클라이언트는 키를 받아 인터셉터에 넘긴다. 인터셉터가 오류 응답의 예외에서 키를 가린다
+    // TODO(interceptor-core 배포): 생성 코드가 지금 배포된 유일한 판 v0.1.0(2026-08-27)에 없는 API를 부른다.
+    //   결과코드 이름을 넘기는 PublicDataErrorInterceptor(String, List)(PR #52), 키를 넘기는 PublicDataErrorInterceptor(String, List, String)과
+    //   ServiceKeyMasker.mask(String, String)(api.auth). 이런 생성 코드는 interceptor-core v0.1.0을 쓰는 프로젝트에서 컴파일되지 않는다.
+    //   성공코드만 넘기는 클라이언트(rule 엔진의 IR)는 v0.1.0으로도 된다.
+    //   할 것: main에 머지한 뒤 새 태그(v0.2.0 등)를 만들어 JitPack으로 배포하고, README의 의존성 줄(interceptor-core:v0.1.0)을 그 판으로
+    //   바꾼다. 관련 자리는 "TODO(interceptor-core 배포)"로 찾는다.
+    private void appendDefaultRestTemplateFactory(StringBuilder sb, List<String> resultCodeKeys, boolean masksByValue) {
         String indent2 = INDENT.repeat(2);
         String indent4 = INDENT.repeat(4);
-        sb.append(INDENT).append("private static RestTemplate defaultRestTemplate() {\n");
+        sb.append(INDENT).append(masksByValue
+                ? "private static RestTemplate defaultRestTemplate(String serviceKey) {\n"
+                : "private static RestTemplate defaultRestTemplate() {\n");
         sb.append(indent2).append("RestTemplate restTemplate = new RestTemplate(\n");
         sb.append(indent4).append("new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()));\n");
         sb.append(indent2).append("restTemplate.getInterceptors().add(new PublicDataErrorInterceptor(SUCCESS_CODE");
-        if (!resultCodeKeys.isEmpty()) {
+        if (!resultCodeKeys.isEmpty() || masksByValue) {
             sb.append(", List.of(");
             for (int i = 0; i < resultCodeKeys.size(); i++) {
                 if (i > 0) {
@@ -303,6 +312,9 @@ public class ClientEmitter {
                 sb.append("\"").append(JavaText.literal(resultCodeKeys.get(i))).append("\"");
             }
             sb.append(")");
+        }
+        if (masksByValue) {
+            sb.append(", serviceKey");
         }
         sb.append("));\n");
         sb.append(indent2).append("return restTemplate;\n");
@@ -335,11 +347,11 @@ public class ClientEmitter {
     }
 
     private void appendApiMethod(StringBuilder sb, IrSpec ir, List<RequestParameter> params,
-                                  String responseClassName, boolean isXml) {
+                                  String responseClassName, boolean isXml, AuthKey key) {
         String indent2 = INDENT.repeat(2);
         String indent3 = INDENT.repeat(3);
         String methodName = methodNameOf(ir.api().endpoint());
-        if (clashesWithExistingMethod(methodName, params, hasPathParameter(ir))) {
+        if (clashesWithExistingMethod(methodName, params, hasPathParameter(ir), key)) {
             methodName = METHOD_NAME_PREFIX + Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
         }
 
@@ -367,14 +379,23 @@ public class ClientEmitter {
         sb.append(indent2).append("StringBuilder url = new StringBuilder(BASE_URL + \"")
           .append(JavaText.literal(ir.api().endpoint())).append("\");\n");
         // 메서드 인자의 Java 이름이 serviceKey(SERVICE_KEY 같은 다른 파라미터)면 필드를 가리므로 필드를 this로 가리킨다
-        boolean keyShadowed = params.stream().anyMatch(p -> SERVICE_KEY_PARAM.equals(
+        boolean keyShadowed = params.stream().anyMatch(p -> KEY_FIELD.equals(
                 JavaNameRules.canonicalIdentifier(JavaNames.camel(p.name()))));
-        sb.append(indent2).append("url.append(\"?").append(JavaText.literal(queryName(findServiceKeyParam(ir).name())))
-          .append("=\").append(encode(").append(keyShadowed ? "this." : "").append(SERVICE_KEY_PARAM).append("));\n");
+        String keyRef = (keyShadowed ? "this." : "") + KEY_FIELD;
+        boolean keyInQuery = key.placement() == AuthKey.Placement.QUERY;
+        if (keyInQuery) {
+            sb.append(indent2).append("url.append(\"?").append(JavaText.literal(queryName(key.name())))
+              .append("=\").append(encodeKey(").append(keyRef).append("));\n");
+        } else if (key.placement() == AuthKey.Placement.PATH) {
+            sb.append(indent2).append("url = new StringBuilder(url.toString().replace(\"{")
+              .append(JavaText.literal(key.name())).append("}\", encodePath(").append(keyRef).append(")));\n");
+        }
+        // 키가 질의에 없으면 어느 파라미터가 처음 붙을지 생성할 때 모른다(선택 파라미터는 null이면 붙지 않는다)
+        String queryAppend = keyInQuery ? "url.append(\"&" : "url.append(separator(url)).append(\"";
         String formatParam = formatParamName(ir);
         if (formatParam != null) {
             String formatValue = formatParamValue(ir);
-            sb.append(indent2).append("url.append(\"&").append(JavaText.literal(queryName(formatParam))).append("=")
+            sb.append(indent2).append(queryAppend).append(JavaText.literal(queryName(formatParam))).append("=")
               .append(JavaText.literal(formatValue)).append("\");\n");
         }
         for (RequestParameter p : params) {
@@ -387,7 +408,7 @@ public class ClientEmitter {
             }
             String varName = JavaNames.camel(p.name());
             String valueExpr = "string".equals(p.type()) ? "encode(" + varName + ")" : varName;
-            String appendLine = "url.append(\"&" + JavaText.literal(queryName(p.name())) + "=\").append(" + valueExpr + ");";
+            String appendLine = queryAppend + JavaText.literal(queryName(p.name())) + "=\").append(" + valueExpr + ");";
             if (p.required()) {
                 sb.append(indent2).append(appendLine).append("\n");
             } else {
@@ -397,23 +418,35 @@ public class ClientEmitter {
             }
         }
         sb.append(indent2).append("URI uri = URI.create(url.toString());\n");
-        sb.append(indent2).append("byte[] body = restTemplate.getForObject(uri, byte[].class);\n");
+        if (key.placement() == AuthKey.Placement.HEADER) {
+            sb.append(indent2).append("byte[] body = restTemplate.exchange(\n");
+            sb.append(INDENT.repeat(4)).append("RequestEntity.get(uri).header(\"").append(JavaText.literal(key.name()))
+              .append("\", ").append(keyRef).append(").build(), byte[].class).getBody();\n");
+        } else {
+            sb.append(indent2).append("byte[] body = restTemplate.getForObject(uri, byte[].class);\n");
+        }
         sb.append(indent2).append("try {\n");
         String mapperVar = mapperVar(isXml);
         sb.append(indent3).append("return ").append(mapperVar).append(".readValue(body, ")
           .append(responseClassName).append(".class);\n");
         sb.append(indent2).append("} catch (IOException e) {\n");
         // 파싱 실패 예외에도 인증키가 남지 않도록 URI를 마스킹해서 넣는다
-        sb.append(indent3).append(
-                "throw new IllegalStateException(\"응답 파싱 실패: \" + ServiceKeyMasker.mask(uri.toString()), e);\n");
+        // TODO(interceptor-core 배포): mask(String, String)은 v0.1.0에 없다. 자세한 내용은 appendDefaultRestTemplateFactory
+        String masked = key.masksByValue()
+                ? "ServiceKeyMasker.mask(uri.toString(), " + keyRef + ")"
+                : "ServiceKeyMasker.mask(uri.toString())";
+        sb.append(indent3).append("throw new IllegalStateException(\"응답 파싱 실패: \" + ").append(masked).append(", e);\n");
         sb.append(indent2).append("}\n");
         sb.append(INDENT).append("}\n");
     }
 
     /** 엔드포인트로 만든 메서드가 생성 클래스의 헬퍼나 Object의 메서드와 이름·인자 타입이 같은지 */
-    private boolean clashesWithExistingMethod(String methodName, List<RequestParameter> params, boolean hasPathParameter) {
+    private boolean clashesWithExistingMethod(String methodName, List<RequestParameter> params, boolean hasPathParameter,
+                                              AuthKey key) {
         String signature = methodName + "(" + String.join(",", params.stream().map(p -> javaType(p.type())).toList()) + ")";
-        return RESERVED_SIGNATURES.contains(signature) || (hasPathParameter && ENCODE_PATH_SIGNATURE.equals(signature));
+        return RESERVED_SIGNATURES.contains(signature) || (hasPathParameter && ENCODE_PATH_SIGNATURE.equals(signature))
+                || (key.placement() == AuthKey.Placement.QUERY && ENCODE_KEY_SIGNATURE.equals(signature))
+                || (key.masksByValue() ? KEYED_REST_TEMPLATE_SIGNATURE : DEFAULT_REST_TEMPLATE_SIGNATURE).equals(signature);
     }
 
     /**
@@ -438,11 +471,21 @@ public class ClientEmitter {
         return ir.api().requestParameters().stream().anyMatch(p -> "path".equals(p.in()));
     }
 
-    private void appendEncodeHelper(StringBuilder sb, boolean hasPathParameter) {
+    private void appendEncodeHelper(StringBuilder sb, boolean keyInQuery, boolean hasPathParameter, boolean needsSeparator) {
         String indent2 = INDENT.repeat(2);
         sb.append(INDENT).append("private static String encode(String value) {\n");
         sb.append(indent2).append("return URLEncoder.encode(value, StandardCharsets.UTF_8);\n");
         sb.append(INDENT).append("}\n");
+        if (keyInQuery) {
+            // 포털은 같은 키를 Encoding 키와 Decoding 키 두 가지로 준다. Encoding 키를 다시 인코딩하면 등록되지 않은 키(30)가 된다.
+            // 포털의 키는 Base64 글자(영문자·숫자·+/=)라 퍼센트 인코딩 꼴이 들어 있으면 이미 인코딩한 키다
+            sb.append("\n");
+            sb.append(INDENT)
+              .append("/** 인증키용. 공공데이터포털의 Encoding 키처럼 이미 인코딩한 키(%2B 같은 글자가 든 키)는 다시 인코딩하지 않는다 */\n");
+            sb.append(INDENT).append("private static String encodeKey(String value) {\n");
+            sb.append(indent2).append("return value.matches(\".*%[0-9A-Fa-f]{2}.*\") ? value : encode(value);\n");
+            sb.append(INDENT).append("}\n");
+        }
         if (hasPathParameter) {
             sb.append("\n");
             sb.append(INDENT)
@@ -451,6 +494,18 @@ public class ClientEmitter {
             sb.append(indent2).append("return encode(value).replace(\"+\", \"%20\");\n");
             sb.append(INDENT).append("}\n");
         }
+        if (needsSeparator) {
+            sb.append("\n");
+            sb.append(INDENT).append("/** 질의에 처음 붙는 파라미터면 ?, 아니면 & */\n");
+            sb.append(INDENT).append("private static String separator(StringBuilder url) {\n");
+            sb.append(indent2).append("return url.indexOf(\"?\") < 0 ? \"?\" : \"&\";\n");
+            sb.append(INDENT).append("}\n");
+        }
+    }
+
+    /** 생성 메서드가 질의에 붙이는 것(포맷 파라미터와 경로 변수가 아닌 인자)이 있는지 */
+    private static boolean hasQueryItems(IrSpec ir, List<RequestParameter> params) {
+        return formatParamName(ir) != null || params.stream().anyMatch(p -> !"path".equals(p.in()));
     }
 
     private String javaType(String type) {

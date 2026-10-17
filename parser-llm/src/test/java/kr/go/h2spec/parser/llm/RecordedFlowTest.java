@@ -1,10 +1,10 @@
 package kr.go.h2spec.parser.llm;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.generator.CodeGenerator;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.parser.ParsedApi;
-import kr.go.h2spec.parser.SpecParseException;
 import kr.go.h2spec.parser.SpecParseResult;
 import kr.go.h2spec.parser.SpecParseResult.Engine;
 import kr.go.h2spec.parser.SpecParseResult.Operation;
@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,13 +47,13 @@ class RecordedFlowTest {
     static Stream<Arguments> recordings() {
         return Stream.of(
                 Arguments.of("its-traffic-light.hwp", List.of("TrafficLightList4"), List.of(), 0, 0),
-                Arguments.of("jejudatahub-wifi-usage.hwp", List.of(), List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), 1, 0),
+                Arguments.of("jejudatahub-wifi-usage.hwp", List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), List.of(), 1, 0),
                 Arguments.of("kasi-special-day.docx",
                         List.of("HoliDeInfo", "RestDeInfo", "AnniversaryInfo", "Get24DivisionsInfo", "SundryDayInfo"), List.of(), 2, 0),
                 Arguments.of("kci-reference.docx", List.of("OpenApiD272List", "OpenApiD273List", "OpenApiD321List",
                         "OpenApiM320List", "OpenApiM325List", "OpenApiM326List"), List.of(), 0, 0),
                 Arguments.of("kma-mid-forecast.docx", List.of("MidFcst", "MidLandFcst", "MidTa", "MidSeaFcst"), List.of(), 2, 0),
-                Arguments.of("kosha-certificate-check.hwp", List.of(), List.of("Koshagw"), 1, 0),
+                Arguments.of("kosha-certificate-check.hwp", List.of("Koshagw"), List.of(), 1, 0),
                 Arguments.of("msrstn-info.docx", List.of("MsrstnList", "NearbyMsrstnList", "TMStdrCrdnt"), List.of(), 0, 0),
                 Arguments.of("nec-ballot-counting-place.hwpx", List.of("CountingSttnInfoInqire"), List.of(), 1, 0),
                 Arguments.of("nps-disability-review.hwp", List.of("JgmtSttusInfoSearchV2"), List.of(), 1, 0));
@@ -105,25 +105,24 @@ class RecordedFlowTest {
     }
 
     @Test
-    void 제주_와이파이는_지원_범위_밖으로_건너뛰되_정규화한_IR을_담고_apis에는_넣지_않으며_parse는_명세가_없다고_하지_않고_실패를_알린다() throws Exception {
+    void 제주_와이파이는_경로의_인증키와_루트_없는_JSON_응답을_IR에_적어_변환한다() throws Exception {
+        // 주소 경로의 {your_appkey}로 키를 받고, 응답은 맨 바깥에 totCnt·hasMore·data가 바로 온다
         String document = "jejudatahub-wifi-usage.hwp";
 
         SpecParseResult result = parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document))
                 .extract(TestDocuments.path(document));
 
         Operation jeju = result.operations().get(0);
-        assertTrue(jeju.outOfScope());
-        assertTrue(jeju.skipReason().startsWith("인증 방식 미지원 (주소 경로의 {your_appkey})"), jeju.skipReason());
-        assertTrue(jeju.skipReason().contains("응답 루트가 둘 이상 (totCnt, hasMore, data)"), jeju.skipReason());
-        assertEquals("JSON", jeju.api().ir().get("api").get("responseFormat").asText(), "IR은 문서의 의미대로 정규화했다");
-        assertEquals(List.of(), result.apis(), "지원 범위 밖 IR은 파일로 쓰지 않는다");
-        assertEquals(List.of("읍면동별 와이파이 사용량 API: " + jeju.skipReason()), result.skipped(), "CLI가 건너뛴 오퍼레이션을 알리는 꼴");
-
-        SpecParseException e = assertThrows(SpecParseException.class,
-                () -> parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document)).parse(TestDocuments.path(document)));
-        assertEquals(SpecParseException.Kind.FAILED, e.kind());
-        assertEquals("변환할 수 있는 상세기능이 없습니다 (찾은 1개 모두 지원 범위 밖이거나 검증에서 건너뜀): "
-                + "jejudatahub-wifi-usage.hwp (" + result.skipped().get(0) + ")", e.getMessage());
+        JsonNode api = jeju.api().ir().get("api");
+        assertFalse(jeju.outOfScope(), jeju.skipReason());
+        assertEquals("{\"kind\":\"PATH_KEY\",\"name\":\"your_appkey\"}", api.get("auth").toString());
+        assertEquals("JSON", api.get("responseFormat").asText());
+        assertTrue(api.get("responseRootless").asBoolean());
+        assertEquals(List.of("totCnt", "hasMore", "data[].baseDate"),
+                List.of(api.get("responseFields").get(0).get("path").asText(),
+                        api.get("responseFields").get(1).get("path").asText(),
+                        api.get("responseFields").get(2).get("path").asText()));
+        assertEquals(List.of(), result.skipped());
     }
 
     private LlmSpecParser parser(RecordedLlmClient client) {

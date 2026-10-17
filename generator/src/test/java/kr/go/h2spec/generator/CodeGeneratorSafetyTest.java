@@ -109,7 +109,7 @@ class CodeGeneratorSafetyTest {
         for (SampleIr ir : List.of(pathHint, keyHint)) {
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                     () -> new CodeGenerator().generate(ir.build(), out()));
-            assertTrue(e.getMessage().contains("serviceKey가 아닌 쿼리 파라미터여야 합니다"), e.getMessage());
+            assertTrue(e.getMessage().contains("인증키가 아닌 쿼리 파라미터여야 합니다"), e.getMessage());
         }
         assertEquals(List.of(), filesUnder(tempDir));
     }
@@ -160,7 +160,7 @@ class CodeGeneratorSafetyTest {
         List<Path> written = new CodeGenerator().generate(ir.build(), out());
 
         String client = Files.readString(written.get(1));
-        assertTrue(client.contains("url.append(\"?serviceKey=\").append(encode(this.serviceKey));"), client);
+        assertTrue(client.contains("url.append(\"?serviceKey=\").append(encodeKey(this.serviceKey));"), client);
         assertTrue(client.contains("url.append(\"&SERVICE_KEY=\").append(encode(serviceKey));"), client);
         assertCompiles(written, classes());
     }

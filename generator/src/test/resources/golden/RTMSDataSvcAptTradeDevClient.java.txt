@@ -57,7 +57,7 @@ public class RTMSDataSvcAptTradeDevClient {
     public RTMSDataSvcAptTradeDevResponse getRTMSDataSvcAptTradeDev(
             String lawdCd, String dealYmd, Long numOfRows, Long pageNo) {
         StringBuilder url = new StringBuilder(BASE_URL + "/getRTMSDataSvcAptTradeDev");
-        url.append("?serviceKey=").append(encode(serviceKey));
+        url.append("?serviceKey=").append(encodeKey(serviceKey));
         url.append("&LAWD_CD=").append(encode(lawdCd));
         url.append("&DEAL_YMD=").append(encode(dealYmd));
         if (numOfRows != null) {
@@ -77,5 +77,10 @@ public class RTMSDataSvcAptTradeDevClient {
 
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    /** 인증키용. 공공데이터포털의 Encoding 키처럼 이미 인코딩한 키(%2B 같은 글자가 든 키)는 다시 인코딩하지 않는다 */
+    private static String encodeKey(String value) {
+        return value.matches(".*%[0-9A-Fa-f]{2}.*") ? value : encode(value);
     }
 }

@@ -98,7 +98,9 @@ public class IrAssembler {
         api.put("endpoint", url.endpoint());
         api.put("httpMethod", "GET");
         api.put("description", IrText.oneLine(description == null ? "" : description));
-        // TODO(인증 확장): 문서의 인증 방식과 상관없이 늘 serviceKey 쿼리로 적는다. 자세한 내용은 ClientEmitter.findServiceKeyParam
+        // TODO(인증 확장): 문서의 인증 방식과 상관없이 늘 serviceKey 쿼리로 적고 api.auth를 적지 않는다. generator는 api.auth로
+        //   이름이 다른 질의 키·주소 경로의 키·헤더 키도 받는다(AuthKey). 요청 표와 주소에서 키 자리를 찾아 적으면
+        //   jeju-folksong(authApiKey), nongsaro-eco-farming(apiKey), jejudatahub-wifi-usage({your_appkey})가 풀린다
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
         api.put("responseFormat", responseFormat(requests));
         ArrayNode parameters = requestParameters(requests, requestParamNames, reviewNotes);
@@ -258,7 +260,9 @@ public class IrAssembler {
 
     /**
      * 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다.
-     * TODO(루트 여럿): 맨 바깥에 키가 여럿인 응답에도 표준 경로를 만들어 틀린 DTO가 나온다. 자세한 내용은 generator의 DtoTreeBuilder.build
+     * TODO(루트 여럿): 맨 바깥에 키가 여럿인 JSON 응답(kosha의 {"header", "body"}, jejudatahub의 {"totCnt", "hasMore", "data"})에도
+     * 표준 경로를 만들어, 컴파일은 되지만 응답을 읽지 못하는 DTO가 나온다. generator는 api.responseRootless로 이런 응답을 받으므로,
+     * 응답 예제로 구조를 알아보고(llm-eval의 StandardStructure) 경로와 그 값을 적는 방법을 정한다
      */
     private String pathFor(String name, Set<String> requestParamNames) {
         if (IrConventions.isResultCodeOrMessageField(name)) {

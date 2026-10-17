@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * 세트 C의 대리 지표 결과. 원문 블록과 rule 엔진 결과를 패턴으로 비교해 센 휴리스틱이라 정확하지 않다.
- * rule 엔진의 한계마다 해당 문서 수를 세어, llm 엔진이 필요한 근거와 generator가 아직 못 하는 일(인증 방식, 루트 없는 JSON)의 규모를 보는 데 쓴다.
+ * rule 엔진의 한계마다 해당 문서 수를 세어, llm 엔진이 필요한 근거와 rule 엔진이 아직 못 하는 일(인증 방식, 루트 없는 JSON)의 규모를 보는 데 쓴다.
  *
  * @param directory 문서 디렉터리
  * @param documents 문서마다의 결과 (경로 순)

@@ -630,10 +630,7 @@ public class ConvertCommand implements Callable<Integer> {
 
     private IrSpec withResponseFormat(IrSpec ir, String responseFormat) {
         ApiSpec api = ir.api();
-        return new IrSpec(
-                new ApiSpec(api.apiId(), api.apiName(), api.description(), api.baseUrl(),
-                        api.endpoint(), api.httpMethod(), responseFormat,
-                        api.requestParameters(), api.responseFields(), api.errorSpec()),
+        return new IrSpec(api.withResponseFormat(responseFormat),
                 withFormatValue(ir.generatorHints(), api.responseFormat(), responseFormat));
     }
 
@@ -664,11 +661,7 @@ public class ConvertCommand implements Callable<Integer> {
     private IrSpec withSuccessCode(IrSpec ir, String code) {
         ApiSpec api = ir.api();
         ErrorSpec errorSpec = new ErrorSpec(code, api.errorSpec().resultCodeFieldCandidates());
-        return new IrSpec(
-                new ApiSpec(api.apiId(), api.apiName(), api.description(), api.baseUrl(),
-                        api.endpoint(), api.httpMethod(), api.responseFormat(),
-                        api.requestParameters(), api.responseFields(), errorSpec),
-                ir.generatorHints());
+        return new IrSpec(api.withErrorSpec(errorSpec), ir.generatorHints());
     }
 
     private IrSpec withTargetPackage(IrSpec ir, String basePackage) {

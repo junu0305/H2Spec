@@ -72,6 +72,54 @@ class ConvertCommandTest {
     }
 
     @Test
+    void 덮어쓰기_옵션을_줘도_IR의_인증키_자리와_루트_없는_응답을_그대로_쓴다() throws Exception {
+        // 옵션을 적용하려고 IR을 다시 만들 때 api.auth와 api.responseRootless를 잃으면 키를 다른 자리에 넣고 루트를 푸는 코드가 나온다
+        Path ir = rootlessApiKeyIr();
+        Path output = tempDir.resolve("output");
+
+        int exit = new CommandLine(new H2SpecCli()).execute("convert", "--input", ir.toString(),
+                "--output", output.toString(), "--success-code", "99", "--format", "json");
+
+        assertEquals(0, exit);
+        String client = Files.readString(output.resolve(
+                "kr/go/h2spec/client/landmolit/RTMSDataSvcAptTradeDevClient.java"));
+        String dto = Files.readString(output.resolve(
+                "kr/go/h2spec/client/landmolit/dto/RTMSDataSvcAptTradeDevResponse.java"));
+        assertTrue(client.contains("SUCCESS_CODE = \"99\""), client);
+        assertTrue(client.contains("url.append(\"?apiKey=\").append(encodeKey(serviceKey));"), client);
+        assertTrue(client.contains("defaultRestTemplate(serviceKey)"), client);
+        assertFalse(client.contains("UNWRAP_ROOT_VALUE"), client);
+        assertFalse(dto.contains("JsonRootName"), dto);
+    }
+
+    @Test
+    void 루트_없는_JSON_IR을_format_xml로_바꾸면_이유를_알리고_실패한다() throws Exception {
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new H2SpecCli());
+        cli.setErr(new PrintWriter(err));
+
+        int exit = cli.execute("convert", "--input", rootlessApiKeyIr().toString(),
+                "--output", tempDir.resolve("output").toString(), "--format", "xml");
+
+        assertEquals(1, exit);
+        assertTrue(err.toString().contains("api.responseRootless는 JSON 응답에만 쓸 수 있습니다"), err.toString());
+        assertFalse(Files.exists(tempDir.resolve("output")), "생성에 실패하면 아무 파일도 쓰지 않는다");
+    }
+
+    /** schema-example의 serviceKey를 apiKey로 바꿔 api.auth로 가리키고, 맨 바깥에 response가 바로 오는 루트 없는 JSON 응답으로 둔 IR */
+    private Path rootlessApiKeyIr() throws Exception {
+        ObjectNode tree = readIr(irPath());
+        ObjectNode api = (ObjectNode) tree.get("api");
+        ((ObjectNode) api.withArray("requestParameters").get(0)).put("name", "apiKey");
+        api.putObject("auth").put("kind", "SERVICE_KEY_QUERY").put("name", "apiKey");
+        api.put("responseFormat", "JSON");
+        api.put("responseRootless", true);
+        Path ir = Files.createDirectories(tempDir.resolve("input")).resolve("rootless-api-key.json");
+        Files.writeString(ir, tree.toPrettyString());
+        return ir;
+    }
+
+    @Test
     void format_옵션이_응답_포맷을_덮어쓴다() throws Exception {
         // 샘플 문서는 대부분 기본값이 xml이라, 이 옵션이 없으면 JSON 클라이언트를 만들 방법이 없다
         int exit = new CommandLine(new H2SpecCli()).execute(

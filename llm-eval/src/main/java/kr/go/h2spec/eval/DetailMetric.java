@@ -244,8 +244,8 @@ enum DetailMetric {
 
     /**
      * IR의 인증 방식. IR에 {@code api.auth}가 생기면 그 종류를, 없으면 {@code authType}을 정답과 같은 이름으로 바꿔 쓴다.
-     * rule 엔진 IR은 늘 SERVICE_KEY_QUERY_PARAM이고, llm 엔진은 serviceKey 쿼리 파라미터가 없어 지원 범위 밖으로 둔
-     * 오퍼레이션에 인증 종류(PATH_KEY 등)를 적는다.
+     * rule 엔진 IR은 늘 SERVICE_KEY_QUERY_PARAM이고 api.auth가 없다. llm 엔진은 serviceKey 쿼리가 아닌 키를 api.auth에 적고,
+     * 지원 범위 밖으로 둔 오퍼레이션은 authType에 인증 종류(OTHER 등)를 적는다.
      *
      * @param api IR의 api 노드
      * @return SERVICE_KEY_QUERY 같은 인증 종류. 적혀 있지 않으면 UNKNOWN

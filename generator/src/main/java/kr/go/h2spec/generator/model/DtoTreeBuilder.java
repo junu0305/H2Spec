@@ -9,32 +9,57 @@ public class DtoTreeBuilder {
 
     private static final String LIST_SUFFIX = "[]";
 
-    // TODO(루트 여럿): 응답 경로의 첫 칸(루트)이 하나여야 해서, 맨 바깥에 키가 여럿인 JSON 응답은 받지 못한다(아래 예외).
-    //   샘플 문서: kosha-certificate-check({"header": …, "body": …}), jejudatahub-wifi-usage({"totCnt", "hasMore", "data"}).
-    //   지금 두 엔진의 처리: llm 엔진은 이런 오퍼레이션을 지원 범위 밖으로 건너뛴다(IrNormalizer.responseFields).
-    //   rule 엔진은 응답을 늘 표준 구조(response.header·response.body)로 가정해 경로를 만들어(IrAssembler.pathFor),
-    //   컴파일은 되지만 실제 응답을 읽지 못하는 DTO가 나온다.
-    //   고칠 것: 루트 없는 DTO(최상위 필드를 그대로 갖는 클래스)를 만들고, 그때는 ClientEmitter의 JSON 루트 풀기(UNWRAP_ROOT_VALUE)와
-    //   DtoEmitter의 @JsonRootName·@JacksonXmlRootElement를 쓰지 않는다. rule 엔진이 이런 응답을 알아보는 방법도 정한다.
-    //   관련 자리는 "TODO(루트 여럿)"으로 찾는다.
+    /** 경로의 첫 칸이 응답을 감싼 루트인 응답({@code {"response": {…}}}, XML의 루트 요소) */
     public DtoNode build(List<ResponseField> fields) {
-        DtoNode root = null;
+        return build(fields, false);
+    }
+
+    /**
+     * @param rootless 응답이 루트 하나로 감싸이지 않고 맨 바깥에 필드가 바로 오는지({@code {"header": …, "body": …}}).
+     *                 그러면 경로의 첫 칸이 맨 바깥 키이고, 이름 없는 루트 노드(응답 전체)가 그 칸들을 자식으로 갖는다.
+     *                 아니면 첫 칸이 루트이고 모든 경로가 같은 루트 아래에 있어야 한다
+     */
+    public DtoNode build(List<ResponseField> fields, boolean rootless) {
+        DtoNode root = rootless ? new DtoNode(null, false) : null;
         for (ResponseField field : fields) {
             String[] segments = field.path().split("\\.");
-            String rootName = stripListSuffix(segments[0]);
-            if (root == null) {
-                root = new DtoNode(rootName, isListSegment(segments[0]));
-            } else if (!root.name().equals(rootName)) {
-                throw new IllegalArgumentException(
-                        "응답 경로의 루트가 하나가 아님: " + root.name() + " vs " + rootName);
+            int first = 0;
+            if (!rootless) {
+                root = rootOf(root, segments, field.path());
+                first = 1;
             }
             DtoNode current = root;
-            for (int i = 1; i < segments.length; i++) {
+            for (int i = first; i < segments.length; i++) {
                 String segment = segments[i];
                 current = current.getOrCreateChild(
                         stripListSuffix(segment), isListSegment(segment), field.path());
             }
             current.markLeaf(field.type(), field.description(), field.path());
+        }
+        return root;
+    }
+
+    /**
+     * 경로의 첫 칸으로 루트를 정한다. 루트는 응답을 감싼 객체라 리스트나 값일 수 없다. 그런 경로로 만들면 응답을 읽지 못하는 DTO가
+     * 조용히 나오므로 거부한다. 맨 바깥 키가 리스트이거나 값인 JSON 응답({@code {"totCnt": 1, "data": […]}})은 루트 없는 응답이다
+     */
+    private DtoNode rootOf(DtoNode root, String[] segments, String path) {
+        String rootName = stripListSuffix(segments[0]);
+        if (isListSegment(segments[0])) {
+            throw new IllegalArgumentException("응답 경로의 루트가 리스트임: " + path
+                    + " — 맨 바깥 키가 배열인 JSON 응답이면 api.responseRootless를 true로 적어 주세요.");
+        }
+        if (segments.length == 1) {
+            throw new IllegalArgumentException("응답 경로에 루트 아래 필드가 없음: " + path
+                    + " — 맨 바깥에 값이 바로 오는 JSON 응답이면 api.responseRootless를 true로 적어 주세요.");
+        }
+        if (root == null) {
+            return new DtoNode(rootName, false);
+        }
+        if (!root.name().equals(rootName)) {
+            throw new IllegalArgumentException(
+                    "응답 경로의 루트가 하나가 아님: " + root.name() + " vs " + rootName
+                    + " — 맨 바깥에 키가 여럿인 JSON 응답이면 api.responseRootless를 true로 적어 주세요.");
         }
         return root;
     }

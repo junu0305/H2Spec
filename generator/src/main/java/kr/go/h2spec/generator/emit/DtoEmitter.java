@@ -23,7 +23,7 @@ public class DtoEmitter {
     private static final String DEFAULT_TYPE = "String";
     private static final String XML_FORMAT = "XML";
     /**
-     * 생성 DTO가 이름으로 부르는 타입(필드 타입과 import하는 어노테이션). 중첩 클래스 이름은 루트 클래스 본문 전체에서
+     * 생성 DTO가 이름으로 부르는 타입(필드 타입, import하는 타입, 역직렬화기가 쓰는 java.lang 타입). 중첩 클래스 이름은 루트 클래스 본문 전체에서
      * 같은 이름의 import를 가리므로, 중첩 클래스가 이 이름이면 List 필드나 어노테이션이 그 클래스를 가리켜 컴파일되지 않고
      * String 같은 필드는 엉뚱한 타입이 된다. 포맷마다 import가 다르지만 같은 IR이 포맷과 상관없이 같은 클래스 이름을 갖도록
      * 두 포맷의 이름을 모두 피한다. TYPE_MAP이나 appendImports에 타입을 더하면 여기에도 더한다.
@@ -31,31 +31,48 @@ public class DtoEmitter {
     private static final Set<String> RESERVED_TYPE_NAMES = Set.of(
             "List", "String", "Long", "Double", "Boolean",
             "JsonIgnoreProperties", "JsonProperty", "JsonCreator", "JsonRootName",
-            "JacksonXmlRootElement", "JacksonXmlProperty", "JacksonXmlElementWrapper");
+            "JacksonXmlRootElement", "JacksonXmlProperty", "JacksonXmlElementWrapper",
+            "IOException", "JsonParser", "DeserializationContext", "JsonDeserializer", "JsonDeserialize",
+            "Override", "NumberFormatException", "LenientLong", "LenientDouble", "LenientBoolean");
+    /**
+     * 숫자·불리언 필드를 너그럽게 읽는 역직렬화기의 클래스 이름. 공공데이터 응답은 값이 없는 측정값에 "-"를 넣거나 금액에 천 단위
+     * 쉼표("82,500")를 넣어, 그대로 읽으면 값 하나 때문에 응답 전체를 읽지 못한다. 생성 DTO가 interceptor-core 같은 다른 라이브러리의
+     * 판에 기대지 않도록 쓰는 것만 루트 클래스 안에 만든다(appendLenientDeserializers)
+     */
+    private static final Map<String, String> LENIENT_DESERIALIZERS = Map.of(
+            "Long", "LenientLong", "Double", "LenientDouble", "Boolean", "LenientBoolean");
+    /** 루트 클래스 안에 만드는 차례 */
+    private static final List<String> LENIENT_TYPES = List.of("Long", "Double", "Boolean");
 
     public String emit(IrSpec ir, DtoNode root) {
         String className = JavaNames.pascal(ir.api().apiId()) + "Response";
+        boolean isXml = XML_FORMAT.equals(ir.api().responseFormat());
+        // 루트 노드에 이름이 없으면 루트 없는 응답이다(DtoTreeBuilder). XML 문서는 루트 요소가 늘 하나라 그럴 수 없다
+        boolean rootless = root.name() == null;
+        if (rootless && isXml) {
+            throw new IllegalArgumentException("XML 응답은 루트 요소가 하나라 루트 없는 응답으로 만들 수 없습니다.");
+        }
         Map<DtoNode, String> classNames = assignClassNames(root, className);
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(ir.generatorHints().targetPackage()).append(".dto;\n\n");
-        boolean isXml = XML_FORMAT.equals(ir.api().responseFormat());
         appendImports(sb, root, isXml);
         sb.append("/**\n")
           .append(" * ").append(JavaText.comment(ir.api().apiName())).append(" 응답 DTO.\n")
           .append(" * H2Spec generator가 자동 생성한 코드입니다. 직접 수정하지 마세요.\n")
           .append(" */\n");
         sb.append("@JsonIgnoreProperties(ignoreUnknown = true)\n");
-        // TODO(루트 여럿): 루트 없는 응답이면 루트 어노테이션을 달지 않아야 한다. 자세한 내용은 DtoTreeBuilder.build
         if (isXml) {
             sb.append("@JacksonXmlRootElement(localName = \"").append(JavaText.literal(root.name())).append("\")\n");
-        } else {
+        } else if (!rootless) {
             // JSON은 루트가 {"response":{...}}처럼 키로 들어온다. 클라이언트의
             // UNWRAP_ROOT_VALUE와 짝을 이뤄야 하며, 없으면 전 필드가 null인 객체가 조용히 나온다.
+            // 루트 없는 응답은 이 클래스가 응답 전체라 클라이언트도 루트를 풀지 않는다
             sb.append("@JsonRootName(\"").append(JavaText.literal(root.name())).append("\")\n");
         }
         sb.append("public class ").append(className).append(" {\n");
         appendClassBody(sb, root, 1, isXml, classNames);
         appendNestedClasses(sb, root, 1, isXml, classNames);
+        appendLenientDeserializers(sb, lenientTypes(root));
         sb.append("}\n");
         return sb.toString();
     }
@@ -67,14 +84,16 @@ public class DtoEmitter {
      * <ol>
      *   <li>pascal(이름). 앞서 정한 클래스, 루트 클래스, 예약된 타입 이름과 겹치지 않으면 그대로 쓴다. 겹침이 없는 IR은 이름이 바뀌지 않는다</li>
      *   <li>부모 클래스 이름 + pascal(이름). 응답 경로를 따라 읽히는 이름이 된다(result.list → ResultList, items.item → ItemsItem).
-     *       루트의 자식은 루트 클래스 대신 루트 요소 이름을 붙인다. 부모 이름도 겹치지 않게 정했으므로 대개 여기서 끝난다</li>
+     *       루트의 자식은 루트 클래스 대신 루트 요소 이름을 붙인다(루트 없는 응답은 루트 클래스 이름).
+     *       부모 이름도 겹치지 않게 정했으므로 대개 여기서 끝난다</li>
      *   <li>그래도 겹치면 pascal(이름) 뒤에 2부터 차례로 번호를 붙인다(List2)</li>
      * </ol>
      * 필드 이름과 어노테이션은 원래 이름을 그대로 쓰므로 클래스 이름이 바뀌어도 JSON·XML 매핑은 같다.
      */
     private Map<DtoNode, String> assignClassNames(DtoNode root, String rootClassName) {
         Map<DtoNode, String> classNames = new IdentityHashMap<>();
-        assignNestedClassNames(root, JavaNames.pascal(root.name()), rootClassName, classNames, new HashSet<>());
+        String rootPrefix = root.name() == null ? rootClassName : JavaNames.pascal(root.name());
+        assignNestedClassNames(root, rootPrefix, rootClassName, classNames, new HashSet<>());
         return classNames;
     }
 
@@ -127,14 +146,22 @@ public class DtoEmitter {
         return JavaNameRules.canonicalIdentifier(className).toLowerCase(Locale.ROOT);
     }
 
-    // 트리에 리스트가 있으면 java.util.List + 빈 줄, 항상 JsonIgnoreProperties. XML은 리스트 있으면 ElementWrapper/Property,
-    // 원본명!=camel명인 필드가 있으면 Property, 항상 RootElement. JSON은 리스트나 원본명!=camel명인 필드가 있으면
-    // JsonProperty, 리스트 래퍼가 있으면 JsonCreator, 항상 JsonRootName. 마지막에 빈 줄.
+    // 트리에 리스트가 있으면 java.util.List, 숫자·불리언 필드가 있으면 java.io.IOException + 빈 줄. 항상 JsonIgnoreProperties.
+    // XML은 리스트 있으면 ElementWrapper/Property, 원본명!=camel명인 필드가 있으면 Property, 항상 RootElement. JSON은 리스트나
+    // 원본명!=camel명인 필드가 있으면 JsonProperty, 리스트 래퍼가 있으면 JsonCreator, 루트가 있으면 JsonRootName.
+    // 숫자·불리언 필드가 있으면 역직렬화기에 쓰는 네 타입. 마지막에 빈 줄.
     private void appendImports(StringBuilder sb, DtoNode root, boolean isXml) {
         boolean hasList = hasList(root);
         boolean hasRenamedField = hasRenamedField(root);
+        boolean lenient = !lenientTypes(root).isEmpty();
+        if (lenient) {
+            sb.append("import java.io.IOException;\n");
+        }
         if (hasList) {
-            sb.append("import java.util.List;\n\n");
+            sb.append("import java.util.List;\n");
+        }
+        if (lenient || hasList) {
+            sb.append("\n");
         }
         sb.append("import com.fasterxml.jackson.annotation.JsonIgnoreProperties;\n");
         if (!isXml) {
@@ -144,18 +171,47 @@ public class DtoEmitter {
             if (hasListWrapper(root)) {
                 sb.append("import com.fasterxml.jackson.annotation.JsonCreator;\n");
             }
-            sb.append("import com.fasterxml.jackson.annotation.JsonRootName;\n");
-            sb.append("\n");
-            return;
+            if (root.name() != null) {
+                sb.append("import com.fasterxml.jackson.annotation.JsonRootName;\n");
+            }
+        } else {
+            if (hasList) {
+                sb.append("import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;\n");
+            }
+            if (hasList || hasRenamedField) {
+                sb.append("import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;\n");
+            }
+            sb.append("import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;\n");
         }
-        if (hasList) {
-            sb.append("import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;\n");
+        if (lenient) {
+            sb.append("import com.fasterxml.jackson.core.JsonParser;\n");
+            sb.append("import com.fasterxml.jackson.databind.DeserializationContext;\n");
+            sb.append("import com.fasterxml.jackson.databind.JsonDeserializer;\n");
+            sb.append("import com.fasterxml.jackson.databind.annotation.JsonDeserialize;\n");
         }
-        if (hasList || hasRenamedField) {
-            sb.append("import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;\n");
-        }
-        sb.append("import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;\n");
         sb.append("\n");
+    }
+
+    /** 리프의 역직렬화기 클래스 이름. 너그럽게 읽을 타입(숫자·불리언)이 아니면 null */
+    private static String lenientDeserializer(DtoNode node) {
+        return node.isLeaf() ? LENIENT_DESERIALIZERS.get(TYPE_MAP.getOrDefault(node.leafType(), DEFAULT_TYPE)) : null;
+    }
+
+    /** 트리의 숫자·불리언 리프 타입. 루트 클래스 안에 만드는 차례(Long, Double, Boolean)다 */
+    private static List<String> lenientTypes(DtoNode root) {
+        Set<String> used = new HashSet<>();
+        collectLeafTypes(root, used);
+        return LENIENT_TYPES.stream().filter(used::contains).toList();
+    }
+
+    private static void collectLeafTypes(DtoNode node, Set<String> used) {
+        for (DtoNode child : node.children().values()) {
+            if (child.isLeaf()) {
+                used.add(TYPE_MAP.getOrDefault(child.leafType(), DEFAULT_TYPE));
+            } else {
+                collectLeafTypes(child, used);
+            }
+        }
     }
 
     /** 리스트 필드 하나만 가진 래퍼 노드가 있는지 (배열 수용 팩토리 방출 대상) */
@@ -224,7 +280,7 @@ public class DtoEmitter {
         if (node.isLeaf() && node.description() != null) {
             return true;
         }
-        if (node.isList()) {
+        if (node.isList() || lenientDeserializer(node) != null) {
             return true;
         }
         return !node.name().equals(JavaNames.camel(node.name()));
@@ -248,8 +304,98 @@ public class DtoEmitter {
         } else if (renamed) {
             sb.append(indent).append("@JacksonXmlProperty(localName = \"").append(nameLiteral).append("\")\n");
         }
+        String lenient = lenientDeserializer(node);
+        if (lenient != null) {
+            // 리스트면 요소마다 쓴다
+            sb.append(indent).append(node.isList() ? "@JsonDeserialize(contentUsing = " : "@JsonDeserialize(using = ")
+              .append(lenient).append(".class)\n");
+        }
         sb.append(indent).append("private ").append(fieldType(node, classNames)).append(" ")
           .append(JavaNames.camel(node.name())).append(";\n");
+    }
+
+    /**
+     * 숫자·불리언 필드의 역직렬화기를 루트 클래스 안에 만든다. JSON의 숫자·불리언 값은 그대로 읽는다. 글로 온 값(XML은 모든 값이 글이다)은
+     * 앞뒤 공백을 떼고 읽는데, 숫자는 천 단위로 끊은 쉼표("82,500")만 떼고, 읽을 수 없는 글("-", "")은 응답 전체를 실패시키지 않고 null로 둔다.
+     * 소수점 쉼표("1,5")처럼 천 단위 꼴이 아닌 쉼표는 떼지 않아 null이 된다(다른 값으로 잘못 읽지 않는다). 불리언은 Y·N과 1·0도 읽는다.
+     * 객체·배열처럼 값이 아닌 것은 지금처럼 실패한다. 역직렬화기 안의 타입은 import한 이름만 쓴다. 완전한 이름(java.util.…)은
+     * 이름이 java나 com인 응답 필드에 가려진다.
+     */
+    private void appendLenientDeserializers(StringBuilder sb, List<String> types) {
+        for (String type : types) {
+            sb.append("\n");
+            switch (type) {
+                case "Long" -> appendNumberDeserializer(sb, "LenientLong", "Long", "getLongValue",
+                        "숫자 칸을 너그럽게 읽는다. 천 단위 쉼표(\"82,500\")와 앞뒤 공백은 떼고, 값이 없을 때의 \"-\"처럼 숫자가 아닌 글은 null로 둔다");
+                case "Double" -> appendNumberDeserializer(sb, "LenientDouble", "Double", "getDoubleValue",
+                        "실수 칸을 너그럽게 읽는다. 천 단위 쉼표와 앞뒤 공백은 떼고, 값이 없을 때의 \"-\"처럼 숫자가 아닌 글은 null로 둔다");
+                default -> appendBooleanDeserializer(sb);
+            }
+        }
+    }
+
+    private void appendNumberDeserializer(StringBuilder sb, String className, String type, String numberGetter,
+                                          String javadoc) {
+        String i1 = INDENT;
+        String i2 = INDENT.repeat(2);
+        String i3 = INDENT.repeat(3);
+        String i4 = INDENT.repeat(4);
+        sb.append(i1).append("/** ").append(javadoc).append(" */\n");
+        sb.append(i1).append("public static class ").append(className).append(" extends JsonDeserializer<").append(type)
+          .append("> {\n");
+        sb.append(i2).append("@Override\n");
+        sb.append(i2).append("public ").append(type)
+          .append(" deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {\n");
+        sb.append(i3).append("if (p.currentToken().isNumeric()) {\n");
+        sb.append(i4).append("return p.").append(numberGetter).append("();\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("String text = p.getValueAsString();\n");
+        sb.append(i3).append("if (text == null) {\n");
+        sb.append(i4).append("return (").append(type).append(") ctxt.handleUnexpectedToken(").append(type)
+          .append(".class, p);\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("String number = text.strip();\n");
+        sb.append(i3).append("if (number.matches(\"[-+]?\\\\d{1,3}(,\\\\d{3})+(\\\\.\\\\d+)?\")) {\n");
+        sb.append(i4).append("number = number.replace(\",\", \"\");\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("try {\n");
+        sb.append(i4).append("return ").append(type).append(".valueOf(number);\n");
+        sb.append(i3).append("} catch (NumberFormatException e) {\n");
+        sb.append(i4).append("return null;\n");
+        sb.append(i3).append("}\n");
+        sb.append(i2).append("}\n");
+        sb.append(i1).append("}\n");
+    }
+
+    private void appendBooleanDeserializer(StringBuilder sb) {
+        String i1 = INDENT;
+        String i2 = INDENT.repeat(2);
+        String i3 = INDENT.repeat(3);
+        String i4 = INDENT.repeat(4);
+        sb.append(i1).append("/** 불리언 칸을 너그럽게 읽는다. true·false에 더해 Y·N과 1·0도 읽고, 그 밖의 글은 null로 둔다 */\n");
+        sb.append(i1).append("public static class LenientBoolean extends JsonDeserializer<Boolean> {\n");
+        sb.append(i2).append("@Override\n");
+        sb.append(i2).append("public Boolean deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {\n");
+        sb.append(i3).append("if (p.currentToken().isBoolean()) {\n");
+        sb.append(i4).append("return p.getBooleanValue();\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("if (p.currentToken().isNumeric()) {\n");
+        sb.append(i4).append("return p.getLongValue() != 0;\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("String text = p.getValueAsString();\n");
+        sb.append(i3).append("if (text == null) {\n");
+        sb.append(i4).append("return (Boolean) ctxt.handleUnexpectedToken(Boolean.class, p);\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("String value = text.strip();\n");
+        sb.append(i3).append("if (value.equalsIgnoreCase(\"true\") || value.equalsIgnoreCase(\"Y\") || value.equals(\"1\")) {\n");
+        sb.append(i4).append("return true;\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("if (value.equalsIgnoreCase(\"false\") || value.equalsIgnoreCase(\"N\") || value.equals(\"0\")) {\n");
+        sb.append(i4).append("return false;\n");
+        sb.append(i3).append("}\n");
+        sb.append(i3).append("return null;\n");
+        sb.append(i2).append("}\n");
+        sb.append(i1).append("}\n");
     }
 
     private void appendGetter(StringBuilder sb, DtoNode node, String indent, int depth,

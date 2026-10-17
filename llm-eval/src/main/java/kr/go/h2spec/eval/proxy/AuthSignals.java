@@ -14,8 +14,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * serviceKey 쿼리가 아닌 인증 방식의 흔적을 찾는다 (대리 지표 (d)). generator는 이름이 serviceKey(대소문자 무시)인
- * 파라미터만 인증키로 알아보므로(ClientEmitter), 이런 문서는 지금 코드를 만들지 못한다. 휴리스틱이다.
+ * serviceKey 쿼리가 아닌 인증 방식의 흔적을 찾는다 (대리 지표 (d)). rule 엔진은 문서의 인증 방식과 상관없이 IR에 serviceKey 질의만
+ * 적으므로(IrAssembler) 이런 문서는 rule 엔진으로 코드를 만들지 못한다. generator는 IR의 api.auth로 이런 키도 받는다. 휴리스틱이다.
  * <ul>
  *   <li>경로 키: 주소의 경로에 {@code {your_appkey}}처럼 키를 넣는 자리가 있다</li>
  *   <li>헤더 키: Authorization·X-…-Key 헤더나 "헤더에 인증키" 같은 설명, 위치 열이 header인 키 파라미터가 있다</li>
