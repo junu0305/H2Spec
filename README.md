@@ -1,243 +1,247 @@
 # H2Spec (HWP to Spring-Client)
 
-> **H**WP/docx → **O**pen**API** **Spec** 변환기
-> 공공기관의 비표준 API 명세서(HWP/HWPX/DOCX)를 OpenAPI 3.0 스펙으로 변환하고,
-> Spring 통신 코드와 "200 OK 위장 에러" 감지 Interceptor까지 자동 생성하는 오픈소스 도구입니다.
-
 [![build](https://github.com/junu0305/H2Spec/actions/workflows/build.yml/badge.svg)](https://github.com/junu0305/H2Spec/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](#)
 [![Spring](https://img.shields.io/badge/Spring-Framework%206.x-6DB33F.svg)](#)
 
-## 🎯 개발 목적
-비표준 HWP 명세서로 제공되는 국내 공공데이터 API를 활용할 때 발생하는 개발 비효율을 근본적으로 해결하고자 합니다. 
-문서 수동 분석과 클라이언트 코드 구축의 번거로움을 제거하고, 오류임에도 200 OK를 반환하는 비표준 응답 예외 처리까지 자동화된 Spring 클라이언트 생성 라이브러리를 통해 공공데이터의 활용 장벽을 대폭 낮추고자 합니다.
+H2Spec은 HWP, HWPX, DOCX 형식의 공공데이터 API 명세서를 읽어 다음 결과물을 생성합니다.
 
-## 🚀 기대 효과
-* **개발 생산성 극대화 및 리소스 절감**: 수작업 분석 및 보일러플레이트 코드 작성을 자동화하여 초기 연동 시간을 90% 이상 단축합니다.
-* **시스템 안정성 확보**: 성공(200 OK) 코스프레형 에러 응답을 식별하는 인터셉터를 내장하여 장애를 원천 차단합니다.
-* **표준 기술 생태계 기여**: 비표준 문서를 글로벌 표준 포맷(OpenAPI Spec)으로 전환하는 징검다리 역할을 수행합니다.
+- OpenAPI 3.0 문서
+- Spring `RestTemplate` 클라이언트
+- 응답 DTO
+- HTTP 200으로 반환되는 오류 응답을 감지하는 Interceptor
 
-## 왜 만들었나
+## 목차
 
-공공데이터포털 및 각 기관 자체 API는 다음 두 가지 문제를 공통적으로 안고 있습니다.
+- [주요 기능](#주요-기능)
+- [구조](#구조)
+- [빠른 시작](#빠른-시작)
+  - [1. 설치](#1-설치)
+  - [2. 명세서 변환](#2-명세서-변환)
+  - [3. 생성 결과](#3-생성-결과)
+  - [4. 프로젝트 설정](#4-프로젝트-설정)
+  - [5. 클라이언트 호출](#5-클라이언트-호출)
+- [지원하는 문서 형식](#지원하는-문서-형식)
+- [변환 옵션](#변환-옵션)
+- [LLM 파서](#llm-파서)
+- [Interceptor만 사용하기](#interceptor만-사용하기)
+  - [RestTemplate](#resttemplate)
+  - [WebClient](#webclient)
+  - [에러코드 사전](#에러코드-사전)
+- [빌드](#빌드)
+- [IR 계약](#ir-계약)
+- [Git 컨벤션](#git-컨벤션)
+  - [브랜치 구조](#브랜치-구조)
+  - [커밋 메시지](#커밋-메시지)
+- [기여 방법](#기여-방법)
+- [라이선스](#라이선스)
 
-1. **명세서가 표준 포맷이 아님**: Swagger/OpenAPI 대신 HWP나 워드 문서로 파라미터 표가 제공되는 경우가 대부분이라, 매번 사람이 표를 읽고 DTO와 클라이언트 코드를 손으로 작성해야 합니다.
-2. **HTTP Status만 믿을 수 없음**: 인증키 오류, 파라미터 오류, 호출 한도 초과 같은 명백한 실패 상황에서도 `200 OK`를 반환하고, 실제 성공/실패는 응답 바디 안의 `resultCode` 같은 필드로만 알려주는 API가 많습니다. 이를 놓치면 실패 응답을 성공으로 처리하는 버그로 이어집니다.
+## 주요 기능
 
-H2Spec은 이 두 문제를 각각 **파서/제너레이터 파이프라인**과 **런타임 Interceptor**로 해결합니다.
+- HWP, HWPX, DOCX 명세서를 중간 규격(IR) JSON으로 변환
+- IR에서 OpenAPI 3.0 문서와 Spring 클라이언트 코드 생성
+- 여러 명세 파일 일괄 변환
+- `RestTemplate`과 `WebClient`의 오류 응답 감지 지원
+- 규칙 기반 파서와 선택형 LLM 파서 제공
 
-## 아키텍처
+공공데이터 API 중에는 인증키 오류나 호출 한도 초과도 HTTP 200으로 반환하는 경우가 있습니다. H2Spec은 응답 본문의 `resultCode` 등을 확인해 이런 응답을 `PublicDataApiException`으로 처리합니다.
+
+## 구조
 
 ```mermaid
 flowchart LR
     subgraph Input
-        A1[HWP 명세서]
+        A1[HWP/HWPX 명세서]
         A2[DOCX 명세서]
     end
 
-    subgraph H2Spec Core
-        B[Parser Module]
-        C[(중간 규격 JSON<br/>schema-example.json)]
-        D[Generator Module]
+    subgraph Core
+        B[Parser]
+        C[(IR JSON)]
+        D[Generator]
     end
 
     subgraph Output
-        E1[OpenAPI 3.0 JSON]
-        E2[RestTemplate 클라이언트]
-        E4[DTO 클래스]
+        E1[OpenAPI 3.0]
+        E2[Spring Client]
+        E3[DTO]
     end
-
-    I[interceptor-core<br/>라이브러리]
 
     A1 --> B
     A2 --> B
-    B -->|IR 변환| C
+    B --> C
     C --> D
     D --> E1
     D --> E2
-    D --> E4
+    D --> E3
 
-    subgraph Runtime
-        F[Spring Client 앱]
-    end
-
-    E2 --> F
-    I -.->|자동 장착, 200 OK 위장 에러 차단| E2
+    I[interceptor-core] -. 오류 응답 감지 .-> E2
 ```
 
-### 모듈 구성
+### 모듈
 
-| 모듈 | 역할 | 팀원 병렬 개발 포인트 |
-|---|---|---|
-| `parser` | 공공데이터포털 표준 기술문서(DOCX/HWP/HWPX)를 파싱하여 중간 규격(IR) JSON 생성 | `schema-example.json`을 계약(contract)으로 삼아 Generator와 독립 개발 가능 |
-| `generator` | IR JSON → OpenAPI 3.0 JSON, Spring 클라이언트 코드, DTO 생성 | 동일하게 IR JSON 샘플만으로 개발 시작 가능 |
-| `interceptor-core` | `PublicDataErrorInterceptor`(RestTemplate), `PublicDataErrorFilter`(WebClient), `PublicDataApiException` 등 런타임 라이브러리 | Parser/Generator와 무관하게 독립 배포 가능 (별도 jar) |
-| `parser-llm` | (실험적) 명세 문서의 해석을 LLM에 맡기는 llm 엔진. 결과를 원문과 대조·검증하고 rule 엔진과 교차검증한 뒤 같은 IR로 만든다 | 기본 엔진은 rule이고, llm 엔진은 `--engine llm`으로 켤 때만 쓴다 |
-| `cli` | `h2spec convert` 명령 — parser와 generator를 잇는 진입점 | |
-| `llm-eval` | 엔진 결과를 정답 파일과 비교해 지표를 내는 평가 도구 (배포하지 않음) | `./gradlew :llm-eval:run` |
-| `web` (선택) | 업로드 → 변환 → 다운로드 웹 UI | REST API 계약만 맞으면 병렬 개발 가능 |
+| 모듈 | 역할 |
+|---|---|
+| `parser` | DOCX, HWP, HWPX 명세서를 IR JSON으로 변환 |
+| `parser-llm` | LLM으로 명세서를 해석하고 규칙 기반 파서와 교차 검증 |
+| `generator` | IR에서 OpenAPI 문서, Spring 클라이언트, DTO 생성 |
+| `interceptor-core` | `RestTemplate`과 `WebClient`용 오류 응답 감지 기능 제공 |
+| `cli` | 파서와 제너레이터를 실행하는 명령줄 인터페이스 |
+| `llm-eval` | 파서 결과 평가 도구 |
+| `web` (예정) | 파일 변환용 웹 UI |
 
 ## 빠른 시작
 
-### 1. 명세서 변환
+Java 17 이상이 필요합니다.
+
+### 1. 설치
+
+```bash
+curl -sL -o h2spec.zip https://github.com/junu0305/H2Spec/releases/download/v0.1.0/h2spec-v0.1.0.zip
+unzip h2spec.zip
+```
+
+### 2. 명세서 변환
+
+```bash
+./h2spec-v0.1.0/bin/h2spec convert \
+    --input 기술문서.docx \
+    --output generated \
+    --package com.example.publicdata
+```
+
+HWP, HWPX, DOCX, IR JSON을 입력할 수 있습니다.
+
+```bash
+./h2spec convert --input 명세서.hwp --output generated
+./h2spec convert --input 명세서.hwpx --output generated
+./h2spec convert --input docs/schema-example.json --output generated
+```
+
+디렉터리를 입력하면 바로 아래의 명세 파일을 한 번에 변환합니다. 하위 디렉터리는 탐색하지 않습니다. 일부 파일이 실패해도 나머지 파일은 계속 처리하며, 실패가 하나라도 있으면 종료 코드는 1입니다.
+
+### 3. 생성 결과
+
+```text
+generated/
+├── ir/MsrstnList.json
+├── openapi/MsrstnList.json
+└── kr/go/h2spec/client/msrstnlist/
+    ├── MsrstnListClient.java
+    └── dto/MsrstnListResponse.java
+```
+
+IR은 파서와 제너레이터 사이의 계약입니다. 내용을 검수하거나 수정한 뒤 다시 입력할 수 있습니다.
+
+### 4. 프로젝트 설정
+
+```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.1.0'
+
+    // XML 응답을 사용할 때만 추가합니다.
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
+}
+
+sourceSets.main.java.srcDir 'generated'
+```
+
+### 5. 클라이언트 호출
+
+```java
+MsrstnListClient client = new MsrstnListClient(serviceKey);
+MsrstnListResponse response = client.getMsrstnList(2L, 1L, null, null);
+```
+
+생성된 클라이언트에는 `PublicDataErrorInterceptor`가 적용됩니다. 응답 본문에 오류 코드가 있으면 `PublicDataApiException`을 발생시킵니다.
+
+## 지원하는 문서 형식
+
+공공데이터포털의 표준 기술문서 구조를 기준으로 파싱합니다. 다음과 같은 서식 차이도 처리합니다.
+
+- 요청·응답 구간 제목과 필드명 표기의 차이
+- 페이지가 나뉘거나 셀이 병합된 표
+- 요청과 응답이 한 표에 들어간 형식
+- 요청 예제나 서비스 URL에만 주소가 적힌 문서
+- 응답 필드 표 없이 JSON 예제만 제공된 문서
+
+문서에 직접 적혀 있지 않아 파서가 보완한 값은 IR의 `metadata.reviewNotes`에 기록합니다. 주소나 응답 필드를 확인할 수 없는 오퍼레이션은 건너뛰고 이유를 표준 오류로 출력합니다.
+
+## 변환 옵션
+
+| 옵션 | 설명 |
+|---|---|
+| `-i`, `--input` | 명세 파일 또는 명세 파일이 있는 디렉터리 |
+| `-o`, `--output` | 출력 디렉터리. 기본값은 `./generated` |
+| `--package` | 생성 코드의 기준 패키지 |
+| `--format` | 응답 형식을 `xml` 또는 `json`으로 지정 |
+| `--success-code` | 정상 응답으로 처리할 결과 코드 |
+| `--engine` | `rule` 또는 `llm` 파서 선택 |
 
 ```bash
 ./h2spec convert \
-  --input "docs/sample/한국환경공단_에어코리아_측정소정보_기술문서_v1.2.docx" \
-  --output ./generated
+    --input docs/sample \
+    --output generated \
+    --package com.example.publicdata \
+    --format json
 ```
 
-```
-IR 추출: generated/ir/MsrstnList.json
-IR 추출: generated/ir/NearbyMsrstnList.json
-IR 추출: generated/ir/TMStdrCrdnt.json
-생성: generated/kr/go/h2spec/client/msrstnlist/dto/MsrstnListResponse.java
-생성: generated/kr/go/h2spec/client/msrstnlist/MsrstnListClient.java
-생성: generated/openapi/MsrstnList.json
-...(상세기능마다 반복)
-```
+명령인자로 지정한 값은 생성에 사용되는 IR과 `reviewNotes`에도 반영됩니다. 기존 IR JSON을 입력한 경우 원본 파일은 수정하지 않습니다.
 
-문서의 IR을 모두 먼저 쓰고, 그다음 상세기능마다 코드를 생성합니다.
+## LLM 파서
 
-HWP 명세서(`.hwp`), HWPX 명세서(`.hwpx`), IR JSON도 같은 방식으로 넣을 수 있습니다.
+> LLM 파서 사용시 **문서 내용이 LLM 회사로 전송되고 사용자의 키로 과금됩니다.** 비공개 문서는 기본 엔진(`rule`)으로 변환하세요.
 
-```bash
-./h2spec convert --input "명세서.hwp" --output ./generated
-./h2spec convert --input docs/schema-example.json --output ./generated
-```
-
-`--input`에 디렉터리를 주면 그 안의 모든 명세 파일(`.docx`, `.hwp`, IR `.json`)을 한 번에 변환합니다.
-디렉터리를 재귀적으로 탐색하지는 않고, 명세 파일이 아닌 다른 파일(예: pdf, xlsx)은 무시합니다.
-일부 파일이 변환에 실패해도 나머지 파일은 계속 변환되며, 실패가 하나라도 있으면 종료 코드는 1입니다.
-한 문서에서 일부 상세기능만 코드 생성에 실패하면 그 상세기능만 건너뛰고(IR은 검수하도록 남깁니다) 나머지를 생성하며,
-그 문서는 성공으로 셉니다. 코드를 하나도 만들지 못한 문서만 실패로 셉니다.
-
-```bash
-./h2spec convert --input ./docs/sample --output ./generated
-```
-
-### 인식하는 문서 서식
-
-공공데이터포털 표준 기술문서("상세기능정보 → 요청 메시지 명세 → 응답 메시지 명세")를 기준으로 하되,
-포털에 올라온 기관 문서들에서 확인한 다음 변형도 읽습니다.
-
-- 구간 제목 표기: `상세기능 정보`, `요청메시지 명세`, `응답 메세지 명세`, `OOO 오퍼레이션 명세`, `요청 변수(Request Parameters)`, `입력값/출력값 명세` 등. 목차 줄은 구간으로 보지 않습니다
-- 필드 표 머리행: `항목명(영문)/항목명(국문)/…` 외에 `요청변수/설명/필수여부`, `Name/Description/Type/Note`, `항목명/타입/필수/값 샘플/항목설명`, `변수명/변수설명/필수여부/비고`, 항목크기 열이 없는 표, `구분(In/Out)/코드/코드명` 한 표 등
-- 표 배치: 쪽 나눔으로 갈라진 표, 요청·응답을 한 표에 담은 표, 세로 병합·칸 들여쓰기(└ 표지 포함)로 나타낸 하위 필드, 하위 필드를 감싸는 컨테이너 행
-- 오퍼레이션 주소: `Call Back URL` 외에 요청 표의 `END POINT URL`, `요청 URL :` 문단, 서비스 URL + 오퍼레이션명, 요청 예제. Call Back URL이 N/A·자리표시이거나 다른 기능의 주소를 베껴 둔 경우 요청 예제로 바로잡습니다
-- 응답 필드 표 없이 JSON 응답 예제만 둔 문서는 예제의 키로 응답 필드를 만들고, 공통 파라미터 구간은 각 오퍼레이션에 붙입니다
-
-문서가 직접 적지 않아 파서가 채우거나 고친 값(게이트웨이 `serviceKey`, 예제에서 가져온 주소 등)은
-IR의 `metadata.reviewNotes`에 남습니다. 같은 종류의 노트(샘플값으로 추론한 타입 등)는 한 줄로 묶습니다.
-주소나 응답 필드를 찾지 못한 오퍼레이션, 생성 코드를 만들 수 없는 오퍼레이션은 건너뛰고 나머지는 변환하며,
-건너뛴 오퍼레이션과 이유를 표준 오류로 알립니다.
-
-### 옵션
-
-| 옵션 | 설명 |
-|---|---|
-| `-i`, `--input` | 명세 파일(DOCX/HWP/HWPX/IR JSON) 또는 명세 파일들이 담긴 디렉터리 |
-| `-o`, `--output` | 출력 디렉터리 (기본: `./generated`) |
-| `--package` | 생성 코드의 기준 패키지. 오퍼레이션별 하위 패키지가 자동으로 붙습니다 |
-| `--format` | 응답 포맷 `xml` 또는 `json`. 문서에서 판별한 값을 덮어씁니다 |
-| `--success-code` | 정상 처리로 간주할 `resultCode` (기본: 문서의 값 또는 `00`) |
-
-`--package`·`--format`·`--success-code`로 바꾼 값은 명세 문서에서 뽑은 IR에도 반영되고 `reviewNotes`에 `[CLI]` 노트가 남습니다.
-IR이 검수 단위라 생성 코드와 어긋나지 않게 하기 위해서입니다. `--input`으로 넣은 IR JSON 파일은 고치지 않고, 생성할 때만 적용합니다.
-
-```bash
-./h2spec convert --input ./docs/sample --output ./generated \
-  --package com.example.publicdata --format json
-```
-
-### LLM 엔진 (실험적)
-
-기본 엔진은 규칙 기반 `rule`입니다. `--engine llm`을 주면 명세 문서의 해석을 LLM(Claude, OpenAI, Gemini)에 맡깁니다.
-정확도 평가를 아직 하지 않은 기능이고, OpenAI와 Gemini는 실제 API로 시험하지 않았습니다.
+기본 파서는 규칙 기반 `rule` 엔진입니다. `--engine llm`을 지정하면 Claude, OpenAI, Gemini 중 하나를 사용해 문서를 파싱합니다.
 
 ```bash
 export ANTHROPIC_API_KEY=...
-./h2spec convert --engine llm --input "명세서.hwp" --output ./build/h2spec-review
+
+./h2spec convert \
+    --engine llm \
+    --provider claude \
+    --input 명세서.hwp \
+    --output generated
 ```
 
-> **문서 내용이 LLM 회사로 전송되고 사용자의 키로 과금됩니다.** 비공개 문서는 기본 엔진(`rule`)으로 변환하세요.
-> `rule` 엔진은 아무것도 전송하지 않고 키 환경변수도 읽지 않습니다.
-
-- LLM이 낸 값은 원문과 대조해 문서에 없는 값을 버립니다. 응답 필드·요청 파라미터를 버렸거나 오퍼레이션을 건너뛰었으면 그 내용을 알려 한 번 더 부릅니다
-- 주소와 성공코드는 LLM이 고르지 않습니다. 주소는 LLM이 찾은 후보에서 rule 엔진과 같은 규칙으로, 성공코드는 응답 예제 > 응답 필드 표 > 에러코드 표 순으로 고릅니다
-- 같은 문서를 rule 엔진으로도 돌려 비교하고, 차이는 `[교차검증]` 노트로 남깁니다
-- 생성 코드가 아직 지원하지 않는 API(serviceKey가 아닌 인증키, 최상위 키가 여럿인 JSON 응답 등)는 이유를 알리고 건너뜁니다
-- rule 엔진이 찾은 오퍼레이션이 20개(Gemini는 10개)를 넘거나 출력이 잘리면 나눠 부릅니다
-- 결과는 `${XDG_CACHE_HOME:-~/.cache}/h2spec/llm/`(Windows는 `%LOCALAPPDATA%\h2spec\llm`)에 캐시해 같은 문서를 다시 부르지 않습니다. 30일 넘게 쓰지 않은 결과는 자동으로 지웁니다
-
-만든 IR과 `reviewNotes`를 검수해 저장소에 커밋하고, 빌드에서는 그 IR로 생성하세요(`--input <IR 디렉터리>`).
-빌드가 LLM을 부르지 않고, 누가 빌드해도 같은 코드가 나옵니다.
+LLM이 추출한 결과는 원문과 대조하고 규칙 기반 파서의 결과와 비교합니다. 주소와 성공 코드는 규칙 기반 파서와 같은 기준으로 결정합니다. 결과는 캐시되며, `--no-cache`로 캐시를 끌 수 있습니다.
 
 | 옵션 | 설명 |
 |---|---|
-| `--engine` | `rule`(기본) 또는 `llm` |
-| `--provider` | `claude`, `openai`, `gemini` (기본: `H2SPEC_LLM_PROVIDER`, 없으면 키가 있는 회사. 여러 회사의 키가 있으면 오류) |
-| `--model` | 모델 ID (기본: `H2SPEC_LLM_MODEL`, 없으면 회사별 기본 모델) |
-| `--effort` | 추론 깊이 (기본: `H2SPEC_LLM_EFFORT`, 없으면 `medium`). 높을수록 비용과 시간이 늘어납니다 |
-| `--no-cross-check` | rule 엔진과의 교차검증을 끕니다 |
-| `--no-cache`, `--cache-dir` | 결과 캐시를 끄거나 위치를 바꿉니다 |
+| `--provider` | `claude`, `openai`, `gemini` 중 하나 선택 |
+| `--model` | 사용할 모델 ID |
+| `--effort` | 추론 깊이 |
+| `--no-cross-check` | 규칙 기반 파서와의 교차 검증 비활성화 |
+| `--no-cache` | 결과 캐시 비활성화 |
+| `--cache-dir` | 캐시 디렉터리 지정 |
 
-| 회사 | API 키 환경변수 | 기본 모델 | 값 (100만 토큰당 입력 / 출력) | `--effort` 값 |
-|---|---|---|---|---|
-| `claude` | `ANTHROPIC_API_KEY` | `claude-sonnet-5-5` | $2 / $10 | `low` ~ `max` |
-| `openai` | `OPENAI_API_KEY` | `gpt-6.1-sol` | $2 / $10 | `none` ~ `max` (모델마다 일부만 받음) |
-| `gemini` | `GEMINI_API_KEY` | `gemini-3.8-flash` | $0.75 / $3.75 (2026년 말까지) | `low`, `medium`, `high` |
+API 키는 환경변수로만 받으며 출력, IR, 캐시에 저장하지 않습니다.
 
-값과 모델은 2026년 10월 각 회사 문서 기준입니다. API 키는 환경변수로만 받고 출력·IR·캐시에 남기지 않습니다.
-Gemini는 `--provider gemini`나 `H2SPEC_LLM_PROVIDER`로 고르면 `GOOGLE_API_KEY`도 읽습니다. 무료 등급은 보낸 내용을 구글이 제품 개선에 쓰므로 결제를 켠 키를 쓰세요.
-Claude 기본 모델(Sonnet)로 오퍼레이션이 검증에서 건너뛰어지는 문서는 `--model claude-opus-5-5`로 다시 변환해 볼 수 있습니다(값이 두 배).
+| 제공자 | 환경변수 |
+|---|---|
+| Claude | `ANTHROPIC_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Gemini | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` |
 
-실행마다 한 번 외부 전송 안내를 내고, 문서마다 쓴 모델과 토큰을 출력합니다. 입력 토큰은 프롬프트 캐시를 포함한 보낸 입력 전체이고,
-출력 토큰은 thinking을 포함합니다.
-
-```
-문서 내용을 claude(claude-sonnet-5-5, 추론 깊이 medium)로 보냅니다. 비공개 문서는 --engine rule로 변환하세요.
-=== 명세서.hwp ===
-엔진: llm (claude / claude-sonnet-5-5, 추론 깊이 medium), 캐시 없음, 토큰 입력 17500 (프롬프트 캐시 읽기 8300) / 출력 4200 (thinking 포함)
-...
-3개 중 3개 변환 성공, 0개 실패 · LLM 토큰 합계 입력 41200 (프롬프트 캐시 읽기 16600) / 출력 9800
-```
+LLM으로 만든 IR은 `reviewNotes`와 함께 검수한 뒤 저장소에 커밋하는 방식을 권장합니다. 빌드에서는 검수한 IR을 입력하면 외부 API 호출 없이 같은 코드를 생성할 수 있습니다.
 
 | 실패 | 처리 |
 |---|---|
-| API 키·권한 오류, 잔액·사용 한도, 모델·추론 깊이·주소 오류, 회사가 1분보다 긴 대기를 요구 | 남은 파일도 변환하지 않고 멈춤 (그때까지의 토큰 합계를 알림) |
-| 호출 한도·서버·네트워크 오류 | 재시도한 뒤에도 실패하면 그 문서만 실패 |
-| 응답이 대기 시간(Claude 10분, OpenAI·Gemini 30분) 동안 멈추거나 끊김 | 그 문서만 실패. 회사가 이미 과금했을 수 있어 다시 부르지 않음 |
-| 거절, JSON으로 읽지 못함(한 번 더 부른 뒤), 다 적힌 오퍼레이션 없이 출력이 잘림, 그 밖의 요청 오류 | 그 문서만 실패 |
+| API 키·권한 오류, 잔액·사용 한도, 모델·추론 깊이·주소 오류 | 나머지 파일을 건너뛰고 중단 |
+| 호출 한도·서버·네트워크 오류 | 재시도한 뒤에도 실패하면 해당 문서만 실패 |
+| 응답이 대기 시간(Claude 10분, OpenAI·Gemini 30분) 동안 멈추거나 끊김 | 해당 문서만 실패 |
+| 그 밖의 요청 오류 | 해당 문서만 실패 |
 
-llm 엔진이 실패한 문서를 rule 엔진으로 대신 변환하지는 않습니다. IR JSON만 변환할 때는 키가 없어도 되지만,
-명세 문서가 섞여 있으면 변환을 시작하기 전에 회사와 키를 정하고, 정하지 못하면 아무 파일도 변환하지 않습니다.
 
-### 2. 생성 결과물
+## Interceptor만 사용하기
 
-```
-generated/
-├── ir/MsrstnList.json              # 추출된 중간 표현(IR) — 검수·수정 후 재입력 가능
-├── openapi/MsrstnList.json         # OpenAPI 3.0 문서 — Swagger UI/Postman에서 바로 사용
-└── kr/go/h2spec/client/msrstnlist/
-    ├── MsrstnListClient.java       # RestTemplate 클라이언트
-    └── dto/MsrstnListResponse.java # Jackson XML 매핑 DTO
-```
-
-### 3. 생성된 클라이언트 사용
-
-```java
-MsrstnListClient client = new MsrstnListClient("발급받은 서비스키");
-MsrstnListResponse response = client.getMsrstnList("xml", 10, 1, "서울", null);
-```
-
-생성된 클라이언트에는 `PublicDataErrorInterceptor`가 **자동 장착**되어 있어 별도 설정이 필요 없습니다.
-인증키 오류·호출 한도 초과처럼 HTTP 200 OK로 위장한 에러 응답이 오면 `PublicDataApiException`을 던집니다.
-
-### 인터셉터만 단독으로 사용하기
-
-직접 구성한 RestTemplate에도 붙일 수 있습니다 (`interceptor-core` 모듈):
+### RestTemplate
 
 ```java
 RestTemplate restTemplate = new RestTemplate(
@@ -246,181 +250,56 @@ RestTemplate restTemplate = new RestTemplate(
 restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00"));
 ```
 
-결과코드는 숫자로만 되어 있으면 앞자리 0을 빼고 비교합니다. 성공코드가 `00`일 때 응답의 `0`, `000`, JSON 숫자 `0`도 정상으로 봅니다.
-숫자가 아닌 코드(`INFO-00` 등)는 글자 그대로 비교합니다. 기관마다 다른 결과코드 이름은 두 번째 인자로 줄 수 있고, 기본 이름보다 먼저 찾습니다.
+Interceptor가 읽은 응답 본문을 메시지 컨버터에서도 다시 읽을 수 있도록 `BufferingClientHttpRequestFactory`를 사용해야 합니다.
+
+기관이 다른 결과 코드 필드명을 사용한다면 후보를 추가할 수 있습니다.
 
 ```java
-restTemplate.getInterceptors().add(new PublicDataErrorInterceptor("00", List.of("resultCd")));
+restTemplate.getInterceptors().add(
+    new PublicDataErrorInterceptor("00", List.of("resultCd"))
+);
 ```
 
-> `BufferingClientHttpRequestFactory`로 감싸지 않으면 Interceptor가 바디를 먼저 읽은 뒤
-> 후속 메시지 컨버터가 빈 스트림을 읽게 되므로 반드시 함께 사용해야 합니다.
+숫자로만 된 결과 코드는 앞의 0을 제외하고 비교합니다. `00`, `0`, `000`, JSON 숫자 `0`은 같은 코드로 처리합니다. 문자열 코드는 원문 그대로 비교합니다.
 
-WebClient에는 `ExchangeFilterFunction` 구현체를 붙일 수 있습니다. 필터가 읽은 응답 바디는
-downstream에서 다시 읽을 수 있도록 복원됩니다. 필터 자체는 기본 256KB 코덱 제한을
-사용하지 않지만, 이후 `bodyToMono(String.class)` 또는 DTO 디코딩을 할 때는 WebFlux
-코덱의 기본 메모리 제한이 적용되므로 큰 응답에는 제한을 늘려야 합니다.
+### WebClient
 
 ```java
 WebClient webClient = WebClient.builder()
     .filter(new PublicDataErrorFilter("00"))
-    .codecs(c -> c.defaultCodecs().maxInMemorySize(5 * 1024 * 1024))
     .build();
 ```
 
+필터가 읽은 응답 본문은 이후 처리 단계에서 다시 읽을 수 있도록 복원됩니다.
+
 ### 에러코드 사전
 
-예외 메시지에는 결과코드의 뜻과 조치 안내가 함께 붙습니다.
+알려진 결과 코드에는 의미와 조치 안내가 함께 표시됩니다. 새 코드는 [에러코드 등재 기준](./docs/error-codes.md)에 따라 추가할 수 있습니다.
 
-```
-[H2Spec] 공공데이터 API 응답 오류 감지 (HTTP 403 이지만 실제로는 실패) - uri=...&serviceKey=****,
-resultCode=30, resultMsg=SERVICE_KEY_IS_NOT_REGISTERED_ERROR | 등록되지 않은 서비스키
-| 조치: 인증키를 확인한다. Encoding/Decoding 키를 바꿔 넣었거나, 신청 직후라 아직 반영되지 않은 경우가 많다.
-```
-
-사전에 없는 코드를 만났다면 항목을 추가해 주세요. 형식과 등재 기준은 [docs/error-codes.md](./docs/error-codes.md)에 있습니다.
-
-### 빠른 시작
-
-저장소를 클론하지 않고 씁니다. Java 17 이상이 필요합니다.
-
-**1. 변환 도구 받기**
+## 빌드
 
 ```bash
-curl -sL -o h2spec.zip https://github.com/junu0305/H2Spec/releases/download/v0.1.0/h2spec-v0.1.0.zip
-unzip h2spec.zip
+./gradlew build
+./gradlew test
 ```
 
-**2. 명세서 변환**
+JDK 17 이상이 필요합니다. 컴파일에는 Gradle toolchain으로 Java 17을 사용합니다.
 
-```bash
-./h2spec-v0.1.0/bin/h2spec convert \
-    --input 기술문서.docx \
-    --output generated \
-    --package com.mycorp.publicdata
-```
-
-`generated/` 아래에 클라이언트와 DTO가 패키지 경로대로, OpenAPI 스펙이 `openapi/`에 나옵니다.
-
-**3. 프로젝트에 붙이기**
-
-```groovy
-repositories {
-    mavenCentral()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.1.0'
-
-    // XML 응답 API일 때만 추가합니다
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
-}
-
-sourceSets.main.java.srcDir 'generated'
-```
-
-**4. 호출**
-
-```java
-MsrstnListClient client = new MsrstnListClient(serviceKey);
-MsrstnListResponse res = client.getMsrstnList(2L, 1L, null, null);
-```
-
-인증키는 생성자에서 받으므로 메서드마다 넘기지 않습니다.
-HTTP 200으로 위장한 실패 응답은 `PublicDataApiException`으로 올라옵니다.
-
-### 내 프로젝트에서 쓰기
-
-생성된 클라이언트는 `interceptor-core`를 의존성으로 요구합니다. JitPack에서 받습니다.
-
-```groovy
-repositories {
-    mavenCentral()
-    maven { url 'https://jitpack.io' }
-}
-
-dependencies {
-    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.1.0'
-
-    // XML 응답 API일 때만 추가합니다. 생성된 DTO가 @JacksonXmlProperty를 씁니다.
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
-}
-```
-
-`spring-web`과 `jackson-databind`는 `interceptor-core`가 `api`로 노출하므로 따로 선언하지 않아도 됩니다.
-
-로컬에서 고쳐가며 쓰려면 `~/.m2`에 올립니다.
+로컬 Maven 저장소에 배포하려면 다음 명령을 실행합니다.
 
 ```bash
 ./gradlew publishToMavenLocal
 ```
 
-```groovy
-repositories { mavenLocal(); mavenCentral() }
+## IR 계약
 
-dependencies {
-    implementation 'kr.go.h2spec:interceptor-core:0.1.0-SNAPSHOT'
-}
-```
+IR 구조는 `schema-example.json`에 정의되어 있습니다.
 
-원격 저장소에 올리려면 URL과 인증 정보를 넘깁니다.
+- `api.requestParameters[]`: 요청 파라미터의 타입, 필수 여부, 예시값
+- `api.responseFields[]`: 응답 필드의 경로와 타입
+- `api.errorSpec`: 성공 코드, 결과 코드 필드명, 알려진 오류 코드
 
-```bash
-./gradlew publish \
-    -Ph2specRepoUrl=https://... \
-    -Ph2specRepoUser=... \
-    -Ph2specRepoPassword=...
-```
-
-게시하지 않고 소스에서 바로 쓰려면 composite build로 끌어옵니다.
-
-```groovy
-// settings.gradle
-includeBuild('/path/to/H2Spec') {
-    name = 'h2spec'   // 디렉터리명이 H2Spec이라 못 박아야 합니다
-}
-```
-
-변환을 빌드 단계로 넣으면 명세서가 바뀔 때만 다시 생성됩니다.
-
-```groovy
-def generatedDir = layout.buildDirectory.dir('generated/h2spec')
-
-def generateClients = tasks.register('generateClients', Exec) {
-    dependsOn gradle.includedBuild('h2spec').task(':cli:installDist')
-    inputs.dir 'specs'
-    outputs.dir generatedDir
-    commandLine '/path/to/H2Spec/cli/build/install/h2spec/bin/h2spec',
-            'convert', '--input', file('specs').absolutePath,
-            '--output', generatedDir.get().asFile.absolutePath,
-            '--package', 'com.example.publicdata'
-}
-
-sourceSets.main.java.srcDir generatedDir
-tasks.named('compileJava') { dependsOn generateClients }
-```
-
-### 빌드와 테스트
-
-빌드에는 JDK 17 이상이 필요합니다. Gradle 실행에 쓰는 JDK와 무관하게 컴파일은 toolchain 설정에 따라
-항상 Java 17로 수행되며, 로컬에 JDK 17이 없으면 Gradle이 자동으로 내려받습니다.
-
-```bash
-./gradlew build   # 전 모듈 빌드 + 테스트
-./gradlew test    # 테스트만
-```
-
-## 중간 규격(IR) 계약
-
-파서와 제너레이터는 서로의 내부 구현을 몰라도 `schema-example.json`에 정의된 구조만 지키면
-독립적으로 개발할 수 있습니다. 주요 필드:
-
-- `api.requestParameters[]`: 쿼리/패스 파라미터 목록 (타입, 필수 여부, 예시값)
-- `api.responseFields[]`: 응답 필드의 JSONPath/XPath 유사 경로와 타입
-- `api.errorSpec`: 성공 코드, resultCode 후보 키, 알려진 에러코드/키워드 목록
-
-이 계약이 바뀌는 경우 PR에 `[BREAKING-IR]` 라벨을 붙이고 두 모듈 담당자 모두의 리뷰를 받아야 합니다.
+IR 구조를 바꾸는 PR에는 `[BREAKING-IR]` 라벨을 붙이고 `parser`와 `generator` 담당자의 리뷰를 받아야 합니다.
 
 ## Git 컨벤션
 
@@ -470,20 +349,6 @@ main              ← 최종 병합 (PR 필수)
 3. PR은 `.github/pull_request_template.md` 양식을 따릅니다 (PR 생성 시 자동 적용)
 4. IR 스키마를 변경하는 PR은 parser/generator 양쪽 담당자 승인이 필요합니다
 
-## 로드맵
-
-- [x] HWP 명세서 파싱 (`hwplib` 기반, 구형 바이너리 `.hwp`)
-- [x] WebClient 리액티브 버전 Interceptor(`ExchangeFilterFunction`) 지원
-- [x] 다건 API 배치 변환 CLI 옵션
-- [x] 생성 코드 패키지 지정 옵션(`--package`), 응답 포맷 지정(`--format`)
-- [x] HWP 표 파싱 정확도 개선 (머리행 기준 열 매핑, 병합 셀 대응)
-- [x] HWPX(신형식, OWPML) 파싱 지원 (`hwpxlib` 기반)
-- [x] 공공데이터포털 기관 문서의 비표준 구간·표 서식 대응 (구간 제목·머리행 변형, 주소 출처 다변화, 세로 병합 셀 위치 보정)
-- [x] 알려진 공공기관 에러코드 사전(dictionary) 커뮤니티 기여 방식 정립
-- [x] 생성 코드 안전장치 (IR 문자열 escape, apiId·패키지·Java 이름 검사)
-- [ ] LLM 파싱 엔진 (`--engine llm`, 실험적): Claude·OpenAI·Gemini 어댑터 구현(OpenAI·Gemini는 실제 API 시험 전). 정확도 평가, `--engine auto`는 예정
-- [ ] serviceKey가 아닌 인증키, 최상위 키가 여럿인 JSON 응답의 코드 생성
-
 ## 라이선스
 
-이 프로젝트는 [MIT License](./LICENSE)를 따릅니다.
+[MIT License](./LICENSE)
