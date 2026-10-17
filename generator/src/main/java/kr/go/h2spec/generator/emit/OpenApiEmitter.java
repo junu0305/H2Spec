@@ -40,8 +40,9 @@ public class OpenApiEmitter {
         doc.set("info", info(ir));
         doc.set("servers", servers(ir));
         doc.set("paths", paths(ir, root, key));
-        // OpenAPI 3.0의 apiKey 보안 스킴은 query·header·cookie에만 둘 수 있어, 경로에 넣는 키는 path 파라미터로만 적는다
-        if (key.placement() != AuthKey.Placement.PATH) {
+        // OpenAPI 3.0의 apiKey 보안 스킴은 query·header·cookie에만 둘 수 있어, 경로에 넣는 키는 path 파라미터로만 적는다.
+        // 인증키를 보내지 않는 API는 보안 스킴이 없다
+        if (key.placement() != AuthKey.Placement.PATH && key.hasKey()) {
             doc.set("components", components(key));
             doc.set("security", security());
         }

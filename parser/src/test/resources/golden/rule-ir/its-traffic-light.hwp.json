@@ -6,7 +6,7 @@
       "sourceFormat" : "HWP",
       "engine" : "rule",
       "manualReviewRequired" : true,
-      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 2개): serviceKey, countPerPage" ]
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 2개): serviceKey, countPerPage", "응답 필드 표에 계층이 없어 응답 예제의 구조로 응답 필드 경로를 정함 (루트 response)" ]
     },
     "api" : {
       "apiId" : "TrafficLightList4",
@@ -57,11 +57,11 @@
         "description" : "결과코드",
         "isResultIndicator" : true
       }, {
-        "path" : "response.body.items.item[].countPerPage",
+        "path" : "response.page.countPerPage",
         "type" : "integer",
         "description" : "한 페이지 결과수"
       }, {
-        "path" : "response.body.items.item[].page",
+        "path" : "response.page.page",
         "type" : "string",
         "description" : "페이지번호"
       }, {

@@ -82,9 +82,9 @@ public class ClientEmitter {
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(ir.generatorHints().targetPackage()).append(";\n\n");
         appendImports(sb, ir, responseClassName, isXml, !resultCodeKeys.isEmpty() || key.masksByValue(), key);
-        appendClassJavadoc(sb, ir);
+        appendClassJavadoc(sb, ir, key);
         sb.append("public class ").append(className).append(" {\n\n");
-        appendFields(sb, ir, isXml);
+        appendFields(sb, ir, isXml, key);
         sb.append("\n");
         appendConstructors(sb, className, key);
         sb.append("\n");
@@ -236,14 +236,18 @@ public class ClientEmitter {
         sb.append("\n");
     }
 
-    private void appendClassJavadoc(StringBuilder sb, IrSpec ir) {
+    private void appendClassJavadoc(StringBuilder sb, IrSpec ir, AuthKey key) {
         sb.append("/**\n");
         sb.append(" * ").append(JavaText.comment(ir.api().apiName())).append(" 클라이언트.\n");
+        if (!key.hasKey()) {
+            // 키가 필요한데 문서에서 키 파라미터를 찾지 못했을 수도 있다. 그러면 기관의 오류 코드를 인터셉터가 예외로 알린다
+            sb.append(" * 명세에 인증키 파라미터가 없어 인증키 없이 부릅니다.\n");
+        }
         sb.append(" * H2Spec generator가 자동 생성한 코드입니다. 직접 수정하지 마세요.\n");
         sb.append(" */\n");
     }
 
-    private void appendFields(StringBuilder sb, IrSpec ir, boolean isXml) {
+    private void appendFields(StringBuilder sb, IrSpec ir, boolean isXml, AuthKey key) {
         sb.append(INDENT).append("private static final String BASE_URL = \"")
           .append(JavaText.literal(ir.api().baseUrl())).append("\";\n");
         sb.append(INDENT).append("private static final String SUCCESS_CODE = \"")
@@ -264,11 +268,23 @@ public class ClientEmitter {
             sb.append(INDENT.repeat(3)).append(".enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY)\n");
             sb.append(INDENT.repeat(3)).append(".enable(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT);\n");
         }
-        sb.append(INDENT).append("private final String serviceKey;\n");
+        if (key.hasKey()) {
+            sb.append(INDENT).append("private final String serviceKey;\n");
+        }
     }
 
     private void appendConstructors(StringBuilder sb, String className, AuthKey key) {
         String indent2 = INDENT.repeat(2);
+        if (!key.hasKey()) {
+            sb.append(INDENT).append("public ").append(className).append("() {\n");
+            sb.append(indent2).append("this(defaultRestTemplate());\n");
+            sb.append(INDENT).append("}\n");
+            sb.append("\n");
+            sb.append(INDENT).append("public ").append(className).append("(RestTemplate restTemplate) {\n");
+            sb.append(indent2).append("this.restTemplate = restTemplate;\n");
+            sb.append(INDENT).append("}\n");
+            return;
+        }
         sb.append(INDENT).append("/**\n");
         sb.append(INDENT).append(" * @param serviceKey ").append(JavaText.comment(key.description()))
           .append("\n");
@@ -330,7 +346,7 @@ public class ClientEmitter {
      */
     private String methodNameOf(String endpoint) {
         String words = endpoint.replaceAll("[/{}]+", "_").replaceAll("^_+|_+$", "");
-        String name = JavaNames.camel(words);
+        String name = JavaNames.camelKeepingSymbols(words);
         if (JavaNameRules.isValidIdentifier(name)) {
             return name;
         }

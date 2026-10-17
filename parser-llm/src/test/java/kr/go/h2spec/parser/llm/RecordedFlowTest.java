@@ -47,15 +47,15 @@ class RecordedFlowTest {
     static Stream<Arguments> recordings() {
         return Stream.of(
                 Arguments.of("its-traffic-light.hwp", List.of("TrafficLightList4"), List.of(), 0, 0),
-                Arguments.of("jejudatahub-wifi-usage.hwp", List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), List.of(), 1, 0),
+                Arguments.of("jejudatahub-wifi-usage.hwp", List.of("Api7tttaDaD5ataaba75a57ttDtaDb6tb7t"), List.of(), 0, 0),
                 Arguments.of("kasi-special-day.docx",
                         List.of("HoliDeInfo", "RestDeInfo", "AnniversaryInfo", "Get24DivisionsInfo", "SundryDayInfo"), List.of(), 2, 0),
                 Arguments.of("kci-reference.docx", List.of("OpenApiD272List", "OpenApiD273List", "OpenApiD321List",
                         "OpenApiM320List", "OpenApiM325List", "OpenApiM326List"), List.of(), 0, 0),
-                Arguments.of("kma-mid-forecast.docx", List.of("MidFcst", "MidLandFcst", "MidTa", "MidSeaFcst"), List.of(), 2, 0),
-                Arguments.of("kosha-certificate-check.hwp", List.of("Koshagw"), List.of(), 1, 0),
+                Arguments.of("kma-mid-forecast.docx", List.of("MidFcst", "MidLandFcst", "MidTa", "MidSeaFcst"), List.of(), 1, 0),
+                Arguments.of("kosha-certificate-check.hwp", List.of("Koshagw"), List.of(), 0, 0),
                 Arguments.of("msrstn-info.docx", List.of("MsrstnList", "NearbyMsrstnList", "TMStdrCrdnt"), List.of(), 0, 0),
-                Arguments.of("nec-ballot-counting-place.hwpx", List.of("CountingSttnInfoInqire"), List.of(), 1, 0),
+                Arguments.of("nec-ballot-counting-place.hwpx", List.of("CountingSttnInfoInqire"), List.of(), 0, 0),
                 Arguments.of("nps-disability-review.hwp", List.of("JgmtSttusInfoSearchV2"), List.of(), 1, 0));
     }
 

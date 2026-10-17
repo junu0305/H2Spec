@@ -46,7 +46,7 @@ public class CodeGenerator {
         DtoNode root = new DtoTreeBuilder().build(ir.api().responseFields(), ir.api().responseRootless());
         validateFieldNames(root, root.name() == null ? "" : root.name());
 
-        // 셋을 모두 메모리에 만든 뒤에 쓴다. DTO를 먼저 써 두면 ClientEmitter가 실패할 때(serviceKey 누락 등) DTO만 남는다.
+        // 셋을 모두 메모리에 만든 뒤에 쓴다. DTO를 먼저 써 두면 ClientEmitter가 실패할 때(api.auth가 가리키는 파라미터가 없는 등) DTO만 남는다.
         // UTF-8로 쓸 수 없는 글(짝 없는 서로게이트)도 쓰기 전에 드러나도록 바이트까지 만들어 둔다.
         byte[] dtoSource = utf8(new DtoEmitter().emit(ir, root), "DTO");
         byte[] clientSource = utf8(new ClientEmitter().emit(ir), "클라이언트");

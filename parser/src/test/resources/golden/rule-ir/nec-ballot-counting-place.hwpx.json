@@ -6,7 +6,7 @@
       "sourceFormat" : "HWPX",
       "engine" : "rule",
       "manualReviewRequired" : true,
-      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 3개): num, countingSttnSeq, placeFloor" ]
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 3개): num, countingSttnSeq, placeFloor", "응답 예제의 정상 응답 결과코드 INFO-00를 성공코드로 씀" ]
     },
     "api" : {
       "apiId" : "CountingSttnInfoInqire",
@@ -127,7 +127,7 @@
         "description" : "장소층수 (지하1층 : –1)"
       } ],
       "errorSpec" : {
-        "successResultCode" : "00",
+        "successResultCode" : "INFO-00",
         "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
       }
     },

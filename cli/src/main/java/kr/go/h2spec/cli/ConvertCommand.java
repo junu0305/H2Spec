@@ -3,6 +3,7 @@ package kr.go.h2spec.cli;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.generator.CodeGenerator;
+import kr.go.h2spec.generator.emit.AuthKey;
 import kr.go.h2spec.generator.emit.JavaNameRules;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.ErrorSpec;
@@ -562,6 +563,11 @@ public class ConvertCommand implements Callable<Integer> {
     private void generate(IrSpec ir) throws IOException {
         List<Path> written = new CodeGenerator().generate(ir, output);
         written.forEach(path -> spec.commandLine().getOut().println("생성: " + path));
+        // 키 없이 여는 API도 있지만, 문서의 요청 표에서 키 파라미터가 빠졌을 수도 있다. 부를 때 인증 오류가 나기 전에 알린다
+        if (!AuthKey.of(ir.api()).hasKey()) {
+            err("인증키 파라미터를 찾지 못해 인증키 없이 부르는 클라이언트를 만들었습니다: " + ir.api().apiId()
+                    + " — 키가 필요한 API면 IR의 api.auth나 요청 파라미터에 인증키를 적어 주세요");
+        }
     }
 
     /**

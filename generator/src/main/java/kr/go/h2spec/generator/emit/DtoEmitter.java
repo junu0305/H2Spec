@@ -239,7 +239,7 @@ public class DtoEmitter {
 
     private boolean hasRenamedField(DtoNode node) {
         for (DtoNode child : node.children().values()) {
-            if (!child.name().equals(JavaNames.camel(child.name())) || hasRenamedField(child)) {
+            if (needsExplicitName(child) || hasRenamedField(child)) {
                 return true;
             }
         }
@@ -270,7 +270,7 @@ public class DtoEmitter {
             if (i > 0) {
                 sb.append("\n");
             }
-            appendGetter(sb, fields.get(i), indent, depth, classNames);
+            appendGetter(sb, fields.get(i), indent, depth, isXml, classNames);
             sb.append("\n");
             appendSetter(sb, fields.get(i), indent, depth, classNames);
         }
@@ -283,7 +283,40 @@ public class DtoEmitter {
         if (node.isList() || lenientDeserializer(node) != null) {
             return true;
         }
-        return !node.name().equals(JavaNames.camel(node.name()));
+        return needsExplicitName(node);
+    }
+
+    /**
+     * 필드에 원래 이름을 적어야 하는지. Java 이름이 원래 이름과 다르거나, getter에서 Jackson이 읽는 이름이 원래 이름과 다를 때다
+     * ({@link #needsGetterName}). 적지 않으면 Jackson이 다른 이름으로 찾아 그 값을 조용히 버린다
+     */
+    private static boolean needsExplicitName(DtoNode node) {
+        return !node.name().equals(JavaNames.camel(node.name())) || needsGetterName(node);
+    }
+
+    /**
+     * getter에도 원래 이름을 적어야 하는지. Jackson은 getter 이름에서 get을 떼고 맨 앞의 대문자들을 소문자로 바꿔 속성 이름을 짓는다
+     * ({@code getSGubun} → {@code sgubun}, {@code getXPos} → {@code xpos}). 그 이름이 필드 이름({@code sGubun}, {@code xPos})과 다르면
+     * Jackson은 둘을 다른 속성으로 본다. 필드에만 원래 이름을 적으면 읽기는 되지만 직렬화할 때 getter의 이름으로 한 번 더 나가므로
+     * getter에도 적어 한 속성으로 묶는다. 두 번째 글자가 대문자인 이름(sGubun, eUserNo, xPos)과 그렇게 바뀌는 이름(X_POS)이 여기에 든다
+     */
+    private static boolean needsGetterName(DtoNode node) {
+        return !jacksonPropertyName(JavaNames.pascal(node.name())).equals(JavaNames.camel(node.name()));
+    }
+
+    /** getter 이름에서 get을 뗀 부분으로 Jackson(기본 설정)이 짓는 속성 이름. 맨 앞부터 대문자인 글자를 소문자로 바꾼다 */
+    private static String jacksonPropertyName(String accessorSuffix) {
+        StringBuilder sb = new StringBuilder(accessorSuffix.length());
+        int i = 0;
+        for (; i < accessorSuffix.length(); i++) {
+            char c = accessorSuffix.charAt(i);
+            char lower = Character.toLowerCase(c);
+            if (c == lower) {
+                break;
+            }
+            sb.append(lower);
+        }
+        return sb.append(accessorSuffix, i, accessorSuffix.length()).toString();
     }
 
     private void appendFieldDeclaration(StringBuilder sb, DtoNode node, String indent, boolean isXml,
@@ -291,7 +324,7 @@ public class DtoEmitter {
         if (node.isLeaf() && node.description() != null) {
             sb.append(indent).append("/** ").append(JavaText.comment(node.description())).append(" */\n");
         }
-        boolean renamed = !node.name().equals(JavaNames.camel(node.name()));
+        boolean renamed = needsExplicitName(node);
         String nameLiteral = JavaText.literal(node.name());
         if (!isXml) {
             // JSON 배열에는 XML의 래퍼 요소 개념이 없어 이름만 맞춰주면 된다
@@ -398,11 +431,17 @@ public class DtoEmitter {
         sb.append(i1).append("}\n");
     }
 
-    private void appendGetter(StringBuilder sb, DtoNode node, String indent, int depth,
+    private void appendGetter(StringBuilder sb, DtoNode node, String indent, int depth, boolean isXml,
                               Map<DtoNode, String> classNames) {
         String type = fieldType(node, classNames);
         String fieldName = JavaNames.camel(node.name());
         String bodyIndent = INDENT.repeat(depth + 1);
+        if (needsGetterName(node)) {
+            String nameLiteral = JavaText.literal(node.name());
+            sb.append(indent).append(isXml
+                    ? "@JacksonXmlProperty(localName = \"" + nameLiteral + "\")\n"
+                    : "@JsonProperty(\"" + nameLiteral + "\")\n");
+        }
         sb.append(indent).append("public ").append(type).append(" get")
           .append(JavaNames.pascal(node.name())).append("() {\n");
         sb.append(bodyIndent).append("return ").append(fieldName).append(";\n");

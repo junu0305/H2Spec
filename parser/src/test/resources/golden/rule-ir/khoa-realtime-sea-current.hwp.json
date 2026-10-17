@@ -5,8 +5,8 @@
       "sourceFile" : "khoa-realtime-sea-current.hwp",
       "sourceFormat" : "HWP",
       "engine" : "rule",
-      "manualReviewRequired" : false,
-      "reviewNotes" : [ ]
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "요청에 응답 형식 파라미터가 없고 응답 예제가 JSON라 응답 형식을 JSON로 정함", "응답 필드 표에 계층이 없어 응답 예제의 구조로 응답 필드 경로를 정함 (루트 response)" ]
     },
     "api" : {
       "apiId" : "GetRealTimeSeaCurrentApiService",
@@ -17,7 +17,7 @@
       "httpMethod" : "GET",
       "description" : "인공위성 해수면 높이 자료를 이용하여 산출한 매일의 표층해류자료 제공 서비스",
       "authType" : "SERVICE_KEY_QUERY_PARAM",
-      "responseFormat" : "XML",
+      "responseFormat" : "JSON",
       "requestParameters" : [ {
         "name" : "serviceKey",
         "in" : "query",
@@ -97,7 +97,7 @@
         "type" : "integer",
         "description" : "한 페이지당 데이터 갯수"
       }, {
-        "path" : "response.body.items.item[].type",
+        "path" : "response.body.type",
         "type" : "string",
         "description" : "데이터 타입"
       }, {

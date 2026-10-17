@@ -172,6 +172,8 @@ MsrstnListResponse response = client.getMsrstnList(2L, 1L, null, null);
 - 요청과 응답이 한 표에 들어간 형식
 - 요청 예제나 서비스 URL에만 주소가 적힌 문서
 - 응답 필드 표 없이 JSON 예제만 제공된 문서
+- 응답 필드 표에 계층이 없는 문서: 응답 예제(XML, JSON)에서 루트·목록 위치와 성공 코드를 정합니다
+- 요청 표에 인증키가 빠진 문서: 요청 예제 주소에서 인증키 파라미터를 찾습니다
 
 문서에 직접 적혀 있지 않아 파서가 보완한 값은 IR의 `metadata.reviewNotes`에 기록합니다. 주소나 응답 필드를 확인할 수 없는 오퍼레이션은 건너뛰고 이유를 표준 오류로 출력합니다.
 
@@ -308,7 +310,7 @@ IR 구조는 `schema-example.json`에 정의되어 있습니다.
 - `api.requestParameters[]`: 요청 파라미터의 타입, 필수 여부, 예시값
 - `api.responseFields[]`: 응답 필드의 경로와 타입
 - `api.errorSpec`: 성공 코드, 결과 코드 필드명, 알려진 오류 코드
-- `api.auth` (선택): 인증키를 넣는 자리입니다. `kind`는 `SERVICE_KEY_QUERY`(질의), `PATH_KEY`(주소 경로의 `{name}`), `HEADER_KEY`(요청 헤더) 중 하나이고 `name`은 그 이름입니다. 질의와 경로의 키는 `requestParameters`에도 있어야 합니다. 없으면 이름이 `serviceKey`인 파라미터를 질의로 보냅니다.
+- `api.auth` (선택): 인증키를 넣는 자리입니다. `kind`는 `SERVICE_KEY_QUERY`(질의), `PATH_KEY`(주소 경로의 `{name}`), `HEADER_KEY`(요청 헤더) 중 하나이고 `name`은 그 이름입니다. 질의와 경로의 키는 `requestParameters`에도 있어야 합니다. 없으면 요청 파라미터 이름으로 정합니다. 이름이 `serviceKey`(대소문자 무시)인 파라미터, `apiKey`·`authApiKey`·`crtfc_key` 같은 인증키 이름의 질의 파라미터, `{your_appkey}` 같은 인증키 이름의 경로 변수 순서로 찾고, 모두 없으면 인증키를 받지 않는 클라이언트(`new XxxClient()`)를 만듭니다.
 - `api.responseRootless` (선택): JSON 응답이 루트 키 하나로 감싸지지 않고 `{"header": …, "body": …}`처럼 맨 바깥에 필드가 바로 오면 `true`입니다. 이때 `responseFields[].path`의 첫 칸은 맨 바깥 키입니다. 없으면 `false`입니다.
 
 IR 구조를 바꾸는 PR에는 `[BREAKING-IR]` 라벨을 붙이고 `parser`와 `generator` 담당자의 리뷰를 받아야 합니다.

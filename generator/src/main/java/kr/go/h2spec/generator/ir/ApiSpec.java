@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
 /**
- * @param auth             인증키를 넣는 자리. 없으면 이름이 serviceKey인 요청 파라미터를 질의로 보낸다
+ * @param auth             인증키를 넣는 자리. 없으면 generator가 요청 파라미터의 이름으로 정한다({@link ApiAuth})
  * @param responseRootless JSON 응답이 루트 키 하나로 감싸이지 않고 맨 바깥에 필드가 바로 오는지({"header": …, "body": …}).
  *                         그러면 responseFields 경로의 첫 칸이 맨 바깥 키다. 없으면 false이고 첫 칸은 응답을 감싼 루트다
  */

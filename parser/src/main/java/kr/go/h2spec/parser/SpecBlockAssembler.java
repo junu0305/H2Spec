@@ -110,6 +110,8 @@ class SpecBlockAssembler {
         private String responseSample;
         /** "데이터 공통 사항"처럼 뒤따르는 오퍼레이션마다 붙는 공통 사항 구간 */
         private boolean common;
+        /** 구간의 문단과 필드 표가 아닌 표의 칸. 응답·요청 예제를 여기서 찾는다({@link DocumentExamples}) */
+        private final StringBuilder text = new StringBuilder();
 
         boolean hasFields() {
             return !request.isEmpty() || !response.isEmpty();
@@ -131,9 +133,12 @@ class SpecBlockAssembler {
         private final List<String> notes;
         /** operations에서 이 오퍼레이션의 자리 */
         private final int position;
+        /** 구간의 글. 응답·요청 예제를 찾는다 */
+        private final String text;
 
         private Prepared(String label, Map<String, String> info, List<List<String>> request,
-                         List<List<String>> response, String url, String exampleUrl, List<String> notes, int position) {
+                         List<List<String>> response, String url, String exampleUrl, List<String> notes, int position,
+                         String text) {
             this.label = label;
             this.info = info;
             this.request = request;
@@ -142,6 +147,7 @@ class SpecBlockAssembler {
             this.exampleUrl = exampleUrl;
             this.notes = notes;
             this.position = position;
+            this.text = text;
         }
     }
 
@@ -166,6 +172,8 @@ class SpecBlockAssembler {
         private final List<List<String>> commonResponse = new ArrayList<>();
         /** 주소까지 정한 오퍼레이션 */
         private final List<Prepared> prepared = new ArrayList<>();
+        /** 에러 코드 구간의 표 행. 문서 끝에 한 번만 두는 문서가 많아 모든 오퍼레이션이 같이 쓴다 */
+        private final List<List<String>> errorRows = new ArrayList<>();
 
         private Run(String sourceFile, String sourceFormat) {
             this.sourceFile = sourceFile;
@@ -176,6 +184,7 @@ class SpecBlockAssembler {
             if (SpecLabels.isTocEntry(text)) {
                 return;
             }
+            operation.text.append(text).append('\n');
             String labeledUrl = SpecLabels.labeledUrl(text);
             if (labeledUrl == null && urlLabelPending) {
                 labeledUrl = IrConventions.firstUrl(text);
@@ -253,6 +262,8 @@ class SpecBlockAssembler {
             if (section == Section.ERROR) {
                 // 에러 코드 표와 에러 응답 형식 표는 필드 명세가 아니다
                 lastField = null;
+                errorRows.addAll(rows);
+                appendText(rows);
             } else if (fieldHeader) {
                 fieldTable(rows, null);
             } else if (isInfoTable(rows) || (section == Section.INFO && foundServiceUrl == null)) {
@@ -269,7 +280,18 @@ class SpecBlockAssembler {
             } else {
                 exampleUrl(rows);
                 responseSample(rows);
+                appendText(rows);
                 lastField = null;
+            }
+        }
+
+        private void appendText(List<List<String>> rows) {
+            for (List<String> cells : rows) {
+                for (String cell : cells) {
+                    if (!cell.isBlank()) {
+                        operation.text.append(cell).append('\n');
+                    }
+                }
             }
         }
 
@@ -594,7 +616,7 @@ class SpecBlockAssembler {
             }
             operations.add(new RuleEngine.OperationResult(operationName(done.info), title(done.info), null, null));
             prepared.add(new Prepared(label, info, distinctByName(request), distinctByName(response), url,
-                    done.exampleUrl, notes, operations.size() - 1));
+                    done.exampleUrl, notes, operations.size() - 1, done.text.toString()));
         }
 
         /** 오퍼레이션을 건너뛴다. 건너뛴 것도 교차검증에서 짝을 지을 수 있게 오퍼레이션 결과로 남긴다 */
@@ -605,6 +627,7 @@ class SpecBlockAssembler {
 
         /** 주소가 겹치는 오퍼레이션을 바로잡은 뒤({@link IrConventions#correctSharedUrls}) IR로 조립한다 */
         List<ParsedApi> finish() {
+            String errorTableCode = DocumentExamples.successCodeOfErrorTable(errorRows).orElse(null);
             List<String> urls = IrConventions.correctSharedUrls(
                     prepared.stream().map(op -> op.url).toList(),
                     prepared.stream().map(op -> op.exampleUrl).toList(),
@@ -617,7 +640,8 @@ class SpecBlockAssembler {
                 }
                 RuleEngine.OperationResult found = operations.get(op.position);
                 try {
-                    ParsedApi api = assembler.assemble(sourceFile, sourceFormat, op.info, op.request, op.response);
+                    ParsedApi api = assembler.assemble(sourceFile, sourceFormat, op.info, op.request, op.response,
+                            DocumentExamples.of(op.text), errorTableCode);
                     result.add(api);
                     operations.set(op.position, new RuleEngine.OperationResult(found.operationName(), found.title(),
                             api, null));

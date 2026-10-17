@@ -1,6 +1,7 @@
 package kr.go.h2spec.cli;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.parser.ParsedApi;
 import org.junit.jupiter.api.Test;
@@ -373,7 +374,23 @@ class ConvertCommandTest {
 
     @Test
     void 모든_오퍼레이션의_생성에_실패한_문서는_실패로_끝나지만_IR은_모두_남긴다() throws Exception {
-        // 농사로 문서는 두 오퍼레이션 모두 serviceKey가 아닌 apiKey로 인증해 generator가 받지 못한다
+        StringWriter err = new StringWriter();
+        ConvertCommand command = parsedCommand(err);
+
+        boolean converted = command.convertDocument(List.of(brokenApi("FirstApi"), brokenApi("LastApi")),
+                List.of(), Path.of("synthetic.hwp"));
+
+        assertFalse(converted);
+        assertTrue(Files.exists(tempDir.resolve("ir/FirstApi.json")));
+        assertTrue(Files.exists(tempDir.resolve("ir/LastApi.json")), "앞 오퍼레이션이 실패해도 뒤 오퍼레이션의 IR까지 써야 한다");
+        assertTrue(err.toString().contains("건너뛴 오퍼레이션 (synthetic.hwp): FirstApi: "), err.toString());
+        assertTrue(err.toString().contains("건너뛴 오퍼레이션 (synthetic.hwp): LastApi: "), err.toString());
+        assertTrue(err.toString().contains("코드를 생성한 오퍼레이션이 없습니다"), err.toString());
+    }
+
+    @Test
+    void serviceKey가_아닌_apiKey로_인증하는_문서도_코드를_생성한다() throws Exception {
+        // 농사로 문서는 두 오퍼레이션 모두 apiKey로 인증한다. rule 엔진의 IR에는 api.auth가 없어 generator가 이름으로 키를 찾는다
         Path hwp = docPath("nongsaro-eco-farming.hwp");
         StringWriter err = new StringWriter();
         CommandLine cli = new CommandLine(new H2SpecCli());
@@ -381,22 +398,43 @@ class ConvertCommandTest {
 
         int exit = cli.execute("convert", "--input", hwp.toString(), "--output", tempDir.toString());
 
-        assertEquals(1, exit);
-        assertTrue(Files.exists(tempDir.resolve("ir/SelectAreaInfoLst.json")));
-        assertTrue(Files.exists(tempDir.resolve("ir/EvrfrndFarmngLst.json")),
-                "앞 오퍼레이션이 실패해도 뒤 오퍼레이션의 IR까지 써야 한다");
-        assertTrue(err.toString().contains("건너뛴 오퍼레이션 (nongsaro-eco-farming.hwp): SelectAreaInfoLst: "),
-                err.toString());
-        assertTrue(err.toString().contains("건너뛴 오퍼레이션 (nongsaro-eco-farming.hwp): EvrfrndFarmngLst: "),
-                err.toString());
-        assertTrue(err.toString().contains("코드를 생성한 오퍼레이션이 없습니다"), err.toString());
+        assertEquals(0, exit, err.toString());
+        String client = Files.readString(tempDir.resolve(
+                "kr/go/h2spec/client/evrfrndfarmnglst/EvrfrndFarmngLstClient.java"));
+        assertTrue(client.contains("url.append(\"?apiKey=\").append(encodeKey(serviceKey));"), client);
+        assertFalse(client.contains("String apiKey"), client);
     }
 
     @Test
-    void 디렉터리_안에_코드를_하나도_만들지_못한_문서가_있으면_결과는_실패로_보고된다() throws Exception {
+    void 인증키_파라미터가_없는_IR은_키_없이_생성하고_알린다() throws Exception {
+        ObjectNode ir = readIr(irPath());
+        ArrayNode params = ir.withArray("/api/requestParameters");
+        for (int i = params.size() - 1; i >= 0; i--) {
+            if ("serviceKey".equalsIgnoreCase(params.get(i).path("name").asText())) {
+                params.remove(i);
+            }
+        }
+        Path irFile = Files.writeString(tempDir.resolve("keyless.json"), ir.toPrettyString());
+        StringWriter err = new StringWriter();
+        CommandLine cli = new CommandLine(new H2SpecCli());
+        cli.setOut(new PrintWriter(new StringWriter()));
+        cli.setErr(new PrintWriter(err));
+
+        int exit = cli.execute("convert", "--input", irFile.toString(), "--output", tempDir.resolve("out").toString());
+
+        assertEquals(0, exit, err.toString());
+        assertTrue(err.toString().contains("인증키 파라미터를 찾지 못해 인증키 없이 부르는 클라이언트를 만들었습니다: "
+                + ir.at("/api/apiId").asText()), err.toString());
+    }
+
+    @Test
+    void 디렉터리_안에_코드를_하나도_만들지_못한_파일이_있으면_결과는_실패로_보고된다() throws Exception {
         Path inputDir = Files.createDirectories(tempDir.resolve("input"));
         Files.copy(docPath("msrstn-info.docx"), inputDir.resolve("msrstn-info.docx"));
-        Files.copy(docPath("nongsaro-eco-farming.hwp"), inputDir.resolve("nongsaro-eco-farming.hwp"));
+        // generator가 받지 못하는 IR. 필수 필드인 baseUrl이 없다
+        ObjectNode broken = readIr(irPath());
+        broken.withObject("/api").remove("baseUrl");
+        Files.writeString(inputDir.resolve("broken.json"), broken.toPrettyString());
         StringWriter out = new StringWriter();
         CommandLine cli = new CommandLine(new H2SpecCli());
         cli.setOut(new PrintWriter(out));

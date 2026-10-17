@@ -3,6 +3,7 @@ package kr.go.h2spec.generator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.go.h2spec.client.interceptor.PublicDataApiException;
+import kr.go.h2spec.generator.emit.JavaNames;
 import kr.go.h2spec.generator.ir.ApiAuth;
 import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrSpec;
@@ -184,6 +185,78 @@ class AuthKeyGenerationTest {
         assertFalse(pathDoc.has("components"));
         assertFalse(pathDoc.has("security"));
         assertEquals("appkey", pathDoc.at("/paths/~1getSample~1{appkey}/get/parameters/0/name").asText());
+    }
+
+    @Test
+    void api_auth가_없으면_알려진_인증키_이름의_질의_파라미터를_키로_보낸다() throws Throwable {
+        // 농사로 apiKey, 제주 authApiKey, OpenDART crtfc_key. rule 엔진의 IR에는 api.auth가 없다
+        for (String name : List.of("apiKey", "authApiKey", "crtfc_key")) {
+            TestIr ir = new TestIr();
+            ir.params = new ArrayList<>(List.of(query("pageNo", false), query(name, true)));
+
+            Path classes = generateAndCompile(ir);
+            GeneratedClientCall call = new GeneratedClientCall(OK);
+            call.call(classes, CLIENT_CLASS, KEY, "3");
+
+            assertEquals(ir.baseUrl + "/getSample?" + name + "=" + QUERY_KEY + "&pageNo=3", call.uri().toString());
+            assertFalse(client().contains("String " + JavaNames.camel(name)), client());
+        }
+    }
+
+    @Test
+    void api_auth가_없으면_인증키_꼴의_경로_변수에_키를_넣는다() throws Throwable {
+        // 제주데이터허브 {your_appkey}, {your_projectKey}
+        TestIr ir = new TestIr();
+        ir.endpoint = "/getSample/{your_projectKey}";
+        ir.params = new ArrayList<>(List.of(path("your_projectKey"), query("pageNo", false)));
+
+        Path classes = generateAndCompile(ir);
+        GeneratedClientCall call = new GeneratedClientCall(OK);
+        call.call(classes, CLIENT_CLASS, KEY, "1");
+
+        assertEquals(ir.baseUrl + "/getSample/" + PATH_KEY + "?pageNo=1", call.uri().toString());
+        assertFalse(client().contains("String yourProjectKey"), client());
+        assertEquals("your_projectKey", openApi(ir, "openapi").at("/paths/~1getSample~1{your_projectKey}/get/parameters/0/name")
+                .asText(), "경로의 키는 path 파라미터로 적는다");
+    }
+
+    @Test
+    void 인증키_파라미터가_없으면_키를_받지_않는_클라이언트를_만든다() throws Throwable {
+        // 거제시 rfcapi처럼 키 없이 여는 API. 검색어·도서 키처럼 key로 끝나는 이름은 인증키가 아니라 메서드 인자로 남는다
+        TestIr ir = new TestIr();
+        ir.baseUrl = "http://data.geoje.go.kr/rfcapi/rest/geojebooks";
+        ir.params = new ArrayList<>(List.of(query("geojebooksBookKey", true), query("pageNo", false)));
+
+        Path classes = generateAndCompile(ir);
+        GeneratedClientCall call = new GeneratedClientCall(OK);
+        JsonNode response = call.call(classes, CLIENT_CLASS, null, "B-1", null);
+
+        assertEquals(ir.baseUrl + "/getSample?geojebooksBookKey=B-1", call.uri().toString());
+        assertEquals("종로구", response.at("/body/items/item/0/stationName").asText());
+        String client = client();
+        assertTrue(client.contains("public SampleApiClient() {"), client);
+        assertTrue(client.contains("public SampleApiClient(RestTemplate restTemplate) {"), client);
+        assertTrue(client.contains("명세에 인증키 파라미터가 없어 인증키 없이 부릅니다."), client);
+        assertFalse(client.contains("serviceKey"), client);
+        JsonNode doc = openApi(ir, "openapi");
+        assertFalse(doc.has("security"), doc.toString());
+        assertFalse(doc.has("components"), doc.toString());
+        assertEquals(2, doc.at("/paths/~1getSample/get/parameters").size());
+    }
+
+    @Test
+    void 키를_받지_않는_클라이언트도_오류_응답을_예외로_알린다() throws Throwable {
+        TestIr ir = new TestIr();
+        ir.params = new ArrayList<>(List.of(query("pageNo", true)));
+        Path classes = generateAndCompile(ir);
+        GeneratedClientCall call = new GeneratedClientCall("<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg>"
+                + "<returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg><returnReasonCode>30</returnReasonCode>"
+                + "</cmmMsgHeader></OpenAPI_ServiceResponse>");
+
+        PublicDataApiException e = assertThrows(PublicDataApiException.class,
+                () -> call.call(classes, CLIENT_CLASS, null, "1"));
+
+        assertEquals("30", e.getResultCode());
     }
 
     @Test

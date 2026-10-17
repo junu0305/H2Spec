@@ -155,8 +155,9 @@ class ExtractionValidatorTest {
         ValidatedOperation operation = validate(blocks, standardOperation()
                 .parameters(query("item.name"), query("class"), query("a'b"), query("page-no"), query("검색어")));
 
-        assertEquals(List.of("page-no", "검색어"), names(operation), "공백·한글·붙임표가 든 이름은 지금도 잘 생성된다");
-        assertEquals(List.of("[검증] 생성 코드에 쓸 수 없는 이름의 요청 파라미터를 제거함 (3개): item.name, class, a'b"),
+        // 예약어(class)는 generator가 class_로 고쳐 인자로 받는다
+        assertEquals(List.of("class", "page-no", "검색어"), names(operation), "공백·한글·붙임표·예약어 이름은 생성된다");
+        assertEquals(List.of("[검증] 생성 코드에 쓸 수 없는 이름의 요청 파라미터를 제거함 (2개): item.name, a'b"),
                 operation.notes());
     }
 

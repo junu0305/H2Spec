@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -72,6 +74,16 @@ public class IrAssembler {
 
     public ParsedApi assemble(String sourceFile, String sourceFormat, Map<String, String> info,
                               List<List<String>> requestRows, List<List<String>> responseRows) {
+        return assemble(sourceFile, sourceFormat, info, requestRows, responseRows, DocumentExamples.none(), null);
+    }
+
+    /**
+     * @param examples       오퍼레이션 구간의 응답·요청 예제. 성공코드, 응답 구조, 요청 표에 빠진 인증키를 여기서 찾는다
+     * @param errorTableCode 문서 에러 코드 표의 정상 행 코드. 없으면 null
+     */
+    ParsedApi assemble(String sourceFile, String sourceFormat, Map<String, String> info,
+                       List<List<String>> requestRows, List<List<String>> responseRows,
+                       DocumentExamples examples, String errorTableCode) {
         IrConventions.UrlParts url = splitCallBackUrl(info);
         if (!url.ok()) {
             throw new IllegalArgumentException(url.error());
@@ -98,20 +110,40 @@ public class IrAssembler {
         api.put("endpoint", url.endpoint());
         api.put("httpMethod", "GET");
         api.put("description", IrText.oneLine(description == null ? "" : description));
-        // TODO(인증 확장): 문서의 인증 방식과 상관없이 늘 serviceKey 쿼리로 적고 api.auth를 적지 않는다. generator는 api.auth로
-        //   이름이 다른 질의 키·주소 경로의 키·헤더 키도 받는다(AuthKey). 요청 표와 주소에서 키 자리를 찾아 적으면
-        //   jeju-folksong(authApiKey), nongsaro-eco-farming(apiKey), jejudatahub-wifi-usage({your_appkey})가 풀린다
+        // api.auth는 적지 않는다. generator가 api.auth 없이도 요청 파라미터 이름으로 키 자리를 찾는다(serviceKey, apiKey·authApiKey 같은
+        // 질의 파라미터, {your_appkey} 같은 경로 변수). 요청 표에 키가 없으면 요청 예제 주소에서 찾아 넣는다(exampleAuthKey).
+        // TODO(인증 확장): 헤더로 보내는 키는 요청 표에 없어 찾지 못한다
         api.put("authType", "SERVICE_KEY_QUERY_PARAM");
-        api.put("responseFormat", responseFormat(requests));
+        String format = responseFormat(requests);
+        Optional<ExampleStructure.Structure> structure =
+                exampleStructure(responses, requests, requestParamNames, format, examples);
+        if (structure.isPresent() && !structure.get().format().equals(format)) {
+            format = structure.get().format();
+            reviewNotes.add("요청에 응답 형식 파라미터가 없고 응답 예제가 " + format + "라 응답 형식을 " + format + "로 정함");
+        }
+        api.put("responseFormat", format);
+        if (structure.isPresent() && structure.get().rootless()) {
+            api.put("responseRootless", true);
+        }
         ArrayNode parameters = requestParameters(requests, requestParamNames, reviewNotes);
         if (info.containsKey(SpecBlockAssembler.GATEWAY_SERVICE_KEY_FLAG)) {
             // 경로 변수 파라미터보다 먼저 넣어야 경로 변수 다음 자리가 된다
             IrConventions.insertGatewayServiceKey(parameters);
+        } else {
+            exampleAuthKey(parameters, url, examples, reviewNotes);
         }
         IrConventions.addPathParameters(parameters, url.endpoint());
         api.set("requestParameters", parameters);
-        api.set("responseFields", responseFields(responses, requestParamNames, reviewNotes));
-        api.set("errorSpec", IrConventions.errorSpec());
+        if (structure.isPresent()) {
+            ExampleStructure.Structure found = structure.get();
+            reviewNotes.add("응답 필드 표에 계층이 없어 응답 예제의 구조로 응답 필드 경로를 정함"
+                    + (found.rootless() ? " (루트 없는 JSON 응답)" : " (루트 " + firstSegment(found.paths()) + ")"));
+            found.renamed().forEach((from, to) ->
+                    reviewNotes.add("응답 예제의 표기로 응답 필드 이름을 고침: " + from + " → " + to));
+        }
+        api.set("responseFields", responseFields(responses, requestParamNames, reviewNotes,
+                structure.map(ExampleStructure.Structure::paths).orElse(Map.of())));
+        api.set("errorSpec", errorSpec(examples, errorTableCode, reviewNotes));
 
         ObjectNode ir = objectMapper.createObjectNode();
         ir.set("metadata", IrConventions.metadata(sourceFile, sourceFormat, reviewNotes.lines()));
@@ -219,8 +251,83 @@ public class IrAssembler {
         return names;
     }
 
+    /**
+     * 응답 예제로 응답 필드의 경로를 정한다({@link ExampleStructure}). 예제가 IR의 형식과 같아야 하고, 요청에 응답 형식 파라미터가
+     * 없을 때만 다른 형식의 예제도 본다. 그때는 서버의 기본 형식으로 오고 예제가 그 형식을 보여 준다.
+     */
+    private Optional<ExampleStructure.Structure> exampleStructure(List<List<String>> responses,
+                                                                  List<List<String>> requests,
+                                                                  Set<String> requestParamNames, String format,
+                                                                  DocumentExamples examples) {
+        List<String> names = responses.stream().map(cells -> cells.get(0)).toList();
+        Map<String, String> standard = new LinkedHashMap<>();
+        for (String name : names) {
+            standard.put(name, pathFor(name, requestParamNames));
+        }
+        boolean formatParameter = requests.stream()
+                .anyMatch(cells -> IrConventions.responseFormatParameters().contains(cells.get(0)));
+        List<DocumentExamples.Example.Format> formats = new ArrayList<>();
+        formats.add(DocumentExamples.Example.Format.valueOf(format));
+        if (!formatParameter) {
+            formats.add(JSON_FORMAT.equals(format) ? DocumentExamples.Example.Format.XML : DocumentExamples.Example.Format.JSON);
+        }
+        return ExampleStructure.resolve(names, standard, formats, examples);
+    }
+
+    private static String firstSegment(Map<String, String> paths) {
+        String path = paths.values().iterator().next();
+        return path.substring(0, path.indexOf('.'));
+    }
+
+    /**
+     * 성공코드. 정상 응답 예제의 결과코드, 에러 코드 표의 정상 행 코드, 기본값 00 순으로 정한다.
+     * 0으로만 된 코드는 00으로 적는다(interceptor가 자릿수를 가리지 않고 비교한다).
+     */
+    private ObjectNode errorSpec(DocumentExamples examples, String errorTableCode, ReviewNotes reviewNotes) {
+        ObjectNode errorSpec = IrConventions.errorSpec();
+        Optional<String> fromExample = examples.successCode();
+        String code = fromExample.orElse(errorTableCode);
+        if (code == null || code.matches("0+")) {
+            return errorSpec;
+        }
+        errorSpec.put("successResultCode", code);
+        reviewNotes.add(fromExample.isPresent()
+                ? "응답 예제의 정상 응답 결과코드 " + code + "를 성공코드로 씀"
+                : "에러 코드 표의 정상 처리 코드 " + code + "를 성공코드로 씀");
+        return errorSpec;
+    }
+
+    /**
+     * 요청 표에 인증키 파라미터가 없으면 요청 예제 주소에서 찾아 맨 앞에 넣는다. 요청 표가 인증키 행을 빼고 예제 주소에만 적는 문서가 있다.
+     * 경로 변수의 인증키({your_appkey})는 주소에 있어 따로 넣지 않는다.
+     */
+    private void exampleAuthKey(ArrayNode parameters, IrConventions.UrlParts url, DocumentExamples examples,
+                                ReviewNotes reviewNotes) {
+        for (var parameter : parameters) {
+            if (IrConventions.isAuthKeyName(parameter.path("name").asText())) {
+                return;
+            }
+        }
+        if (IrConventions.hasPathAuthKey(url.endpoint())) {
+            return;
+        }
+        for (String name : examples.exampleQueryNames(url.baseUrl() + url.endpoint())) {
+            if (IrConventions.isAuthKeyName(name)) {
+                ObjectNode param = parameters.objectNode();
+                param.put("name", name);
+                param.put("in", "query");
+                param.put("type", "string");
+                param.put("required", true);
+                param.put("description", "인증키");
+                parameters.insert(0, param);
+                reviewNotes.add("요청 명세 표에 인증키가 없어 요청 예제 주소의 " + name + "를 인증키 파라미터로 추가함");
+                return;
+            }
+        }
+    }
+
     private ArrayNode responseFields(List<List<String>> rows, Set<String> requestParamNames,
-                                     ReviewNotes reviewNotes) {
+                                     ReviewNotes reviewNotes, Map<String, String> examplePaths) {
         ArrayNode fields = objectMapper.createArrayNode();
         for (List<String> cells : rows) {
             String name = cells.get(0);
@@ -229,7 +336,7 @@ public class IrAssembler {
             String description = IrConventions.description(cells.get(5), korName);
 
             ObjectNode field = fields.addObject();
-            field.put("path", pathFor(name, requestParamNames));
+            field.put("path", examplePaths.getOrDefault(name, pathFor(name, requestParamNames)));
             // 결과코드/메시지는 샘플이 숫자("00")여도 선행 0 보존을 위해 항상 문자열
             boolean settled = isBodyMeta(name, requestParamNames);
             field.put("type", IrConventions.isResultCodeOrMessageField(name)
@@ -259,10 +366,9 @@ public class IrAssembler {
     }
 
     /**
-     * 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다.
-     * TODO(루트 여럿): 맨 바깥에 키가 여럿인 JSON 응답(kosha의 {"header", "body"}, jejudatahub의 {"totCnt", "hasMore", "data"})에도
-     * 표준 경로를 만들어, 컴파일은 되지만 응답을 읽지 못하는 DTO가 나온다. generator는 api.responseRootless로 이런 응답을 받으므로,
-     * 응답 예제로 구조를 알아보고(llm-eval의 StandardStructure) 경로와 그 값을 적는 방법을 정한다
+     * 표에는 계층 정보가 없어 공공데이터 표준 응답 구조(header/body/items)를 가정한다. 응답 예제가 있으면 예제의 구조를 쓴다
+     * ({@link ExampleStructure}). 루트가 다르거나(rfcOpenApi) 루트 없는 JSON 응답(kosha의 {"header", "body"})도 거기서 정한다.
+     * 예제가 없거나 표의 필드가 예제에서 절반도 찾아지지 않을 때만 이 표준 경로를 쓴다
      */
     private String pathFor(String name, Set<String> requestParamNames) {
         if (IrConventions.isResultCodeOrMessageField(name)) {

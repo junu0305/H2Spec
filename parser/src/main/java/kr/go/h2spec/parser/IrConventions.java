@@ -64,6 +64,12 @@ public final class IrConventions {
     public static final String GATEWAY_SERVICE_KEY_NOTE =
             "요청 명세 표에 serviceKey가 없어 공공데이터포털 게이트웨이 인증키 파라미터를 추가함";
     private static final String SERVICE_KEY_DESCRIPTION = "공공데이터포털에서 발급받은 인증키";
+    /** 인증키로 보는 질의 파라미터 이름(소문자, _·- 없음). generator의 AuthKey와 같다 */
+    private static final Set<String> AUTH_KEY_NAMES = Set.of("servicekey",
+            "apikey", "authapikey", "authkey", "certkey", "crtfckey", "accesskey", "appkey", "openapikey", "key");
+    private static final Pattern PATH_AUTH_KEY =
+            Pattern.compile("(?i)(your[_-]?)?((app|api|project|service|auth|access|cert|open[_-]?api)[_-]?)?key");
+    private static final Pattern PATH_VARIABLE = Pattern.compile("\\{([^}]+)}");
 
     /**
      * 공공데이터 표준 응답에서 response.header 바로 아래에 오는 결과코드·결과메시지 필드.
@@ -546,6 +552,25 @@ public final class IrConventions {
      */
     public static boolean needsGatewayServiceKey(String url, Collection<String> parameterNames) {
         return GATEWAY_URL.matcher(url).find() && parameterNames.stream().noneMatch(SERVICE_KEY::equalsIgnoreCase);
+    }
+
+    /**
+     * 인증키로 보는 질의 파라미터 이름인지. 대소문자와 _·-를 가리지 않는다. generator가 api.auth 없이 인증키를 찾는 이름
+     * (AuthKey)과 같은 목록이다. 이름이 key로 끝나도 검색·정렬 키는 넣지 않는다
+     */
+    public static boolean isAuthKeyName(String name) {
+        return name != null && AUTH_KEY_NAMES.contains(name.replaceAll("[_-]", "").toLowerCase(Locale.ROOT));
+    }
+
+    /** 주소 경로에 인증키 꼴의 변수({your_appkey}, {KEY})가 있는지. generator(AuthKey)가 경로의 키로 보는 이름꼴이다 */
+    public static boolean hasPathAuthKey(String endpoint) {
+        Matcher matcher = PATH_VARIABLE.matcher(endpoint);
+        while (matcher.find()) {
+            if (PATH_AUTH_KEY.matcher(matcher.group(1)).matches()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

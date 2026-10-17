@@ -214,14 +214,14 @@ class CodeGeneratorSafetyTest {
 
     @Test
     void 생성에_실패하면_아무_파일도_쓰지_않는다() throws Exception {
-        // DTO를 먼저 써 두면 ClientEmitter가 serviceKey가 없어 실패할 때 DTO 파일만 남는다
+        // DTO를 먼저 써 두면 ClientEmitter가 실패할 때(인자 이름이 메서드 본문의 변수 url과 겹침) DTO 파일만 남는다
         SampleIr ir = new SampleIr();
-        ir.params = new ArrayList<>(List.of(query("pageNo", "페이지 번호")));
+        ir.params = new ArrayList<>(List.of(query("serviceKey", "인증키"), query("url", "주소")));
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> new CodeGenerator().generate(ir.build(), out()));
 
-        assertTrue(e.getMessage().contains("serviceKey"), e.getMessage());
+        assertTrue(e.getMessage().contains("생성 메서드의 변수와 겹칩니다"), e.getMessage());
         assertEquals(List.of(), filesUnder(tempDir));
     }
 

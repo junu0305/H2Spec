@@ -45,7 +45,7 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
      *
      * @param classesDir  생성 코드를 컴파일한 디렉터리
      * @param clientClass 클라이언트 클래스 이름
-     * @param serviceKey  생성자에 넘길 인증키
+     * @param serviceKey  생성자에 넘길 인증키. 인증키를 받지 않는 클라이언트면 쓰지 않는다
      * @param args        API 메서드의 인자
      * @return 응답 DTO를 JSON 트리로 바꾼 것(getter의 이름과 @JsonProperty의 원래 이름을 따른다)
      * @throws Throwable API 메서드가 던진 예외 그대로
@@ -60,7 +60,10 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
                     ? factory.invoke(null)
                     : factory.invoke(null, serviceKey));
             restTemplate.setRequestFactory(this);
-            Object instance = client.getConstructor(String.class, RestTemplate.class).newInstance(serviceKey, restTemplate);
+            // 인증키를 보내지 않는 클라이언트는 키를 받지 않는다
+            Object instance = hasConstructor(client, String.class, RestTemplate.class)
+                    ? client.getConstructor(String.class, RestTemplate.class).newInstance(serviceKey, restTemplate)
+                    : client.getConstructor(RestTemplate.class).newInstance(restTemplate);
             try {
                 return new ObjectMapper().valueToTree(apiMethod(client).invoke(instance, args));
             } catch (InvocationTargetException e) {
@@ -139,6 +142,15 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
                 return new HttpHeaders();
             }
         };
+    }
+
+    private static boolean hasConstructor(Class<?> type, Class<?>... parameterTypes) {
+        try {
+            type.getConstructor(parameterTypes);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
     }
 
     private static Method staticMethod(Class<?> type, String name) {
