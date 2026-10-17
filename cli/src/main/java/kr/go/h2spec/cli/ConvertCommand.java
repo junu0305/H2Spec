@@ -1,7 +1,9 @@
 package kr.go.h2spec.cli;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.generator.CodeGenerator;
+import kr.go.h2spec.generator.emit.JavaNameRules;
 import kr.go.h2spec.generator.ir.ApiSpec;
 import kr.go.h2spec.generator.ir.ErrorSpec;
 import kr.go.h2spec.generator.ir.GeneratorHints;
@@ -29,6 +31,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -159,7 +162,41 @@ public class ConvertCommand implements Callable<Integer> {
             err("--engine 값은 rule 또는 llm 이어야 합니다: " + engine);
             return 1;
         }
+        // 오퍼레이션마다 apiId 마디가 더 붙지만, 기준 패키지가 틀리면 모든 오퍼레이션의 생성이 실패하므로 먼저 알린다
+        if (targetPackage != null && !JavaNameRules.isValidPackageName(targetPackage)) {
+            err("--package 값이 Java 패키지 이름이 아닙니다: " + targetPackage);
+            return 1;
+        }
+        if (RULE_ENGINE.equalsIgnoreCase(engine)) {
+            warnUnusedLlmOptions();
+        }
         return Files.isDirectory(input) ? convertDirectory() : convertSingleFile();
+    }
+
+    /** rule 엔진에는 쓰이지 않는 llm 엔진 옵션을 주었으면 알린다. --engine llm을 빠뜨린 것을 모른 채 rule 결과를 받지 않게 한다 */
+    private void warnUnusedLlmOptions() {
+        List<String> given = new ArrayList<>();
+        if (provider != null) {
+            given.add("--provider");
+        }
+        if (model != null) {
+            given.add("--model");
+        }
+        if (effort != null) {
+            given.add("--effort");
+        }
+        if (noCrossCheck) {
+            given.add("--no-cross-check");
+        }
+        if (noCache) {
+            given.add("--no-cache");
+        }
+        if (cacheDir != null) {
+            given.add("--cache-dir");
+        }
+        if (!given.isEmpty()) {
+            err("--engine llm에서만 쓰는 옵션을 무시하고 rule 엔진으로 변환합니다: " + String.join(", ", given));
+        }
     }
 
     /** 파일 하나를 변환한다. 디렉터리와 같은 종료 코드 규칙을 따른다 */
@@ -233,7 +270,9 @@ public class ConvertCommand implements Callable<Integer> {
             ProviderResolver.Resolution.UseLlm resolved = (ProviderResolver.Resolution.UseLlm)
                     new ProviderResolver(providers, env).resolve(ProviderResolver.Engine.LLM, provider);
             LlmProviderFactory chosen = resolved.provider();
-            LlmSettings settings = LlmSettings.of(modelOf(chosen, env), effortOf(chosen, env), resolved.apiKey())
+            String chosenModel = modelOf(chosen, env);
+            checkModelProvider(chosen, chosenModel);
+            LlmSettings settings = LlmSettings.of(chosenModel, effortOf(chosen, env), resolved.apiKey())
                     .withRequestTimeout(chosen.defaultRequestTimeout())
                     .withWorkspaceId(workspaceOf(chosen, env));
             LlmSpecParser.Options options = llmOptions();
@@ -258,6 +297,25 @@ public class ConvertCommand implements Callable<Integer> {
         }
         String fromEnvironment = env.get(MODEL_ENVIRONMENT_VARIABLE);
         return fromEnvironment != null && !fromEnvironment.isBlank() ? fromEnvironment.strip() : chosen.defaultModel();
+    }
+
+    /**
+     * 모델이 다른 회사의 모델로 보이면 문서를 보내기 전에 멈춘다. 회사를 키 환경변수로 고른 채 다른 회사용 H2SPEC_LLM_MODEL이 남아 있으면
+     * 문서 내용이 뜻하지 않은 회사로 간 뒤에야 모르는 모델 오류가 나기 때문이다. 어느 회사도 알아보지 못하는 이름은 그대로 보낸다.
+     *
+     * @throws IllegalArgumentException 다른 회사만 알아보는 모델일 때
+     */
+    private void checkModelProvider(LlmProviderFactory chosen, String chosenModel) {
+        if (chosen.recognizesModel(chosenModel)) {
+            return;
+        }
+        for (LlmProviderFactory other : providers) {
+            if (other != chosen && other.recognizesModel(chosenModel)) {
+                throw new IllegalArgumentException("모델 '" + chosenModel + "'은 " + other.id() + "의 모델로 보이는데 회사가 "
+                        + chosen.id() + "로 정해져 문서를 보내지 않았습니다. 회사(--provider, H2SPEC_LLM_PROVIDER, 키 환경변수)와 "
+                        + "모델(--model, H2SPEC_LLM_MODEL) 가운데 틀린 쪽을 고치세요");
+            }
+        }
     }
 
     /**
@@ -324,7 +382,8 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     /**
-     * 키 오류(AUTH), 모델 이름·주소 오류(SETTINGS), 잔액·사용 한도 문제(QUOTA)로 실행을 멈춘다. 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다.
+     * 키 오류(AUTH), 모델 이름·주소 오류(SETTINGS), 잔액·사용 한도 문제(QUOTA), 회사가 요구한 긴 대기(RETRY_LATER)로 실행을 멈춘다.
+     * 남은 문서도 모두 같은 이유로 실패하므로 하나씩 실패로 세지 않는다.
      * 변환 요약을 내지 않으므로 남은 파일을 변환하지 않았다는 것을 따로 알린다.
      */
     private int abort(SpecParseException e, int remaining) {
@@ -334,9 +393,14 @@ public class ConvertCommand implements Callable<Integer> {
             String reason = switch (e.kind()) {
                 case AUTH -> "API 키나 권한 오류";
                 case QUOTA -> "LLM 잔액·사용 한도 문제";
+                case RETRY_LATER -> "LLM 회사가 알려 준 시간 전에는 다시 부를 수 없는 상태";
                 default -> "LLM 설정 오류";
             };
             err(reason + "라 남은 파일 " + remaining + "개는 변환하지 않고 멈춥니다");
+        }
+        // 변환 요약을 내지 않아도 멈추기 전까지 과금된 토큰은 알린다
+        if (llmTokens != null && !llmTokens.equals(TokenUsage.NONE)) {
+            spec.commandLine().getOut().println("멈추기 전까지 LLM 토큰 합계 " + tokens(llmTokens));
         }
         return 1;
     }
@@ -344,7 +408,7 @@ public class ConvertCommand implements Callable<Integer> {
     /** 다른 문서도 같은 이유로 실패하는 오류. 실행 전체를 멈춘다 */
     private static boolean stopsRun(SpecParseException e) {
         return e.kind() == SpecParseException.Kind.AUTH || e.kind() == SpecParseException.Kind.SETTINGS
-                || e.kind() == SpecParseException.Kind.QUOTA;
+                || e.kind() == SpecParseException.Kind.QUOTA || e.kind() == SpecParseException.Kind.RETRY_LATER;
     }
 
     private boolean isSupportedSpecFile(Path path) {
@@ -356,7 +420,8 @@ public class ConvertCommand implements Callable<Integer> {
      * 파일 하나(명세 문서 또는 IR JSON)를 변환한다. 실패해도 배치 전체를 중단하지 않도록 boolean으로 결과를 알린다.
      *
      * @throws SpecParseException 다른 문서도 같은 이유로 실패하는 오류({@link SpecParseException.Kind#AUTH},
-     *                            {@link SpecParseException.Kind#SETTINGS}, {@link SpecParseException.Kind#QUOTA})일 때만.
+     *                            {@link SpecParseException.Kind#SETTINGS}, {@link SpecParseException.Kind#QUOTA},
+     *                            {@link SpecParseException.Kind#RETRY_LATER})일 때만.
      *                            부르는 쪽이 실행 전체를 멈춘다
      */
     private boolean convertFile(Path file) throws SpecParseException {
@@ -384,6 +449,11 @@ public class ConvertCommand implements Callable<Integer> {
             return false;
         } catch (IOException e) {
             err("변환 실패 (" + file + "): " + e.getMessage());
+            return false;
+        } catch (RuntimeException e) {
+            // 예기치 않은 오류도 그 파일만 실패로 센다. 디렉터리 변환이 파일 하나 때문에 요약 없이 멈추지 않게 한다
+            StackTraceElement[] trace = e.getStackTrace();
+            err("변환 실패 (" + file + "): 예기치 않은 오류 " + e + (trace.length == 0 ? "" : " (" + trace[0] + ")"));
             return false;
         }
     }
@@ -455,6 +525,11 @@ public class ConvertCommand implements Callable<Integer> {
         Path irDir = Files.createDirectories(output.resolve("ir"));
         Map<String, Path> irFiles = new LinkedHashMap<>();
         for (ParsedApi parsed : apis) {
+            // apiId는 파일 이름이 된다. 두 엔진은 안전한 꼴만 내지만 SpecParser는 공개 인터페이스라 출력 디렉터리 밖에 쓰지 않게 먼저 본다
+            if (!JavaNameRules.isValidApiId(parsed.apiId())) {
+                warnSkipped(List.of(parsed.apiId() + ": apiId는 영문자로 시작하고 영문자·숫자·_만 써야 합니다"), sourceFile);
+                continue;
+            }
             Path irFile = irDir.resolve(parsed.apiId() + ".json");
             // 쓰고 난 뒤에 알리면 앞서 쓴 IR은 이미 사라진 뒤다
             warnOnApiIdOverwrite(parsed.apiId(), sourceFile);
@@ -500,7 +575,17 @@ public class ConvertCommand implements Callable<Integer> {
             override(ir, "/api/errorSpec", "successResultCode", successCode, "--success-code로 성공코드를");
         }
         if (format != null) {
-            override(ir, "/api", "responseFormat", format.toUpperCase(Locale.ROOT), "--format으로 응답 포맷을");
+            String previous = ir.at("/api/responseFormat").asText();
+            String responseFormat = format.toUpperCase(Locale.ROOT);
+            override(ir, "/api", "responseFormat", responseFormat, "--format으로 응답 포맷을");
+            // 생성 클라이언트는 포맷 파라미터 힌트의 값을 그대로 보내므로, IR JSON 입력과 같이 힌트 값도 새 형식으로 바꾼다
+            JsonNode hint = ir.at("/generatorHints/responseFormatParameter");
+            if (hint.isObject() && hint.path("value").isTextual()) {
+                String value = formatValue(hint.path("value").asText(), previous, responseFormat);
+                if (value != null) {
+                    ((ObjectNode) hint).put("value", value);
+                }
+            }
         }
         if (targetPackage != null) {
             String apiPackage = operationPackage(targetPackage, ir.at("/api/apiId").asText());
@@ -555,12 +640,24 @@ public class ConvertCommand implements Callable<Integer> {
     /** 포맷 파라미터 힌트의 값이 이전 응답 형식이면 같은 대소문자로 새 형식을 넣는다 */
     private static GeneratorHints withFormatValue(GeneratorHints hints, String previous, String responseFormat) {
         GeneratorHints.ResponseFormatParameter hint = hints.responseFormatParameter();
-        if (hint == null || hint.value() == null || !hint.value().equalsIgnoreCase(previous)) {
+        String value = hint == null ? null : formatValue(hint.value(), previous, responseFormat);
+        if (value == null) {
             return hints;
         }
-        String value = hint.value().equals(hint.value().toUpperCase(Locale.ROOT))
-                ? responseFormat.toUpperCase(Locale.ROOT) : responseFormat.toLowerCase(Locale.ROOT);
         return new GeneratorHints(hints.targetPackage(), new GeneratorHints.ResponseFormatParameter(hint.name(), value));
+    }
+
+    /**
+     * 포맷 파라미터 힌트의 새 값. 명세 문서에서 쓰는 IR과 IR JSON 입력이 같은 규칙으로 바꿔야 두 경로의 생성 코드가 같다.
+     *
+     * @return 힌트 값이 이전 응답 형식이면 그 대소문자(전부 대문자면 대문자, 아니면 소문자)로 쓴 새 형식. 다른 값이면 바꾸지 않으므로 null
+     */
+    private static String formatValue(String hintValue, String previous, String responseFormat) {
+        if (hintValue == null || !hintValue.equalsIgnoreCase(previous)) {
+            return null;
+        }
+        return hintValue.equals(hintValue.toUpperCase(Locale.ROOT))
+                ? responseFormat.toUpperCase(Locale.ROOT) : responseFormat.toLowerCase(Locale.ROOT);
     }
 
     /** 성공코드만 바꾼다. 결과코드 위치 후보까지 지우면 생성 클라이언트가 문서에 적힌 결과코드 이름을 인터셉터에 넘기지 못한다 */

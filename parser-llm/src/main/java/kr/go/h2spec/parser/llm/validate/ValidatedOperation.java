@@ -23,6 +23,7 @@ import java.util.List;
  * @param address           주소 후보와 고른 주소
  * @param requestParameters 검증을 통과한 요청 파라미터 (LLM 순서)
  * @param responseFields    검증을 통과한 응답 필드 (LLM 순서)
+ * @param resultCodeField   검증(V8)을 통과한 결과코드 필드 이름(LLM이 적은 그대로, 경로일 수 있다). 없거나 버렸으면 빈 문자열
  * @param successCodes      검증(V8)을 통과한 성공코드 후보 (LLM 순서)
  * @param errorCodes        검증(V9)을 통과한 에러코드
  * @param notes             {@code [검증]} 노트 (출처가 붙은 글)
@@ -37,6 +38,7 @@ public record ValidatedOperation(
         Address address,
         List<Parameter> requestParameters,
         List<Field> responseFields,
+        String resultCodeField,
         List<SuccessCode> successCodes,
         List<LlmErrorCode> errorCodes,
         List<String> notes,

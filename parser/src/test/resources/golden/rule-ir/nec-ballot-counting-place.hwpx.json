@@ -1,0 +1,142 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "nec-ballot-counting-place.hwpx",
+      "sourceFormat" : "HWPX",
+      "engine" : "rule",
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 3개): num, countingSttnSeq, placeFloor" ]
+    },
+    "api" : {
+      "apiId" : "CountingSttnInfoInqire",
+      "apiName" : "개표소 정보 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/9760000/CountingSttnInfoInqireService",
+      "endpoint" : "/getCountingSttnInfoInqire",
+      "httpMethod" : "GET",
+      "description" : "실시중인 선거의 개표소명, 주소 등 정보 조회",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 발급받은 인증키",
+        "example" : "공공데이터포털에서 발급받은 인증키"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "페이지 번호 (최대값:100000)",
+        "example" : "1"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "목록 건수 (최대값:100)",
+        "example" : "10"
+      }, {
+        "name" : "resultType",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "xml/json default : xml",
+        "example" : "xml"
+      }, {
+        "name" : "sgId",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "선거ID",
+        "example" : "20220309"
+      }, {
+        "name" : "sdName",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "시도명",
+        "example" : "전라북도"
+      }, {
+        "name" : "wiwName",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "구시군명",
+        "example" : "전주시완산구"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "00:성공",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.numOfRows",
+        "type" : "string",
+        "description" : "한 페이지 결과 수"
+      }, {
+        "path" : "response.body.pageNo",
+        "type" : "string",
+        "description" : "페이지 번호"
+      }, {
+        "path" : "response.body.totalCount",
+        "type" : "string",
+        "description" : "전체 결과 수"
+      }, {
+        "path" : "response.body.items.item[].num",
+        "type" : "integer",
+        "description" : "결과순서"
+      }, {
+        "path" : "response.body.items.item[].sgId",
+        "type" : "string",
+        "description" : "선거ID"
+      }, {
+        "path" : "response.body.items.item[].countingSttnName",
+        "type" : "string",
+        "description" : "개표소명"
+      }, {
+        "path" : "response.body.items.item[].sdName",
+        "type" : "string",
+        "description" : "시도명"
+      }, {
+        "path" : "response.body.items.item[].wiwName",
+        "type" : "string",
+        "description" : "구시군명"
+      }, {
+        "path" : "response.body.items.item[].countingSttnSeq",
+        "type" : "integer",
+        "description" : "구시군별 개표소순번"
+      }, {
+        "path" : "response.body.items.item[].placeName",
+        "type" : "string",
+        "description" : "장소명"
+      }, {
+        "path" : "response.body.items.item[].placeAddr",
+        "type" : "string",
+        "description" : "장소주소"
+      }, {
+        "path" : "response.body.items.item[].placeFloor",
+        "type" : "integer",
+        "description" : "장소층수 (지하1층 : –1)"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.countingsttninfoinqire",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

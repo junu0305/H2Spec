@@ -126,16 +126,14 @@ class RecordedFlowTest {
                 + "jejudatahub-wifi-usage.hwp (" + result.skipped().get(0) + ")", e.getMessage());
     }
 
-    private SpecParseResult parse(String document) throws Exception {
-        return parser(RecordedLlmClient.of(TestDocuments.PROVIDER, document)).parse(TestDocuments.path(document));
-    }
-
     private LlmSpecParser parser(RecordedLlmClient client) {
         return new LlmSpecParser(client, TestDocuments.PROVIDER, MODEL, EFFORT, options());
     }
 
+    /** 녹화는 문서마다 응답이 하나라, 검증 결과를 알려 다시 불러도 같은 응답이 온다. 그래서 다시 부르기는 끈다 */
     private LlmSpecParser.Options options() {
-        return LlmSpecParser.Options.defaults().withCache(ExtractionCache.disabled()).withWarnings(warnings::add);
+        return LlmSpecParser.Options.defaults().withCache(ExtractionCache.disabled()).withWarnings(warnings::add)
+                .withRetryOnValidation(false);
     }
 
     private static TokenUsage tokens(LlmResponse.Usage usage) {

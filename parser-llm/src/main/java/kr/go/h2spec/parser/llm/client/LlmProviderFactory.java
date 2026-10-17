@@ -67,6 +67,17 @@ public interface LlmProviderFactory {
     }
 
     /**
+     * 모델 이름이 이 회사의 모델로 보이는지 본다. CLI가 다른 회사의 모델 이름으로 문서를 보내기 전에 멈추는 데 쓴다.
+     * 모르는 이름(새 모델 계열, 미세 조정 모델)을 막지 않도록 확실한 앞부분만 본다.
+     *
+     * @param model 모델 ID
+     * @return 이 회사의 모델 이름 꼴이면 true. 모르면 false
+     */
+    default boolean recognizesModel(String model) {
+        return false;
+    }
+
+    /**
      * @param settings 모델, 추론 깊이, 키, 대기 시간, 재시도 횟수, 주소
      * @return 이 회사의 클라이언트
      */

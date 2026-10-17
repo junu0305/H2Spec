@@ -60,6 +60,8 @@ public final class ExtractionCache {
     private static final String TEMP_SUFFIX = ".tmp";
     /** 캐시 디렉터리에서 응답 파일로 보는 이름. 다른 파일은 지우지 않는다 */
     private static final Pattern ENTRY_FILE = Pattern.compile("[0-9a-f]{64}\\.json");
+    /** 응답 파일을 저장할 때 만드는 임시 파일 이름({@code <응답 파일 이름>.<난수>.tmp}). 다른 {@code .tmp} 파일은 지우지 않는다 */
+    private static final Pattern TEMP_FILE = Pattern.compile("[0-9a-f]{64}\\.json\\.-?\\d+\\.tmp");
     /** 이만큼 쓰지 않은 응답은 {@link #prune}이 지운다 */
     public static final Duration DEFAULT_MAX_IDLE = Duration.ofDays(30);
     private static final Set<PosixFilePermission> OWNER_ONLY_DIRECTORY = PosixFilePermissions.fromString("rwx------");
@@ -186,7 +188,8 @@ public final class ExtractionCache {
             for (Path file : files) {
                 String name = file.getFileName().toString();
                 boolean entry = ENTRY_FILE.matcher(name).matches();
-                if ((!entry && !name.endsWith(TEMP_SUFFIX)) || !Files.isRegularFile(file)) {
+                // --cache-dir로 다른 파일이 있는 디렉터리를 줄 수 있어, 임시 파일도 저장할 때 만드는 이름 꼴만 지운다
+                if ((!entry && !TEMP_FILE.matcher(name).matches()) || !Files.isRegularFile(file)) {
                     continue;
                 }
                 Instant modified = Files.getLastModifiedTime(file).toInstant();

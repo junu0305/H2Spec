@@ -1,0 +1,141 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "nps-disability-review.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 9개): casRsltRltnCnt, lsnCnfmMpsbCnt, lsnDg1Cnt, lsnDg2Cnt, lsnDg3Cnt, lsnDg4Cnt, lsnNdcdCnt, lsnOgrdCnt, lsnQlfcLackCnt" ]
+    },
+    "api" : {
+      "apiId" : "JgmtSttusInfoSearchV2",
+      "apiName" : "심사현황정보조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/B552015/NpsLsnAnntyJgmtInfoInqireServiceV2",
+      "endpoint" : "/getJgmtSttusInfoSearchV2",
+      "httpMethod" : "GET",
+      "description" : "국민연금 지사코드, 자료생성년월을 통해 지사별 장애연금심사 결정 현황 등을 조회하는 심사현황 정보조회 기능",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "JSON",
+      "requestParameters" : [ {
+        "name" : "startDataCrtYm",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "응답 메시지의 자료생성년월(dataCrtYm) 기준",
+        "example" : "201710"
+      }, {
+        "name" : "endDataCrtYm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "응답 메시지의 자료생성년월(dataCrtYm) 기준",
+        "example" : "201711"
+      }, {
+        "name" : "jgmtAcptBrofCd",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "심사접수지사코드 (※별첨 지사코드 참고)",
+        "example" : "1112"
+      }, {
+        "name" : "dataType",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "xml 또는 json 기본값: xml",
+        "example" : "json"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "페이지번호 기본값: 1",
+        "example" : "1"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "한 페이지 결과 수 기본값: 10",
+        "example" : "10"
+      }, {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 발급받은 인증키",
+        "example" : "서비스인증키"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.body.numOfRows",
+        "type" : "integer",
+        "description" : "한 페이지 결과 수"
+      }, {
+        "path" : "response.body.pageNo",
+        "type" : "integer",
+        "description" : "페이지번호"
+      }, {
+        "path" : "response.body.totalCount",
+        "type" : "integer",
+        "description" : "데이터 총 개수"
+      }, {
+        "path" : "response.body.items.item[].casRsltRltnCnt",
+        "type" : "integer",
+        "description" : "인과관계인원수"
+      }, {
+        "path" : "response.body.items.item[].dataCrtYm",
+        "type" : "string",
+        "description" : "자료생성년월"
+      }, {
+        "path" : "response.body.items.item[].jgmtAcptBrofCd",
+        "type" : "string",
+        "description" : "심사접수지사코드"
+      }, {
+        "path" : "response.body.items.item[].lsnCnfmMpsbCnt",
+        "type" : "integer",
+        "description" : "확인불가인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnDg1Cnt",
+        "type" : "integer",
+        "description" : "1급인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnDg2Cnt",
+        "type" : "integer",
+        "description" : "2급인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnDg3Cnt",
+        "type" : "integer",
+        "description" : "3급인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnDg4Cnt",
+        "type" : "integer",
+        "description" : "4급인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnNdcdCnt",
+        "type" : "integer",
+        "description" : "결정보류인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnOgrdCnt",
+        "type" : "integer",
+        "description" : "등급외인원수"
+      }, {
+        "path" : "response.body.items.item[].lsnQlfcLackCnt",
+        "type" : "integer",
+        "description" : "자격미달인원수"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.jgmtsttusinfosearchv2",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

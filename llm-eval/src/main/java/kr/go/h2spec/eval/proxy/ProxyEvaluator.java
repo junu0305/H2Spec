@@ -1,6 +1,5 @@
 package kr.go.h2spec.eval.proxy;
 
-import kr.go.h2spec.eval.Documents;
 import kr.go.h2spec.eval.EngineOperation;
 import kr.go.h2spec.eval.RuleEvalEngine;
 import kr.go.h2spec.eval.proxy.ExampleParser.Format;
@@ -10,6 +9,7 @@ import kr.go.h2spec.eval.proxy.ProxyReport.Signal;
 import kr.go.h2spec.eval.proxy.ResponseExamples.ResponseExample;
 import kr.go.h2spec.eval.proxy.SuccessCodes.Candidate;
 import kr.go.h2spec.parser.Block;
+import kr.go.h2spec.parser.DocumentReaders;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -56,7 +56,7 @@ public final class ProxyEvaluator {
         }
         List<Path> documents;
         try (Stream<Path> files = Files.walk(directory)) {
-            documents = files.filter(Files::isRegularFile).filter(Documents::isDocument).sorted().toList();
+            documents = files.filter(Files::isRegularFile).filter(DocumentReaders::isDocument).sorted().toList();
         }
         if (documents.isEmpty()) {
             throw new IOException("디렉터리에 DOCX/HWP/HWPX 문서가 없습니다: " + directory);
@@ -81,7 +81,7 @@ public final class ProxyEvaluator {
         List<Block> blocks;
         List<EngineOperation> operations;
         try {
-            blocks = Documents.read(document);
+            blocks = DocumentReaders.read(document);
             operations = RuleEvalEngine.operations(blocks, document);
         } catch (IOException | RuntimeException e) {
             return new DocumentSignals(name, e.toString(), 0, 0, List.of(), List.of(), Map.of());

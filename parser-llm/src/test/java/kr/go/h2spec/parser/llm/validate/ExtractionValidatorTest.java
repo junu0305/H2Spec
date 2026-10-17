@@ -86,6 +86,39 @@ class ExtractionValidatorTest {
                 serviceOnly.address().selectionNotes());
     }
 
+    @Test
+    void V1_영문_오퍼레이션명은_rule_엔진처럼_정보_표의_이름_칸에서만_받고_목록_표에만_있으면_노트_없이_버린다() {
+        // 정보 표에 이름 칸이 없고 오퍼레이션 목록 표에만 영문명이 있는 문서 (rule 엔진도 이름을 쓰지 않는다)
+        List<Block> blocks = new ArrayList<>(SampleDocument.standard());
+        blocks.set(3, SampleDocument.table(row("상세기능명(국문)", "측정소 목록 조회"), row("Call Back URL", URL)));
+        blocks.add(SampleDocument.table(row("번호", "오퍼레이션명(영문)", "오퍼레이션명(국문)"),
+                row("1", "getMsrstnList", "측정소 목록 조회")));
+
+        ValidatedOperation listOnly = validate(blocks, standardOperation());
+        ValidatedOperation invented = validate(standardOperation().name("getInventedList"));
+
+        assertNull(listOnly.operationName());
+        assertEquals(List.of(), listOnly.notes(), "문서에 있는 이름이라 검수할 거리가 아니다");
+        assertEquals(List.of("V1"), rules(listOnly));
+        assertNull(invented.operationName());
+        assertEquals(List.of("[검증] 원문의 표에서 찾지 못한 영문 오퍼레이션명을 버림: getInventedList"), invented.notes());
+    }
+
+    @Test
+    void V1_주소_후보를_찾은_칸에_다른_주소가_먼저_있으면_rule_엔진처럼_첫_주소를_쓰고_알린다() {
+        String other = SERVICE + "/getOtherList";
+        List<Block> blocks = new ArrayList<>(SampleDocument.standard());
+        blocks.set(9, SampleDocument.table(row("요청메시지"), row(other + "?serviceKey=키\n" + SampleDocument.EXAMPLE_URL),
+                row("응답메시지"), row(SampleDocument.RESPONSE_EXAMPLE)));
+
+        ValidatedOperation operation = validate(blocks, standardOperation());
+
+        assertEquals(other, operation.address().candidates().exampleUrl());
+        assertEquals(List.of("[검증] 주소 후보를 찾은 칸에 다른 주소가 먼저 있어 rule 엔진처럼 칸의 첫 주소를 씀 (1개): "
+                + "requestExampleUrl " + SampleDocument.EXAMPLE_URL + " → " + other), operation.notes());
+        assertEquals(List.of(), validate(standardOperation()).notes(), "질의 문자열만 다른 같은 주소는 알리지 않는다");
+    }
+
     // ---- V2 ----
 
     @Test
@@ -93,7 +126,8 @@ class ExtractionValidatorTest {
         assertDroppedFor(SERVICE + "/getMsrstnList#top", "주소에 쓸 수 없는 글자(#)가 있습니다");
         assertDroppedFor(SERVICE + "\\getMsrstnList", "주소에 쓸 수 없는 글자(\\)가 있습니다");
         assertDroppedFor("http://{host}/MsrstnInfoInqireSvc/getMsrstnList", "경로 변수가 endpoint가 아니라 baseUrl에 있습니다");
-        assertDroppedFor("http://apis.data.go.kr", "주소에 호스트 뒤의 경로가 없습니다");
+        // 호스트만 있는 주소는 rule 엔진과 같은 주소 나누기에서 걸린다. 호스트를 오퍼레이션으로 나누면 baseUrl이 "http:/"가 된다
+        assertDroppedFor("http://apis.data.go.kr", "Call Back URL에서 오퍼레이션 경로를 찾을 수 없습니다");
         assertDroppedFor("http://{host}", "Call Back URL에서 오퍼레이션 경로를 찾을 수 없습니다");
     }
 
@@ -169,6 +203,42 @@ class ExtractionValidatorTest {
         assertEquals(List.of("V8", "V8", "V8", "V8"), rules(operation));
         assertTrue(operation.successCodes().get(0).position() < operation.successCodes().get(1).position(),
                 "찾은 칸의 문서 순서를 담는다");
+    }
+
+    @Test
+    void V8_정상_행은_비정상_행과_응답_필드_표의_결과메시지_행을_빼고_찾는다() {
+        List<Block> blocks = new ArrayList<>(SampleDocument.standard());
+        blocks.set(11, SampleDocument.table(row("에러코드", "에러메시지", "설명"),
+                row("00", "NORMAL SERVICE", "정상"),
+                row("99", "UNKNOWN ERROR", "비정상 종료"),
+                row("98", "ABNORMAL STATE", "abnormal")));
+
+        ValidatedOperation operation = validate(blocks, standardOperation().resultCode("resultCode",
+                success("00", LlmSuccessCode.Source.ERROR_TABLE),
+                success("99", LlmSuccessCode.Source.ERROR_TABLE),
+                success("98", LlmSuccessCode.Source.ERROR_TABLE),
+                // 응답 필드 표의 resultMsg 행(샘플 NORMAL SERVICE)의 크기 칸
+                success("50", LlmSuccessCode.Source.ERROR_TABLE)));
+
+        assertEquals(List.of("00"), operation.successCodes().stream().map(ValidatedOperation.SuccessCode::code).toList());
+    }
+
+    @Test
+    void V8_결과코드_필드_이름은_원문에_있어야_하고_결과메시지_필드는_받지_않는다() {
+        ValidatedOperation standard = validate(standardOperation());
+        ValidatedOperation message = validate(standardOperation().resultCode("resultMsg",
+                success("00", LlmSuccessCode.Source.FIELD_TABLE)));
+        ValidatedOperation invented = validate(standardOperation().resultCode("response.header.resultCd",
+                success("00", LlmSuccessCode.Source.FIELD_TABLE)));
+
+        assertEquals("resultCode", standard.resultCodeField());
+        assertEquals("", message.resultCodeField(), "인터셉터가 결과메시지를 결과코드로 읽으면 정상 응답이 모두 예외가 된다");
+        assertEquals(List.of("[검증] 결과메시지 필드라 결과코드 필드로 쓰지 않음 (1개): resultMsg"), message.notes());
+        assertEquals("", invented.resultCodeField());
+        assertEquals(List.of("[검증] 원문에서 찾지 못한 결과코드 필드 이름을 버림 (1개): response.header.resultCd"),
+                invented.notes());
+        assertEquals(List.of("00"), message.successCodes().stream().map(ValidatedOperation.SuccessCode::code).toList(),
+                "성공코드 후보는 기본 결과코드 이름의 행에서 찾는다");
     }
 
     // ---- V11 ----

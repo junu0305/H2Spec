@@ -22,8 +22,9 @@ import java.util.Set;
  * 한 문서에 두 엔진의 결과가 섞이면 검수가 어려워지기 때문이다.
  * <p>
  * 오퍼레이션은 영문 오퍼레이션명, 국문 기능명 순으로 짝짓고 남은 것은 문서 안 순서로 짝짓는다. 주소로 짝짓지 않는다.
- * 주소가 틀리면 짝이 지어지지 않아 정작 주소 차이를 놓치기 때문이다. 지원 범위 밖이나 검증에서 건너뛴 llm 오퍼레이션도
- * 기록이 있으므로 짝을 지어, "rule 엔진만 찾은 오퍼레이션"으로 잘못 경고하지 않는다. 평가 도구도 같은 짝짓기와 비교를 쓴다.
+ * 주소가 틀리면 짝이 지어지지 않아 정작 주소 차이를 놓치기 때문이다. 지원 범위 밖으로 건너뛴 llm 오퍼레이션도 정규화한 IR이 있으므로
+ * 짝을 지어, "rule 엔진만 찾은 오퍼레이션"으로 잘못 경고하지 않는다. 검증에서 건너뛰어 IR이 없는 llm 오퍼레이션은 이름·기능명이 같을
+ * 때만 짝을 짓는다. 순서로만 짝지으면 LLM이 지어낸 오퍼레이션이 rule 엔진의 오퍼레이션을 가져가 놓친 오퍼레이션을 알리지 못한다.
  */
 public final class CrossChecker {
 
@@ -131,6 +132,9 @@ public final class CrossChecker {
                 }
             }
         }
+        // 순서로는 같은 오퍼레이션이라는 근거가 약하므로, 검증에서 건너뛰어 IR이 없는 llm 오퍼레이션(지어낸 구간일 수 있다)과 영문명이 서로 다른
+        // 두 오퍼레이션은 짝짓지 않는다. 짝지으면 LLM이 놓친 오퍼레이션의 경고가 사라지거나 엉뚱한 차이를 알린다. 다만 그 자리의 rule
+        // 오퍼레이션은 건너뛰어 뒤의 오퍼레이션끼리 순서가 어긋나지 않게 한다. 건너뛴 rule 오퍼레이션은 짝이 없어 경고로 알린다
         int r = 0;
         for (int i = 0; i < llmOperations.size(); i++) {
             if (llmPaired[i]) {
@@ -142,8 +146,13 @@ public final class CrossChecker {
             if (r == ruleOperations.size()) {
                 break;
             }
-            rulePaired[r] = true;
-            pairs.add(new Pair(i, r, PairingKey.ORDER));
+            NormalizedOperation operation = llmOperations.get(i);
+            int position = r++;
+            if (operation.ir() == null || differentNames(operation.operationName(), ruleOperations.get(position).operationName())) {
+                continue;
+            }
+            rulePaired[position] = true;
+            pairs.add(new Pair(i, position, PairingKey.ORDER));
         }
         pairs.sort(Comparator.comparingInt(Pair::llmIndex));
         return pairs;
@@ -217,6 +226,11 @@ public final class CrossChecker {
 
     private static String url(JsonNode api) {
         return (api.path("baseUrl").asText() + api.path("endpoint").asText()).replaceAll("/+$", "");
+    }
+
+    /** 두 엔진 모두 영문 오퍼레이션명을 찾았는데 서로 다르면 다른 오퍼레이션이다 */
+    private static boolean differentNames(String llmName, String ruleName) {
+        return llmName != null && !llmName.isBlank() && ruleName != null && !ruleName.isBlank() && !llmName.equals(ruleName);
     }
 
     /** 국문 기능명은 띄어쓰기가 칸마다 달라("공휴일 정보조회", "공휴일 정보 조회") 공백을 빼고 비교한다 */

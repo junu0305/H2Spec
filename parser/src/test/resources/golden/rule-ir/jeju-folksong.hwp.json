@@ -1,0 +1,113 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "jeju-folksong.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 7개): startPage, pageSize, pageIndex, page, rows, minute, second" ]
+    },
+    "api" : {
+      "apiId" : "JejuFolksongList",
+      "apiName" : "제주 민요 정보 조회",
+      "provider" : "",
+      "baseUrl" : "https://www.jeju.go.kr/rest/JejuFolksongService",
+      "endpoint" : "/getJejuFolksongList",
+      "httpMethod" : "GET",
+      "description" : "제주 민요 정보를 조회한다.",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "startPage",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "시작 페이지",
+        "example" : "1"
+      }, {
+        "name" : "pageSize",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "페이지 사이즈",
+        "example" : "10"
+      }, {
+        "name" : "authApiKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "요청키"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.items.item[].pageIndex",
+        "type" : "integer",
+        "description" : "페이지 인덱스"
+      }, {
+        "path" : "response.body.items.item[].pageSize",
+        "type" : "integer",
+        "description" : "페이지 사이즈"
+      }, {
+        "path" : "response.body.items.item[].page",
+        "type" : "integer",
+        "description" : "시작 페이지"
+      }, {
+        "path" : "response.body.items.item[].rows",
+        "type" : "integer",
+        "description" : "전체 건수"
+      }, {
+        "path" : "response.body.items.item[].type",
+        "type" : "string",
+        "description" : "민요 분류"
+      }, {
+        "path" : "response.body.items.item[].name",
+        "type" : "string",
+        "description" : "민요명"
+      }, {
+        "path" : "response.body.items.item[].minute",
+        "type" : "integer",
+        "description" : "재생시간(분)"
+      }, {
+        "path" : "response.body.items.item[].second",
+        "type" : "integer",
+        "description" : "재생시간(초)"
+      }, {
+        "path" : "response.body.items.item[].sound",
+        "type" : "string",
+        "description" : "음성파일"
+      }, {
+        "path" : "response.body.items.item[].soundUrl",
+        "type" : "string",
+        "description" : "음성파일URL"
+      }, {
+        "path" : "response.body.items.item[].contents",
+        "type" : "string",
+        "description" : "내용"
+      }, {
+        "path" : "response.body.items.item[].lyrics",
+        "type" : "string",
+        "description" : "가사"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.jejufolksonglist",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

@@ -1,0 +1,203 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "msrstn-info.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "MsrstnList",
+      "apiName" : "측정소 목록 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc",
+      "endpoint" : "/getMsrstnList",
+      "httpMethod" : "GET",
+      "description" : "",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 발급받은 인증키",
+        "example" : "abcd1234"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "한 페이지 결과 수",
+        "example" : "10"
+      }, {
+        "name" : "addr",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "측정소 주소 검색",
+        "example" : "서울"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.numOfRows",
+        "type" : "integer",
+        "description" : "한 페이지 결과 수"
+      }, {
+        "path" : "response.body.items.item[].stationName",
+        "type" : "string",
+        "description" : "측정소명"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.msrstnlist",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  }, {
+    "metadata" : {
+      "sourceFile" : "msrstn-info.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "TMStdrCrdnt",
+      "apiName" : "TM 기준좌표 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc",
+      "endpoint" : "/getTMStdrCrdnt",
+      "httpMethod" : "GET",
+      "description" : "",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 발급받은 인증키",
+        "example" : "abcd1234"
+      }, {
+        "name" : "stationName",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "측정소명",
+        "example" : "중구"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.items.item[].tmX",
+        "type" : "number",
+        "description" : "TM X좌표"
+      }, {
+        "path" : "response.body.items.item[].tmY",
+        "type" : "number",
+        "description" : "TM Y좌표"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.tmstdrcrdnt",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  }, {
+    "metadata" : {
+      "sourceFile" : "msrstn-info.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 2개): tmX, tmY" ]
+    },
+    "api" : {
+      "apiId" : "NearbyMsrstnList",
+      "apiName" : "근접측정소 목록 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc",
+      "endpoint" : "/getNearbyMsrstnList",
+      "httpMethod" : "GET",
+      "description" : "",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 발급받은 인증키",
+        "example" : "abcd1234"
+      }, {
+        "name" : "tmX",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "TM X좌표",
+        "example" : "198765"
+      }, {
+        "name" : "tmY",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "TM Y좌표",
+        "example" : "451234"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.items.item[].stationName",
+        "type" : "string",
+        "description" : "측정소명"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.nearbymsrstnlist",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

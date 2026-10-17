@@ -216,7 +216,7 @@ public final class LlmSpecParser implements SpecParser {
     public SpecParseResult extract(Path document) throws IOException, SpecParseException {
         DocumentReaders.Format format = DocumentReaders.find(document).orElseThrow(
                 () -> new IllegalArgumentException("명세 문서(.docx, .hwp, .hwpx)가 아닙니다: " + document.getFileName()));
-        return extract(format.reader().read(document), document.getFileName().toString(), format.sourceFormat());
+        return extract(format.read(document), document.getFileName().toString(), format.sourceFormat());
     }
 
     /**
@@ -289,7 +289,13 @@ public final class LlmSpecParser implements SpecParser {
                 break;
             }
             LlmRequest request = prompt.partRequest(document, done, options.operationsPerCall(), options.maxOutputTokens());
-            Extraction part = call(request, sourceFile);
+            Extraction part;
+            try {
+                part = call(request, sourceFile);
+            } catch (SpecParseException e) {
+                // 앞서 부른 호출(잘린 첫 호출, 앞 파트)도 과금됐으므로 그 토큰을 실패에 담는다
+                throw withSpent(e, fromCache, spent);
+            }
             parts++;
             Extraction chosen = part.truncated() ? part : checked(request, part, blocks, sourceFile).extraction();
             spent = add(spent, chosen.spent());
@@ -301,7 +307,12 @@ public final class LlmSpecParser implements SpecParser {
             done.addAll(fresh);
             if (fresh.isEmpty()) {
                 if (part.truncated()) {
-                    throw truncated(sourceFile, part, fromCache, spent, "나눠 부른 호출에서도 다 적힌 오퍼레이션이 없어 변환하지 못했습니다");
+                    if (done.isEmpty()) {
+                        throw truncated(sourceFile, part, fromCache, spent, "나눠 부른 호출에서도 다 적힌 오퍼레이션이 없어 변환하지 못했습니다");
+                    }
+                    // 앞서 받은 오퍼레이션은 쓸 수 있으므로 버리지 않는다. 같은 요청은 같은 자리에서 잘릴 것이라 더 부르지 않는다
+                    warn(sourceFile, "나눠 부른 호출이 출력 한도 " + options.maxOutputTokens() + " 토큰에 걸려 잘렸고 다 적힌 오퍼레이션이 없어 "
+                            + "그만 부릅니다 (" + truncatedDetail(part) + "). 뒤의 오퍼레이션이 빠졌을 수 있습니다");
                 }
                 break;
             }
@@ -365,12 +376,15 @@ public final class LlmSpecParser implements SpecParser {
                     .map(engine -> add(first.extraction().spent(), engine.tokenUsage()))
                     .orElse(first.extraction().spent());
             warn(sourceFile, "검증 결과를 알려 다시 부르지 못해 처음 결과를 씁니다: " + e.getMessage());
-            return new Checked(new Extraction(first.extraction().value(), false, spent, false, 0), first.validation());
+            // 다시 부른 호출이 답을 받지 못했으면 과금되지 않았으므로 처음 결과의 캐시 사용 여부를 그대로 둔다
+            boolean fromCache = first.extraction().fromCache() && e.engine().isEmpty();
+            return new Checked(new Extraction(first.extraction().value(), fromCache, spent, false, 0), first.validation());
         }
         if (again.truncated()) {
             warn(sourceFile, "검증 결과를 알려 다시 부른 응답이 출력 한도에 걸려 잘려 처음 결과를 씁니다");
             SpecParseResult.TokenUsage spent = add(first.extraction().spent(), again.spent());
-            return new Checked(new Extraction(first.extraction().value(), false, spent, false, 0), first.validation());
+            boolean fromCache = first.extraction().fromCache() && again.fromCache();
+            return new Checked(new Extraction(first.extraction().value(), fromCache, spent, false, 0), first.validation());
         }
         ValidationResult validation = new ExtractionValidator().validate(again.value(), blocks);
         boolean better = ValidationFeedback.better(first.validation(), validation);
@@ -518,6 +532,9 @@ public final class LlmSpecParser implements SpecParser {
                     cause(e), used);
             case RATE_LIMITED -> new SpecParseException(SpecParseException.Kind.RETRYABLE,
                     "LLM 호출 한도에 걸려 변환하지 못했습니다. 잠시 뒤 다시 실행하세요" + where + detail, cause(e), used);
+            case RETRY_LATER -> new SpecParseException(SpecParseException.Kind.RETRY_LATER,
+                    "LLM 회사가 한참 뒤에 다시 부르라고 해 변환하지 못했습니다. 알려 준 시간이 지난 뒤 다시 실행하세요" + where + detail,
+                    cause(e), used);
             case UNAVAILABLE -> new SpecParseException(SpecParseException.Kind.RETRYABLE,
                     "LLM 서버나 네트워크 오류로 변환하지 못했습니다. 잠시 뒤 다시 실행하세요" + where + detail, cause(e), used);
             case INTERRUPTED -> new SpecParseException(SpecParseException.Kind.RETRYABLE,
@@ -536,12 +553,34 @@ public final class LlmSpecParser implements SpecParser {
      */
     private SpecParseException truncated(String sourceFile, Extraction part, boolean fromCache,
                                          SpecParseResult.TokenUsage spent, String reason) {
-        String detail = part.fromCache()
-                ? "앞선 실행에서 같은 요청이 잘려 결과 캐시에 잘린 응답이 있어 다시 부르지 않음"
-                : "출력 " + part.truncatedOutputTokens() + " 토큰, thinking 포함";
         return new SpecParseException(SpecParseException.Kind.FAILED, "LLM 출력이 출력 한도 " + options.maxOutputTokens()
-                + " 토큰에 걸려 잘렸습니다 (" + sourceFile + ", " + detail + "). " + reason,
+                + " 토큰에 걸려 잘렸습니다 (" + sourceFile + ", " + truncatedDetail(part) + "). " + reason,
                 null, engine(fromCache, spent));
+    }
+
+    /**
+     * 잘린 응답의 출력 토큰, 또는 결과 캐시에서 꺼낸 잘린 응답이라 다시 부르지 않았다는 것. thinking 양은 호출마다 달라 다시 부르면 잘리지
+     * 않을 수도 있으므로, 캐시에서 꺼냈으면 다시 부르는 방법을 함께 알린다
+     */
+    private static String truncatedDetail(Extraction part) {
+        return part.fromCache()
+                ? "앞선 실행에서 같은 요청이 잘려 결과 캐시에 잘린 응답이 있어 다시 부르지 않음. --no-cache로 다시 부를 수 있음"
+                : "출력 " + part.truncatedOutputTokens() + " 토큰, thinking 포함";
+    }
+
+    /**
+     * 나눠 부르는 중 실패한 호출의 예외에, 그 앞에서 부른 호출의 토큰을 더한다.
+     *
+     * @param fromCache 앞에서 부른 호출이 모두 결과 캐시에서 꺼낸 것인지. 실패한 호출은 실제로 불렀으므로 결과는 캐시 사용이 아니다
+     * @param spent     앞에서 부른 호출의 토큰 합계
+     */
+    private SpecParseException withSpent(SpecParseException e, boolean fromCache, SpecParseResult.TokenUsage spent) {
+        if (spent.equals(SpecParseResult.TokenUsage.NONE) && e.engine().isEmpty()) {
+            return e;
+        }
+        SpecParseResult.TokenUsage total = e.engine().map(used -> add(spent, used.tokenUsage())).orElse(spent);
+        boolean cacheUsed = fromCache && e.engine().map(SpecParseResult.Engine::cacheUsed).orElse(false);
+        return new SpecParseException(e.kind(), e.getMessage(), e.getCause(), engine(cacheUsed, total));
     }
 
     /** 캐시를 읽지 못하면 없는 것으로 보고 부른다. 캐시는 비용을 아끼는 장치라 그 때문에 문서를 실패시키지 않는다 */
@@ -784,11 +823,12 @@ public final class LlmSpecParser implements SpecParser {
         }
 
         /**
-         * 회사 모델의 출력 한도에 맞춘 설정. 출력 상한은 한도를 넘지 않게 하고, 한 번에 적을 오퍼레이션 수는 한도 안에 들어가도록 줄인다.
-         * 한도보다 크게 보내면 회사가 거절하거나, 나눠 불러도 매번 잘려 잘린 출력만큼 과금되기 때문이다.
+         * 회사 모델의 출력 한도에 맞춘 설정. 출력 상한은 회사 한도를 넘지 않게 하고, 한 번에 적을 오퍼레이션 수는 그 출력 상한 안에 들어가도록
+         * (오퍼레이션당 6천 토큰) 줄인다. 한도보다 크게 보내면 회사가 거절하고, 출력 상한에 들어가지 않는
+         * 수를 한 번에 적게 하면 나눠 불러도 매번 잘려 잘린 출력만큼 과금되기 때문이다. 호출자가 출력 상한을 낮췄으면 그 상한에 맞춰 줄인다.
          *
          * @param providerMaxOutputTokens 회사 모델의 출력 토큰 한도
-         * @return 맞춘 설정. 이미 한도 안이면 같은 값이다
+         * @return 맞춘 설정. 출력 상한과 한 번에 적을 오퍼레이션 수가 이미 맞으면 같은 값이다
          */
         public Options fittedTo(int providerMaxOutputTokens) {
             int tokens = Math.min(maxOutputTokens, providerMaxOutputTokens);

@@ -273,7 +273,10 @@ enum DetailMetric {
      */
     static boolean hasSuccessCodeNote(EngineOperation engine) {
         for (JsonNode note : engine.ir().path("metadata").path("reviewNotes")) {
-            if (note.asText().contains("성공코드")) {
+            // 성공코드 정책이 남기는 노트([검증] 엇갈린 후보, [정규화] 찾지 못해 00)만 센다. 교차검증 노트(rule 엔진과 다름)는 이 지표가 보려는
+            // 것이 아니다
+            String text = note.asText();
+            if ((text.startsWith("[검증] ") || text.startsWith("[정규화] ")) && text.contains("성공코드")) {
                 return true;
             }
         }

@@ -72,6 +72,9 @@ public final class ExtractionValidator {
     private static final String V11_API_ID_NOTE = "apiId가 같은 뒤 오퍼레이션을 건너뜀";
     private static final String V12_PARAMETER_NOTE = "Java 이름이 앞 파라미터와 겹치는 요청 파라미터를 제거함";
     private static final String V12_FIELD_NOTE = "Java 이름이 같은 자리의 앞 필드와 겹치는 응답 필드를 제거함";
+    private static final String RESULT_FIELD_NOT_FOUND_NOTE = "원문에서 찾지 못한 결과코드 필드 이름을 버림";
+    private static final String RESULT_MESSAGE_FIELD_NOTE = "결과메시지 필드라 결과코드 필드로 쓰지 않음";
+    private static final String URL_NOT_FIRST_NOTE = "주소 후보를 찾은 칸에 다른 주소가 먼저 있어 rule 엔진처럼 칸의 첫 주소를 씀";
 
     /** V5에서 응답 경로를 버린 이유. 노트는 이유마다 한 줄로 묶는다 */
     private enum PathFailure {
@@ -120,6 +123,7 @@ public final class ExtractionValidator {
         if (draft.fields.isEmpty()) {
             draft.drop("검증을 통과한 응답 필드가 없습니다");
         }
+        draft.resultCodeField = checkResultCodeField(draft, source, evidence);
         draft.successCodes = checkSuccessCodes(draft, source, evidence);
         draft.errorCodes = checkErrorCodes(draft.operation.errorCodes(), source, evidence, draft);
         return draft;
@@ -154,6 +158,37 @@ public final class ExtractionValidator {
                 draft.operationName,
                 // llm 엔진은 공통 구간을 오퍼레이션으로 내지 않는다
                 false);
+        UrlCandidates candidates = draft.candidates;
+        noteOtherUrl(draft, "callBackUrl", urls.callBackUrl(),
+                candidates.callBackUrl() != null ? candidates.callBackUrl() : candidates.schemelessCallBackUrl());
+        noteOtherUrl(draft, "tableUrl", urls.tableUrl(), candidates.tableUrl());
+        noteOtherUrl(draft, "urlLine", urls.urlLine(), candidates.lineUrl());
+        noteOtherUrl(draft, "requestExampleUrl", urls.requestExampleUrl(), candidates.exampleUrl());
+        noteOtherUrl(draft, "serviceUrl", urls.serviceUrl(), candidates.serviceUrl());
+    }
+
+    /**
+     * 칸에서 꺼낸 주소가 LLM이 가리킨 주소와 다르면 알린다. 주소는 같은 칸에서 rule 엔진과 같은 값이 나오도록 칸의 원래 글에서 rule 엔진의
+     * 함수로 꺼내므로, 한 칸에 주소가 여럿이면(개발·운영 주소, 여러 오퍼레이션의 요청 예제) LLM이 가리킨 주소 대신 칸의 첫 주소가 된다.
+     * 교차검증도 같은 칸을 읽는 rule 엔진과 비교하므로 이 차이는 잡지 못한다. 질의 문자열·끝 슬래시·공백·스킴 차이는 보지 않는다.
+     */
+    private static void noteOtherUrl(Draft draft, String slot, String candidate, String extracted) {
+        String wanted = comparableUrl(LlmText.restore(candidate));
+        if (extracted == null || wanted.isEmpty() || comparableUrl(extracted).equals(wanted)) {
+            return;
+        }
+        draft.notes.add(URL_NOT_FIRST_NOTE, slot + " " + LlmText.oneLine(candidate) + " → " + extracted);
+    }
+
+    private static String comparableUrl(String url) {
+        String bare = SourceText.stripSpaces(url);
+        int query = bare.indexOf('?');
+        bare = query < 0 ? bare : bare.substring(0, query);
+        bare = bare.replaceFirst("(?i)^https?://", "").replaceFirst("[.,;)]+$", "");
+        while (bare.endsWith("/")) {
+            bare = bare.substring(0, bare.length() - 1);
+        }
+        return bare;
     }
 
     /**
@@ -187,15 +222,22 @@ public final class ExtractionValidator {
         return null;
     }
 
-    /** 영문 오퍼레이션명은 rule 엔진처럼 정보 표 이름 칸의 원래 글로만 본다 */
+    /**
+     * 영문 오퍼레이션명은 rule 엔진처럼 정보 표 이름 칸의 원래 글로만 본다. 목록 표에만 있는 이름은 rule 엔진도 쓰지 않으므로 버리되,
+     * 문서에 있는 이름이라 검수할 거리가 아니어서 노트는 남기지 않는다. 표 어디에도 없는 이름은 지어낸 것이라 노트를 남긴다
+     */
     private String locateOperationName(Draft draft, SourceText source, Set<Integer> evidence) {
         String name = LlmText.restore(draft.operation.operationName()).strip();
         if (name.isEmpty()) {
             return null;
         }
         if (source.operationNames(name, evidence).isEmpty()) {
-            draft.remove("V1", name, "정보 표의 이름 칸에서 찾지 못함");
-            draft.notes.add("정보 표의 이름 칸에서 찾지 못한 영문 오퍼레이션명을 버림: " + name);
+            if (source.names(name, true, evidence).isEmpty()) {
+                draft.remove("V1", name, "원문의 표에서 찾지 못함");
+                draft.notes.add("원문의 표에서 찾지 못한 영문 오퍼레이션명을 버림: " + name);
+            } else {
+                draft.remove("V1", name, "정보 표의 이름 칸이 아닌 표(목록 표 등)에만 있음");
+            }
             return null;
         }
         return name;
@@ -562,7 +604,36 @@ public final class ExtractionValidator {
         }
     }
 
-    // ---- V8, V9: 성공코드 후보, 에러코드 ----
+    // ---- V8, V9: 결과코드 필드, 성공코드 후보, 에러코드 ----
+
+    /**
+     * 결과코드 필드 이름이 원문에 있는지 본다 (V8). 생성 클라이언트는 이 이름을 인터셉터에 넘겨 기본 이름보다 먼저 찾고, 정규화는 같은 이름의
+     * 응답 필드를 문자열 결과코드로 둔다. 그래서 지어낸 이름이나 결과메시지 필드({@code resultMsg})를 받으면 정상 응답이 모두 예외가 될 수 있다.
+     * 검증을 통과한 응답 필드의 이름이거나 원문의 표 칸·예제 키에 있어야 하고, 결과메시지 필드가 아니어야 한다.
+     *
+     * @return 통과한 이름(LLM이 적은 그대로, 경로일 수 있다). 없거나 버렸으면 빈 문자열
+     */
+    private String checkResultCodeField(Draft draft, SourceText source, Set<Integer> evidence) {
+        LlmResultCode resultCode = draft.operation.resultCode();
+        String fieldName = resultCode == null ? "" : LlmText.oneLine(resultCode.fieldName());
+        if (fieldName.isEmpty()) {
+            return "";
+        }
+        String leaf = leafName(fieldName);
+        if (isMessageField(leaf)) {
+            draft.remove("V8", fieldName, "결과메시지 필드");
+            draft.notes.add(RESULT_MESSAGE_FIELD_NOTE, fieldName);
+            return "";
+        }
+        boolean inFields = draft.fields.stream().anyMatch(field -> field.leaf().equals(leaf));
+        if (!leaf.isEmpty() && (inFields || !source.keys(leaf, evidence).isEmpty()
+                || !source.names(leaf, true, evidence).isEmpty())) {
+            return fieldName;
+        }
+        draft.remove("V8", fieldName, "결과코드 필드 이름을 원문에서 찾지 못함");
+        draft.notes.add(RESULT_FIELD_NOT_FOUND_NOTE, fieldName);
+        return "";
+    }
 
     /** 성공코드 후보가 출처가 가리키는 자리에 있고 {@code [A-Za-z0-9_-]+} 꼴인지 본다 (V8). 버린 후보는 노트를 남기지 않는다 */
     private List<SuccessCode> checkSuccessCodes(Draft draft, SourceText source, Set<Integer> evidence) {
@@ -570,7 +641,7 @@ public final class ExtractionValidator {
         if (resultCode == null) {
             return List.of();
         }
-        String fieldName = leafName(LlmText.restore(resultCode.fieldName()).strip());
+        String fieldName = leafName(draft.resultCodeField);
         Predicate<String> resultCodeName = name -> !name.isEmpty()
                 && (name.equals(fieldName) || IrConventions.isResultCodeField(name));
         List<SuccessCode> found = new ArrayList<>();
@@ -668,6 +739,18 @@ public final class ExtractionValidator {
         return segment.endsWith(LIST_SUFFIX) ? LIST_SUFFIX : "";
     }
 
+    /**
+     * 결과메시지 필드인지 본다. rule 엔진의 판정(resultMsg·resultMessage)에 더해, 인터셉터가 메시지로 읽는 {@code returnAuthMsg}·{@code errorMsg}·
+     * {@code ERROR_MSG}처럼 이름이 Msg·Message로 끝나는 필드도 결과코드가 아니다
+     */
+    private static boolean isMessageField(String name) {
+        if (IrConventions.isResultCodeField(name)) {
+            return false;
+        }
+        String key = name.toLowerCase(Locale.ROOT).replace("_", "");
+        return IrConventions.isResultCodeOrMessageField(name) || key.endsWith("msg") || key.endsWith("message");
+    }
+
     /** 결과코드 필드 이름이 경로로 오면({@code response.header.resultCode}) 마지막 칸만 본다 */
     private static String leafName(String fieldName) {
         return bare(fieldName.substring(fieldName.lastIndexOf('.') + 1));
@@ -694,6 +777,7 @@ public final class ExtractionValidator {
         private IrConventions.UrlParts parts;
         private List<Parameter> parameters = List.of();
         private List<Field> fields = List.of();
+        private String resultCodeField = "";
         private List<SuccessCode> successCodes = List.of();
         private List<LlmErrorCode> errorCodes = List.of();
         private String dropReason;
@@ -726,7 +810,7 @@ public final class ExtractionValidator {
         private ValidatedOperation result() {
             Address address = new Address(sources, candidates, url, parts, selectionNotes, correctionNotes);
             return new ValidatedOperation(position, operation, operationName, title, address, parameters, fields,
-                    successCodes, errorCodes, notes.lines(), removals, dropReason);
+                    resultCodeField, successCodes, errorCodes, notes.lines(), removals, dropReason);
         }
     }
 }

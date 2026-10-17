@@ -5,6 +5,7 @@ import kr.go.h2spec.parser.llm.client.LlmProviderFactory;
 import kr.go.h2spec.parser.llm.client.LlmSettings;
 
 import java.util.List;
+import java.util.Locale;
 
 /** Claude(Anthropic) 어댑터의 팩토리. {@link kr.go.h2spec.parser.llm.client.LlmProviders#ALL}에 적혀 있다. */
 public final class ClaudeProviderFactory implements LlmProviderFactory {
@@ -51,6 +52,12 @@ public final class ClaudeProviderFactory implements LlmProviderFactory {
     @Override
     public List<String> workspaceEnvironmentVariables() {
         return List.of("ANTHROPIC_WORKSPACE_ID");
+    }
+
+    /** {@code claude-}로 시작하는 이름 (대소문자 무시) */
+    @Override
+    public boolean recognizesModel(String model) {
+        return model.toLowerCase(Locale.ROOT).startsWith("claude-");
     }
 
     @Override

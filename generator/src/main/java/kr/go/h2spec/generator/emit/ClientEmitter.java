@@ -4,6 +4,7 @@ import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.generator.ir.RequestParameter;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +28,20 @@ public class ClientEmitter {
     /** 엔드포인트로 만든 메서드명이 식별자가 아닐 때 앞에 붙인다. 메서드는 모두 API를 부르는 일이라 동사 call을 쓴다 */
     private static final String METHOD_NAME_PREFIX = "call";
     /**
+     * 생성 클래스가 이미 갖는 메서드(생성하는 헬퍼와 Object의 메서드)의 이름과 인자 타입. 엔드포인트로 만든 메서드가 이와 같으면
+     * 컴파일되지 않으므로({@code /encode}에 문자열 인자 하나, 인자 없는 {@code /getClass}) 접두사를 붙인다. 인자가 다르면 겹치지 않아 그대로 둔다
+     */
+    private static final Set<String> RESERVED_SIGNATURES = Set.of("encode(String)", "defaultRestTemplate()",
+            "getClass()", "hashCode()", "toString()", "notify()", "notifyAll()", "wait()", "finalize()");
+    /** 경로 변수가 있으면 생성하는 헬퍼 */
+    private static final String ENCODE_PATH_SIGNATURE = "encodePath(String)";
+    /**
+     * URL의 질의에 그대로 쓸 수 있는 글자({@code URI.create}가 받는 글자 가운데 질의를 깨지 않는 것). 그 밖의 ASCII 글자(공백,
+     * {@code & = + # %} 등)는 파라미터 이름을 질의에 넣을 때 퍼센트 인코딩한다. 한글 같은 비ASCII 글자는 {@code URI.create}가 받으므로
+     * 그대로 둔다(지금 생성 코드가 바뀌지 않게)
+     */
+    private static final String QUERY_SAFE = "-._~!$'()*,;:@/?[]";
+    /**
      * interceptor-core의 PublicDataErrorDetector가 기본으로 찾는 결과코드 이름. 이 밖의 이름만 인터셉터에 넘겨서,
      * 기본 이름만 있는 IR(rule 엔진의 IR은 모두 그렇다)은 성공코드만 넘기는 코드를 만든다.
      * generator는 interceptor-core에 기대지 않아 목록을 따로 두고, 인터셉터가 실제로 이 이름을 찾는지는 테스트가 본다.
@@ -41,6 +56,13 @@ public class ClientEmitter {
             "number", "Double",
             "boolean", "Boolean");
     private static final String DEFAULT_TYPE = "String";
+
+    /**
+     * @return 힌트 없이 IR의 응답 형식을 값으로 채워 보내는 포맷 파라미터 이름. parser의 같은 목록({@code IrConventions})과 같아야 한다
+     */
+    public static Set<String> responseFormatParameters() {
+        return RESPONSE_FORMAT_PARAMS;
+    }
 
     public String emit(IrSpec ir) {
         String className = JavaNames.pascal(ir.api().apiId()) + "Client";
@@ -317,6 +339,9 @@ public class ClientEmitter {
         String indent2 = INDENT.repeat(2);
         String indent3 = INDENT.repeat(3);
         String methodName = methodNameOf(ir.api().endpoint());
+        if (clashesWithExistingMethod(methodName, params, hasPathParameter(ir))) {
+            methodName = METHOD_NAME_PREFIX + Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
+        }
 
         sb.append(INDENT).append("/**\n");
         sb.append(INDENT).append(" * ").append(JavaText.comment(ir.api().description())).append("\n");
@@ -341,12 +366,15 @@ public class ClientEmitter {
 
         sb.append(indent2).append("StringBuilder url = new StringBuilder(BASE_URL + \"")
           .append(JavaText.literal(ir.api().endpoint())).append("\");\n");
-        sb.append(indent2).append("url.append(\"?").append(JavaText.literal(findServiceKeyParam(ir).name()))
-          .append("=\").append(encode(").append(SERVICE_KEY_PARAM).append("));\n");
+        // 메서드 인자의 Java 이름이 serviceKey(SERVICE_KEY 같은 다른 파라미터)면 필드를 가리므로 필드를 this로 가리킨다
+        boolean keyShadowed = params.stream().anyMatch(p -> SERVICE_KEY_PARAM.equals(
+                JavaNameRules.canonicalIdentifier(JavaNames.camel(p.name()))));
+        sb.append(indent2).append("url.append(\"?").append(JavaText.literal(queryName(findServiceKeyParam(ir).name())))
+          .append("=\").append(encode(").append(keyShadowed ? "this." : "").append(SERVICE_KEY_PARAM).append("));\n");
         String formatParam = formatParamName(ir);
         if (formatParam != null) {
             String formatValue = formatParamValue(ir);
-            sb.append(indent2).append("url.append(\"&").append(formatParam).append("=")
+            sb.append(indent2).append("url.append(\"&").append(JavaText.literal(queryName(formatParam))).append("=")
               .append(JavaText.literal(formatValue)).append("\");\n");
         }
         for (RequestParameter p : params) {
@@ -359,7 +387,7 @@ public class ClientEmitter {
             }
             String varName = JavaNames.camel(p.name());
             String valueExpr = "string".equals(p.type()) ? "encode(" + varName + ")" : varName;
-            String appendLine = "url.append(\"&" + JavaText.literal(p.name()) + "=\").append(" + valueExpr + ");";
+            String appendLine = "url.append(\"&" + JavaText.literal(queryName(p.name())) + "=\").append(" + valueExpr + ");";
             if (p.required()) {
                 sb.append(indent2).append(appendLine).append("\n");
             } else {
@@ -380,6 +408,30 @@ public class ClientEmitter {
                 "throw new IllegalStateException(\"응답 파싱 실패: \" + ServiceKeyMasker.mask(uri.toString()), e);\n");
         sb.append(indent2).append("}\n");
         sb.append(INDENT).append("}\n");
+    }
+
+    /** 엔드포인트로 만든 메서드가 생성 클래스의 헬퍼나 Object의 메서드와 이름·인자 타입이 같은지 */
+    private boolean clashesWithExistingMethod(String methodName, List<RequestParameter> params, boolean hasPathParameter) {
+        String signature = methodName + "(" + String.join(",", params.stream().map(p -> javaType(p.type())).toList()) + ")";
+        return RESERVED_SIGNATURES.contains(signature) || (hasPathParameter && ENCODE_PATH_SIGNATURE.equals(signature));
+    }
+
+    /**
+     * 요청 파라미터 이름을 질의에 넣을 꼴로 바꾼다. 공백 같은 글자가 그대로 들어가면 컴파일은 되지만 호출할 때 {@code URI.create}가
+     * 실패하고, {@code & = #}이 그대로 들어가면 질의가 깨진다. 영문자·숫자와 질의에 쓸 수 있는 글자, 비ASCII 글자는 그대로 둔다
+     */
+    static String queryName(String name) {
+        StringBuilder sb = new StringBuilder(name.length());
+        name.codePoints().forEach(cp -> {
+            if (cp > 0x7f || Character.isLetterOrDigit(cp) || QUERY_SAFE.indexOf(cp) >= 0) {
+                sb.appendCodePoint(cp);
+            } else {
+                for (byte b : new String(Character.toChars(cp)).getBytes(StandardCharsets.UTF_8)) {
+                    sb.append('%').append(String.format(Locale.ROOT, "%02X", b & 0xff));
+                }
+            }
+        });
+        return sb.toString();
     }
 
     private boolean hasPathParameter(IrSpec ir) {

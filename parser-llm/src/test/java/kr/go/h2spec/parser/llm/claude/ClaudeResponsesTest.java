@@ -1,6 +1,7 @@
 package kr.go.h2spec.parser.llm.claude;
 
 import kr.go.h2spec.parser.llm.client.LlmException;
+import kr.go.h2spec.parser.llm.client.LlmResponse;
 import org.junit.jupiter.api.Test;
 
 import java.io.StringReader;
@@ -60,5 +61,57 @@ class ClaudeResponsesTest {
         assertEquals(LlmException.Kind.SETTINGS, effort.kind());
         assertEquals(LlmException.Kind.BAD_REQUEST, other.kind());
         assertEquals(LlmException.Kind.BAD_REQUEST, ClaudeResponses.fromHttpError(400, "<html>bad gateway</html>", null).kind());
+    }
+
+    @Test
+    void 모델의_출력_한도를_넘는_출력_상한은_설정_오류이고_입력과_합친_길이가_넘는_것은_그_문서의_요청_오류다() {
+        LlmException outputLimit = ClaudeResponses.fromHttpError(400, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"invalid_request_error\",\"message\":\"max_tokens: 128000 > 64000, which is the maximum allowed number of "
+                + "output tokens for claude-haiku-5-5\"}}", null);
+        LlmException context = ClaudeResponses.fromHttpError(400, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"invalid_request_error\",\"message\":\"input length and `max_tokens` exceed context limit: "
+                + "190000 + 128000 > 200000\"}}", null);
+
+        assertEquals(LlmException.Kind.SETTINGS, outputLimit.kind(), "모델을 바꾸지 않으면 모든 문서가 같은 400을 받는다");
+        assertEquals(LlmException.Kind.BAD_REQUEST, context.kind(), "작은 문서는 통과하므로 실행을 멈추지 않는다");
+    }
+
+    @Test
+    void 지정한_사용_한도와_월_지출_한도에_닿은_것은_기다려도_풀리지_않는_한도_문제로_가른다() {
+        LlmException usageLimit = ClaudeResponses.fromHttpError(400, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"invalid_request_error\",\"message\":\"You have reached your specified API usage limits. "
+                + "You will regain access on 2026-11-01 at 00:00 UTC.\"}}", null);
+        LlmException spendLimit = ClaudeResponses.fromHttpError(429, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"rate_limit_error\",\"message\":\"Monthly spend limit reached\",\"details\":{\"error_code\":"
+                + "\"enforced_spend_limit_reached\"}}}", null);
+        LlmException rateLimit = ClaudeResponses.fromHttpError(429, "{\"type\":\"error\",\"error\":{\"type\":"
+                + "\"rate_limit_error\",\"message\":\"Number of request tokens has exceeded your per-minute rate limit\"}}", null);
+
+        assertEquals(LlmException.Kind.QUOTA, usageLimit.kind());
+        assertEquals(LlmException.Kind.QUOTA, spendLimit.kind());
+        assertEquals(LlmException.Kind.RATE_LIMITED, rateLimit.kind(), "분당 한도는 곧 풀리므로 다시 부른다");
+    }
+
+    @Test
+    void 공식_SDK처럼_408과_409는_다시_부른다() {
+        assertEquals(LlmException.Kind.UNAVAILABLE, ClaudeResponses.statusKind(408));
+        assertEquals(LlmException.Kind.UNAVAILABLE, ClaudeResponses.statusKind(409));
+    }
+
+    @Test
+    void 잘림이나_거절이_아닌_끝난_이유는_출력과_토큰을_넘겨_JSON으로_판단하게_한다() throws Exception {
+        String stream = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5-5\","
+                + "\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n"
+                + "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\","
+                + "\"text\":\"{}\"}}\n\n"
+                + "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"pause_turn\"},"
+                + "\"usage\":{\"output_tokens\":7}}\n\n"
+                + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n";
+
+        LlmResponse response = ClaudeResponses.fromStream(new StringReader(stream));
+
+        assertEquals(LlmResponse.Finish.COMPLETE, response.finish(), "예외로 알리면 이미 과금된 토큰이 보고에서 빠진다");
+        assertEquals("{}", response.json());
+        assertEquals(7, response.usage().outputTokens());
     }
 }

@@ -1,6 +1,8 @@
 package kr.go.h2spec.parser;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +31,23 @@ public final class DocumentReaders {
      * @param reader       그 형식을 읽는 Reader
      */
     public record Format(String sourceFormat, DocumentReader reader) {
+
+        /**
+         * 이 형식의 Reader로 문서를 읽는다. 문서 라이브러리(POI, hwplib)가 손상되었거나 지원하지 않는 내용에서 던지는 RuntimeException도
+         * 문서를 읽지 못한 것으로 보고 IOException으로 바꾼다. 디렉터리를 변환할 때 그 문서 하나 때문에 실행 전체가 멈추지 않게 한다.
+         *
+         * @param document 읽을 문서
+         * @return 문서 순서대로의 문단·표 블록
+         * @throws IOException 파일을 읽지 못했거나 문서 라이브러리가 해석하지 못했을 때
+         */
+        public List<Block> read(Path document) throws IOException {
+            try {
+                return reader.read(document);
+            } catch (RuntimeException e) {
+                String detail = e.getMessage() == null || e.getMessage().isBlank() ? "" : ": " + e.getMessage();
+                throw new IOException("문서를 해석하지 못했습니다 (" + e.getClass().getSimpleName() + detail + ")", e);
+            }
+        }
     }
 
     /**
@@ -45,6 +64,20 @@ public final class DocumentReaders {
         String name = fileName.toString().toLowerCase(Locale.ROOT);
         int dot = name.lastIndexOf('.');
         return dot < 0 ? Optional.empty() : Optional.ofNullable(BY_EXTENSION.get(name.substring(dot)));
+    }
+
+    /**
+     * 확장자로 고른 Reader로 문서를 읽는다({@link Format#read}).
+     *
+     * @param document 읽을 문서
+     * @return 문서 순서대로의 문단·표 블록
+     * @throws IOException              파일을 읽지 못했거나 문서 라이브러리가 해석하지 못했을 때
+     * @throws IllegalArgumentException 명세 문서(.docx, .hwp, .hwpx)가 아닐 때
+     */
+    public static List<Block> read(Path document) throws IOException {
+        Format format = find(document).orElseThrow(
+                () -> new IllegalArgumentException("명세 문서(.docx, .hwp, .hwpx)가 아닙니다: " + document.getFileName()));
+        return format.read(document);
     }
 
     /**

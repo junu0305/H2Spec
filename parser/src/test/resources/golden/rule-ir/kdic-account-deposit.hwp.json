@@ -1,0 +1,178 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "kdic-account-deposit.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 3개): newDpsamt, dpsIrt, dpsTerm" ]
+    },
+    "api" : {
+      "apiId" : "AcnutAcctoRecptnNewSttus",
+      "apiName" : "계좌별 수신 신규현황 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/B190017/service/GetAcnutAcctoRecptnNewSttusService",
+      "endpoint" : "/getAcnutAcctoRecptnNewSttus",
+      "httpMethod" : "GET",
+      "description" : "계좌별 수신예금액, 수신금리, 수신기간 등 계좌별 수신 신규현황 조회 기능",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "한 페이지 결과 수",
+        "example" : "10"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "페이지 번호",
+        "example" : "1"
+      }, {
+        "name" : "resultType",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "결과형식(xml/json)",
+        "example" : "xml"
+      }, {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 받은 인증키",
+        "example" : "공공데이터포털에서 받은 인증키"
+      }, {
+        "name" : "svbkNm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "저축은행명",
+        "example" : "경기"
+      }, {
+        "name" : "svbkLctplcNm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "저축은행소재지",
+        "example" : "경기도 남양주시"
+      }, {
+        "name" : "newDt",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "신규일자",
+        "example" : "20020719"
+      }, {
+        "name" : "dpsAccno",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "수신계좌번호",
+        "example" : "2896069242"
+      }, {
+        "name" : "custDscdNm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "고객구분",
+        "example" : "개인"
+      }, {
+        "name" : "accSbjcNm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "계좌과목명",
+        "example" : "복리예금"
+      }, {
+        "name" : "custLctplcNm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "고객소재지",
+        "example" : "경기도 남양주시"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.numOfRows",
+        "type" : "integer",
+        "description" : "한 페이지 결과 수"
+      }, {
+        "path" : "response.body.pageNo",
+        "type" : "integer",
+        "description" : "페이지 번호"
+      }, {
+        "path" : "response.body.totalCount",
+        "type" : "integer",
+        "description" : "전체 결과 수"
+      }, {
+        "path" : "response.body.items.item[].num",
+        "type" : "string",
+        "description" : "일련번호"
+      }, {
+        "path" : "response.body.items.item[].svbkNm",
+        "type" : "string",
+        "description" : "저축은행명"
+      }, {
+        "path" : "response.body.items.item[].newDt",
+        "type" : "string",
+        "description" : "신규일자"
+      }, {
+        "path" : "response.body.items.item[].dpsAccno",
+        "type" : "string",
+        "description" : "수신계좌번호"
+      }, {
+        "path" : "response.body.items.item[].custDscdNm",
+        "type" : "string",
+        "description" : "고객구분"
+      }, {
+        "path" : "response.body.items.item[].newDpsamt",
+        "type" : "integer",
+        "description" : "신규예금액"
+      }, {
+        "path" : "response.body.items.item[].dpsIrt",
+        "type" : "integer",
+        "description" : "수신금리"
+      }, {
+        "path" : "response.body.items.item[].accSbjcNm",
+        "type" : "string",
+        "description" : "계좌과목명"
+      }, {
+        "path" : "response.body.items.item[].dpsTerm",
+        "type" : "integer",
+        "description" : "수신기간"
+      }, {
+        "path" : "response.body.items.item[].custLctplcNm",
+        "type" : "string",
+        "description" : "고객소재지"
+      }, {
+        "path" : "response.body.items.item[].svbkLctplcNm",
+        "type" : "string",
+        "description" : "저축은행소재지"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.acnutacctorecptnnewsttus",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

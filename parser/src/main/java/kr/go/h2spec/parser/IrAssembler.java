@@ -116,9 +116,10 @@ public class IrAssembler {
         ir.set("api", api);
         // TODO(rule 포맷 파라미터): rule 엔진은 generatorHints.responseFormatParameter를 적지 않는다. 그래서 포맷 파라미터 이름이
         //   generator가 아는 returnType·dataType·resultType(IrConventions.responseFormatParameters)이 아니면 생성 클라이언트가
-        //   그 파라미터에 값을 보내지 않아 서버 기본 형식이 오고, 필수 파라미터면 호출이 실패할 수 있다.
-        //   샘플 문서: its-traffic-light(type, 필수), khoa-realtime-sea-current(type, 필수), mohw-emergency-safety-org(apiType),
-        //   docs/sample의 천문연 특일 정보(_type).
+        //   그 파라미터에 값을 채우지 않는다. 선택 파라미터면 보내지 않아 서버 기본 형식이 오고, 필수 파라미터면 메서드 인자로
+        //   나와 호출하는 쪽이 값을 넣는데, IR의 responseFormat과 다른 값을 넣으면 생성 DTO가 응답을 읽지 못한다.
+        //   샘플 문서: its-traffic-light(type, 선택), khoa-realtime-sea-current(type, 필수. IR은 XML인데 문서의 예시 값은 json),
+        //   mohw-emergency-safety-org(apiType), docs/sample의 천문연 특일 정보(_type).
         //   고칠 것: llm 엔진(IrNormalizer.hintedFormatParameter·formatValue)처럼 요청 표에서 포맷 파라미터를 찾아
         //   {name, value}를 적는다. 값은 responseFormat이고 대소문자는 표의 샘플·기본값을 따른다. responseFormat 판단
         //   (아래 responseFormat)도 같은 파라미터를 보게 한다. 관련 자리는 "TODO(rule 포맷 파라미터)"로 찾는다.

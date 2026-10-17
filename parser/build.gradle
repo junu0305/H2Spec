@@ -35,3 +35,15 @@ tasks.register('writeHwpxFixture', Test) {
             project.findProperty('out') ?: "$rootDir/cli/src/test/resources/docs/msrstn-info.hwpx"
     outputs.upToDateWhen { false }
 }
+
+// rule 엔진의 IR golden 파일(src/test/resources/golden/rule-ir)을 지금 코드로 다시 쓴다.
+// rule 엔진의 IR을 의도해서 바꿨을 때만 돌리고, 바뀐 golden 파일을 검토해 코드와 함께 커밋한다
+tasks.register('writeRuleIrGolden', Test) {
+    description = 'rule 엔진의 IR golden 파일을 지금 코드로 다시 쓴다'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching 'kr.go.h2spec.parser.RuleIrGoldenTest' }
+    systemProperty 'h2spec.golden.write', 'true'
+    outputs.upToDateWhen { false }
+}

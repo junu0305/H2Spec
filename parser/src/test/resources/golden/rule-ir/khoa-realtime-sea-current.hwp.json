@@ -1,0 +1,129 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "khoa-realtime-sea-current.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "GetRealTimeSeaCurrentApiService",
+      "apiName" : "준실시간 해류도 조회 API",
+      "provider" : "",
+      "baseUrl" : "https://apis.data.go.kr/1192136/realTimeSeaCurrent",
+      "endpoint" : "/GetRealTimeSeaCurrentApiService",
+      "httpMethod" : "GET",
+      "description" : "인공위성 해수면 높이 자료를 이용하여 산출한 매일의 표층해류자료 제공 서비스",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털 에서 발급받은 인증키",
+        "example" : "인증키 (URL Encode)"
+      }, {
+        "name" : "type",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "json/xml 중 택 1",
+        "example" : "json"
+      }, {
+        "name" : "sea",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "지역",
+        "example" : "eastsea"
+      }, {
+        "name" : "reqDate",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "요청일시 기본값: 현재일시",
+        "example" : "20250119"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "페이지 번호 기본값: 1",
+        "example" : "1"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "한 페이지당 데이터 갯수 기본값: 10, 최대값: 300",
+        "example" : "10"
+      }, {
+        "name" : "include",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "출력하고자 하는 항목명",
+        "example" : "obsrvnYmd"
+      }, {
+        "name" : "exclude",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "출력 제외하고자하는 항목명",
+        "example" : "obsrvnYmd"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "응답 메시지 코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "응답 메시지 내용"
+      }, {
+        "path" : "response.body.totalCount",
+        "type" : "integer",
+        "description" : "응답 결과 수"
+      }, {
+        "path" : "response.body.pageNo",
+        "type" : "integer",
+        "description" : "페이지 번호"
+      }, {
+        "path" : "response.body.numOfRows",
+        "type" : "integer",
+        "description" : "한 페이지당 데이터 갯수"
+      }, {
+        "path" : "response.body.items.item[].type",
+        "type" : "string",
+        "description" : "데이터 타입"
+      }, {
+        "path" : "response.body.items.item[].ocSeNm",
+        "type" : "string",
+        "description" : "지역"
+      }, {
+        "path" : "response.body.items.item[].obsrvnYmd",
+        "type" : "string",
+        "description" : "관측일자"
+      }, {
+        "path" : "response.body.items.item[].urlAddr",
+        "type" : "string",
+        "description" : "이미지url"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.getrealtimeseacurrentapiservice",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

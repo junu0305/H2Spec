@@ -1,0 +1,113 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "its-traffic-light.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : true,
+      "reviewNotes" : [ "샘플데이터 기반 integer 추론 (코드형 문자열일 수 있음, 2개): serviceKey, countPerPage" ]
+    },
+    "api" : {
+      "apiId" : "TrafficLightList4",
+      "apiName" : "대중교통 신호연계 정보 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/6500000/trafficLightService4",
+      "endpoint" : "/trafficLightList4",
+      "httpMethod" : "GET",
+      "description" : "대중교통 신호연계 정보를 조회하는 기능",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "인증키 (URL Encode)",
+        "example" : "1"
+      }, {
+        "name" : "page",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "페이지 번호",
+        "example" : "10"
+      }, {
+        "name" : "countPerPage",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "한페이지 결과수",
+        "example" : "1"
+      }, {
+        "name" : "type",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "출력형식(xml, json)",
+        "example" : "xml"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.body.items.item[].countPerPage",
+        "type" : "integer",
+        "description" : "한 페이지 결과수"
+      }, {
+        "path" : "response.body.items.item[].page",
+        "type" : "string",
+        "description" : "페이지번호"
+      }, {
+        "path" : "response.body.items.item[].ecallId",
+        "type" : "string",
+        "description" : "비상호출ID"
+      }, {
+        "path" : "response.body.items.item[].gnssLat",
+        "type" : "number",
+        "description" : "GNSS위도"
+      }, {
+        "path" : "response.body.items.item[].gnssLon",
+        "type" : "number",
+        "description" : "GNSS경도"
+      }, {
+        "path" : "response.body.items.item[].gnssSpd",
+        "type" : "number",
+        "description" : "GNSS속도"
+      }, {
+        "path" : "response.body.items.item[].gnssTim",
+        "type" : "string",
+        "description" : "GNSS시간"
+      }, {
+        "path" : "response.body.items.item[].no",
+        "type" : "string",
+        "description" : "번호"
+      }, {
+        "path" : "response.body.items.item[].routeNo",
+        "type" : "string",
+        "description" : "노선번호"
+      }, {
+        "path" : "response.body.items.item[].sensorCd",
+        "type" : "string",
+        "description" : "센서코드"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.trafficlightlist4",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

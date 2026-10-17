@@ -71,6 +71,10 @@ final class BaselineEvaluator {
         List<EngineOperation> operations;
         try {
             operations = engine.extract(document.document());
+        } catch (ReplayLlmEvalEngine.MissingRecordingException e) {
+            // 녹화가 없는 것은 엔진이 틀린 것이 아니다. 못 찾은 것으로 세면 엔진 품질과 무관하게 녹화 수만큼 재현율이 떨어진다
+            return new DocumentResult(name, goldName, e.getMessage() + " (지표에서 뺌)", List.of(), List.of(), null,
+                    List.of(), List.of(), List.of());
         } catch (IOException | RuntimeException e) {
             // 엔진이 결과를 내지 못한 문서의 정답 오퍼레이션은 모두 못 찾은 것으로 센다. 문서를 읽지 못했거나,
             // llm 엔진이 녹화 응답을 쓸 수 없었던 경우다. 이유는 예외 메시지가 말한다

@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /** 공공데이터 응답 바디에서 성공/실패 여부와 오류 정보를 판정한다. */
@@ -133,22 +134,49 @@ final class PublicDataErrorDetector {
             var builder = XML_FACTORY.newDocumentBuilder();
             try (InputStream input = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
                 var document = builder.parse(input);
-                return new ResultInfo(firstTagText(document, resultCodeKeys), firstTagText(document, RESULT_MSG_KEYS));
+                return new ResultInfo(resultCodeText(document), firstTagText(document, RESULT_MSG_KEYS, Integer.MAX_VALUE));
             }
         } catch (Exception ignored) {
             return new ResultInfo(null, null);
         }
     }
 
-    private String firstTagText(org.w3c.dom.Document document, List<String> names) {
+    /**
+     * 결과코드를 찾는다. 호출자가 준 이름은 JSON과 같이 응답 메타데이터 깊이({@link #MAX_SEARCH_DEPTH})까지만 찾는다.
+     * {@code code}처럼 흔한 이름이면 데이터 항목 안의 같은 이름 요소가 먼저 잡혀 정상 응답을 오류로 볼 수 있기 때문이다.
+     * 기본 이름은 지금까지처럼 문서 전체에서 찾는다.
+     */
+    private String resultCodeText(org.w3c.dom.Document document) {
+        for (String key : resultCodeKeys) {
+            int maxDepth = RESULT_CODE_KEYS.contains(key) ? Integer.MAX_VALUE : MAX_SEARCH_DEPTH;
+            String value = firstTagText(document, List.of(key), maxDepth);
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    /** @param maxDepth 루트 요소를 0으로 센 요소 깊이의 상한 */
+    private String firstTagText(org.w3c.dom.Document document, List<String> names, int maxDepth) {
         for (String name : names) {
             var nodes = document.getElementsByTagName(name);
-            if (nodes.getLength() > 0) {
-                String value = nodes.item(0).getTextContent();
+            for (int i = 0; i < nodes.getLength(); i++) {
+                if (depth(nodes.item(i)) > maxDepth) continue;
+                String value = nodes.item(i).getTextContent();
                 if (value != null && !value.isBlank()) return value.trim();
+                // 문서 전체에서 찾던 기본 이름은 지금까지처럼 첫 요소만 본다
+                if (maxDepth == Integer.MAX_VALUE) break;
             }
         }
         return null;
+    }
+
+    private static int depth(org.w3c.dom.Node node) {
+        int depth = 0;
+        for (org.w3c.dom.Node parent = node.getParentNode(); parent != null
+                && parent.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE; parent = parent.getParentNode()) {
+            depth++;
+        }
+        return depth;
     }
 
     private ResultInfo parseJson(String content) {
@@ -171,7 +199,8 @@ final class PublicDataErrorDetector {
     private String findKey(JsonNode node, String key, int depth) {
         if (depth > MAX_SEARCH_DEPTH || !node.isObject()) return null;
         JsonNode direct = node.get(key);
-        if (direct != null && direct.isValueNode()) return direct.asText();
+        // null은 값이 없는 것이다. "null"이라는 결과코드로 읽으면 정상 응답을 오류로 본다
+        if (direct != null && direct.isValueNode() && !direct.isNull()) return direct.asText();
         for (JsonNode child : node) {
             String found = findKey(child, key, depth + 1);
             if (found != null) return found;
@@ -180,9 +209,9 @@ final class PublicDataErrorDetector {
     }
 
     private String matchedErrorKeyword(String content) {
-        String upper = content.toUpperCase();
+        String upper = content.toUpperCase(Locale.ROOT);
         return ERROR_KEYWORDS.stream()
-                .filter(keyword -> upper.contains(keyword.toUpperCase()))
+                .filter(keyword -> upper.contains(keyword.toUpperCase(Locale.ROOT)))
                 .findFirst()
                 .orElse(null);
     }

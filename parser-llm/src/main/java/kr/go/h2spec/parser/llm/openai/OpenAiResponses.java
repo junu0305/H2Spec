@@ -57,7 +57,8 @@ public final class OpenAiResponses {
         StringBuilder text = new StringBuilder();
         boolean refused = false;
         for (SseReader.Event event = events.next(); event != null; event = events.next()) {
-            // Responses API는 [DONE]을 보내지 않는다. 주소를 바꿔 쓰는 호환 프록시가 보내면 끝으로 본다
+            // Responses API는 [DONE]을 보내지 않는다. 주소를 바꿔 쓰는 호환 프록시가 마지막 이벤트 없이 [DONE]만 보내면 끝난 방식과
+            // 사용량을 알 수 없으므로 거기서 읽기를 멈추고 끊긴 스트림으로 본다
             if ("[DONE]".equals(event.data().strip())) {
                 break;
             }
@@ -91,7 +92,7 @@ public final class OpenAiResponses {
     }
 
     /**
-     * 2xx가 아닌 HTTP 응답을 실패 종류로 바꾼다. 종류는 상태 코드로 정하고, 429는 오류 코드로 호출 한도와 잔액·사용 한도 문제를 가르고,
+     * 200이 아닌 HTTP 응답을 실패 종류로 바꾼다. 종류는 상태 코드로 정하고, 429는 오류 코드로 호출 한도와 잔액·사용 한도 문제를 가르고,
      * 400은 문제가 된 요청 필드({@code error.param})로 모든 문서가 같이 실패하는 설정 문제를 가른다.
      *
      * @param statusCode HTTP 상태 코드
@@ -116,7 +117,12 @@ public final class OpenAiResponses {
             return Kind.SETTINGS;
         }
         if (statusCode == 429) {
-            return isQuota(error) ? Kind.QUOTA : Kind.RATE_LIMITED;
+            if (isQuota(error)) {
+                return Kind.QUOTA;
+            }
+            // 요청 하나가 분당 토큰 한도(입력과 출력 상한의 합)를 넘었다("Request too large for … tokens per min"). 기다려도 같은 요청은
+            // 늘 넘으므로 다시 부르지 않는다. 작은 문서는 통과할 수 있어 실행을 멈추지 않고 그 문서만 실패로 센다
+            return error.path("message").asText("").startsWith("Request too large") ? Kind.BAD_REQUEST : Kind.RATE_LIMITED;
         }
         if (statusCode == 400) {
             String param = error.path("param").asText("");

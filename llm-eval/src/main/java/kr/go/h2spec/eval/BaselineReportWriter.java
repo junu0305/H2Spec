@@ -76,8 +76,11 @@ final class BaselineReportWriter {
                 .append(report.set()).append("\n\n");
         md.append("- 날짜: ").append(report.date()).append('\n');
         md.append("- 엔진: ").append(report.engine()).append('\n');
+        // 정답 파일은 있지만 녹화 응답이 없거나 정답 파일을 읽지 못해 지표에서 뺀 문서는 정답 없는 문서와 따로 센다
+        long excluded = report.documents().stream().filter(result -> !result.scored() && result.gold() != null).count();
         md.append("- 문서: ").append(totals.documents()).append("개 (정답 있음 ").append(totals.scoredDocuments())
-                .append("개, 정답 없음 ").append(totals.documents() - totals.scoredDocuments()).append("개)\n");
+                .append("개, 정답 없음 ").append(totals.documents() - totals.scoredDocuments() - excluded).append("개")
+                .append(excluded == 0 ? "" : ", 지표에서 뺌 " + excluded + "개").append(")\n");
         md.append("- 정답 오퍼레이션 ").append(totals.goldOperations()).append("개, 엔진이 IR을 낸 오퍼레이션 ")
                 .append(totals.extracted()).append("개 (정답 있는 문서)\n\n");
 
@@ -124,7 +127,8 @@ final class BaselineReportWriter {
             String engine = result.operations().size() + " (" + extracted + ")";
             String generator = passed + "/" + extracted;
             if (!result.scored()) {
-                md.append("| ").append(cell(fileName(result.document()))).append(" | 없음 | ").append(engine)
+                md.append("| ").append(cell(fileName(result.document()))).append(result.gold() == null ? " | 없음 | " : " | 지표에서 뺌 | ")
+                        .append(engine)
                         .append(" | - | - | - | - | ").append(generator).append(" (참고) |\n");
                 continue;
             }
@@ -203,9 +207,12 @@ final class BaselineReportWriter {
                 if (outcome == null || outcome.passed()) {
                     continue;
                 }
+                // 지원 범위 밖으로 건너뛴 오퍼레이션은 generator 통과율에서 빠지므로, generator 결함으로 읽히지 않게 표시한다
+                EngineOperation operation = result.operations().get(i);
+                // 엔진이 지원 범위 밖으로 건너뛴 오퍼레이션은 생성 코드가 없어 통과로 세지 않는다. generator 결함과 구별해 표시한다
                 rows.add("| " + cell(fileName(result.document())) + (result.scored() ? "" : " (정답 없음)") + " | #"
-                        + (i + 1) + " " + cell(result.operations().get(i).apiId()) + " | " + outcome.stage().label()
-                        + " | " + cell(outcome.message()) + " |");
+                        + (i + 1) + " " + cell(operation.apiId()) + (operation.outOfScope() ? " (엔진이 지원 범위 밖으로 건너뜀)" : "")
+                        + " | " + outcome.stage().label() + " | " + cell(outcome.message()) + " |");
             }
         }
         if (rows.isEmpty()) {

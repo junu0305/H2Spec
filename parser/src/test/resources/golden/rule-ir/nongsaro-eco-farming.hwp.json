@@ -1,0 +1,140 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "nongsaro-eco-farming.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "SelectAreaInfoLst",
+      "apiName" : "SelectAreaInfoLst",
+      "provider" : "",
+      "baseUrl" : "http://api.nongsaro.go.kr/service/evrfrndFarmng",
+      "endpoint" : "/selectAreaInfoLst",
+      "httpMethod" : "GET",
+      "description" : "",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "apiKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "발급받은 Open API 인증키"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.body.items.item[].code",
+        "type" : "string",
+        "description" : "지역코드"
+      }, {
+        "path" : "response.body.items.item[].codeNm",
+        "type" : "string",
+        "description" : "지역코드 명"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.selectareainfolst",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  }, {
+    "metadata" : {
+      "sourceFile" : "nongsaro-eco-farming.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "EvrfrndFarmngLst",
+      "apiName" : "EvrfrndFarmngLst",
+      "provider" : "",
+      "baseUrl" : "http://api.nongsaro.go.kr/service/evrfrndFarmng",
+      "endpoint" : "/evrfrndFarmngLst",
+      "httpMethod" : "GET",
+      "description" : "",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "apiKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "발급받은 Open API 인증키"
+      }, {
+        "name" : "sText",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "검색어 문자열"
+      }, {
+        "name" : "sAreaNm",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "검색조건 지역"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "조회할 페이지 번호"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "한 페이지에 제공할 건수"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.body.items.item[].cntntsNo",
+        "type" : "string",
+        "description" : "콘텐츠 번호(키)"
+      }, {
+        "path" : "response.body.items.item[].cntntsSj",
+        "type" : "string",
+        "description" : "대표"
+      }, {
+        "path" : "response.body.items.item[].areaNm",
+        "type" : "string",
+        "description" : "국가명"
+      }, {
+        "path" : "response.body.items.item[].rtnOrginlFileNm",
+        "type" : "string",
+        "description" : "주소"
+      }, {
+        "path" : "response.body.items.item[].rtnFileSn",
+        "type" : "string",
+        "description" : "설립년도"
+      }, {
+        "path" : "response.body.items.item[].rtnFileSeCode",
+        "type" : "string",
+        "description" : "연락처"
+      }, {
+        "path" : "response.body.items.item[].linkUrl",
+        "type" : "string",
+        "description" : "홈페이지"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.evrfrndfarmnglst",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

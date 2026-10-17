@@ -1,5 +1,7 @@
 package kr.go.h2spec.eval;
 
+import kr.go.h2spec.parser.DocumentReaders;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -69,7 +71,7 @@ final class DataSets {
         List<EvalDocument> documents = new ArrayList<>();
         try (Stream<Path> files = Files.list(corpus)) {
             files.filter(Files::isRegularFile)
-                    .filter(Documents::isDocument)
+                    .filter(DocumentReaders::isDocument)
                     .sorted()
                     .forEach(document -> documents.add(new EvalDocument(document, goldFor(document))));
         }

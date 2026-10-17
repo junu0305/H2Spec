@@ -1,5 +1,6 @@
 package kr.go.h2spec.parser.llm.gemini;
 
+import com.fasterxml.jackson.databind.node.MissingNode;
 import kr.go.h2spec.parser.llm.client.LlmException;
 import kr.go.h2spec.parser.llm.client.LlmResponse;
 import org.junit.jupiter.api.Test;
@@ -102,6 +103,17 @@ class GeminiResponsesTest {
                 "{\"error\":{\"status\":\"DEADLINE_EXCEEDED\",\"message\":\"deadline\"}}").kind(), "숫자 코드가 없으면 상태 이름으로 가른다");
         assertEquals(LlmException.Kind.UNAVAILABLE, streamError(
                 "{\"error\":{\"code\":503,\"status\":\"UNAVAILABLE\",\"message\":\"overloaded\"}}").kind());
+        // 숫자 코드가 없어도 상태 이름을 HTTP 상태 코드로 바꿔 HTTP 오류와 같은 상세 판정을 거친다
+        assertEquals(LlmException.Kind.SETTINGS, streamError(
+                "{\"error\":{\"status\":\"NOT_FOUND\",\"message\":\"models/x is not found\"}}").kind());
+        assertEquals(LlmException.Kind.SETTINGS, streamError(
+                "{\"error\":{\"code\":\"404\",\"status\":\"NOT_FOUND\",\"message\":\"models/x is not found\"}}").kind(),
+                "문자열로 온 숫자 코드도 읽는다");
+        assertEquals(LlmException.Kind.AUTH, streamError("{\"error\":{\"status\":\"INVALID_ARGUMENT\",\"message\":\"key\","
+                + "\"details\":[{\"reason\":\"API_KEY_INVALID\"}]}}").kind());
+        assertEquals(LlmException.Kind.UNAVAILABLE, streamError(
+                "{\"error\":{\"status\":\"ABORTED\",\"message\":\"conflict\"}}").kind());
+        assertEquals(LlmException.Kind.UNAVAILABLE, GeminiResponses.statusKind(409, MissingNode.getInstance()));
     }
 
     @Test

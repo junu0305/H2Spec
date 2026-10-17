@@ -279,6 +279,30 @@ class PublicDataErrorInterceptorTest {
         assertEquals("30", e.getResultCode());
     }
 
+    @Test
+    void 준_결과코드_이름은_XML에서도_응답_메타데이터_깊이까지만_찾는다() {
+        // code처럼 흔한 이름이면 header에 없을 때 데이터 항목 안의 같은 이름이 결과코드로 잡혀 정상 응답이 예외가 된다
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of("code"));
+        String itemCode = "<response><header><resultCode>00</resultCode></header><body><items><item><code>A12</code></item>"
+                + "</items></body></response>";
+
+        assertDoesNotThrow(() -> intercept(withKey, itemCode));
+        PublicDataApiException e = assertThrows(PublicDataApiException.class,
+                () -> intercept(withKey, "<response><header><code>99</code></header><body/></response>"));
+        assertEquals("99", e.getResultCode());
+    }
+
+    @Test
+    void JSON_결과코드가_null이면_결과코드가_없는_것으로_본다() {
+        // "null"이라는 결과코드로 읽으면 성공코드와 달라 정상 응답이 예외가 된다
+        PublicDataErrorInterceptor withKey = new PublicDataErrorInterceptor("00", List.of("resultCd"));
+
+        assertDoesNotThrow(() -> intercept(withKey, """
+                {"result":{"resultCd":null,"resultCode":"00"},"list":[]}"""));
+        assertDoesNotThrow(() -> intercept("""
+                {"response":{"header":{"resultCode":null,"resultMsg":"OK"}}}"""));
+    }
+
     private static String xmlWithResultCode(String resultCode) {
         return "<response><header><resultCode>" + resultCode + "</resultCode></header><body/></response>";
     }

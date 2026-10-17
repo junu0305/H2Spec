@@ -47,9 +47,9 @@ public class CodeGenerator {
 
         // 셋을 모두 메모리에 만든 뒤에 쓴다. DTO를 먼저 써 두면 ClientEmitter가 실패할 때(serviceKey 누락 등) DTO만 남는다.
         // UTF-8로 쓸 수 없는 글(짝 없는 서로게이트)도 쓰기 전에 드러나도록 바이트까지 만들어 둔다.
-        byte[] dtoSource = utf8(new DtoEmitter().emit(ir, root));
-        byte[] clientSource = utf8(new ClientEmitter().emit(ir));
-        byte[] openApiSource = utf8(new OpenApiEmitter().emit(ir, root));
+        byte[] dtoSource = utf8(new DtoEmitter().emit(ir, root), "DTO");
+        byte[] clientSource = utf8(new ClientEmitter().emit(ir), "클라이언트");
+        byte[] openApiSource = utf8(new OpenApiEmitter().emit(ir, root), "OpenAPI 스펙");
 
         String pkgPath = ir.generatorHints().targetPackage().replace('.', '/');
         String apiClass = JavaNames.pascal(ir.api().apiId());
@@ -136,6 +136,11 @@ public class CodeGenerator {
                         + " (" + path + "." + child.name() + ") → " + quote(JavaNameRules.javaName(child.name()))
                         + " — 식별자가 아니거나 예약어입니다.");
             }
+            // getter가 Object의 final 메서드 getClass()가 되는 이름("_class" → Class)은 컴파일되지 않는다
+            if (JavaNameRules.canonicalIdentifier(JavaNames.pascal(child.name())).equals("Class")) {
+                throw new IllegalArgumentException("응답 필드 이름의 getter가 Object.getClass()와 겹칩니다: " + quote(child.name())
+                        + " (" + path + "." + child.name() + ") — IR 경로 세그먼트 이름을 바꿔 주세요.");
+            }
         }
         Map<String, List<String>> collisions = JavaNameRules.javaNameCollisions(node.children().keySet());
         if (!collisions.isEmpty()) {
@@ -156,8 +161,16 @@ public class CodeGenerator {
         return "'" + JavaText.literal(value) + "'";
     }
 
-    private static byte[] utf8(String source) throws CharacterCodingException {
-        ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder().encode(CharBuffer.wrap(source));
+    /** @param what 메시지에 쓸 산출물 이름 */
+    private static byte[] utf8(String source, String what) {
+        ByteBuffer encoded;
+        try {
+            encoded = StandardCharsets.UTF_8.newEncoder().encode(CharBuffer.wrap(source));
+        } catch (CharacterCodingException e) {
+            // 인코더의 메시지("Input length = 1")로는 원인을 알 수 없어 무엇이 문제인지 적는다
+            throw new IllegalArgumentException(what + " 코드에 UTF-8로 쓸 수 없는 글자(짝 없는 서로게이트)가 있습니다"
+                    + " — IR의 이름·설명 문자열을 확인해 주세요.", e);
+        }
         byte[] bytes = new byte[encoded.remaining()];
         encoded.get(bytes);
         return bytes;

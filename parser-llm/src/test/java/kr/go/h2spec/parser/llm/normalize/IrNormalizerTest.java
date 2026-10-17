@@ -117,6 +117,25 @@ class IrNormalizerTest {
     // ---- api.requestParameters ----
 
     @Test
+    void 주소의_경로_변수가_되는_파라미터는_필수_여부를_몰라도_필수이고_선택으로_뒀다는_노트를_남기지_않는다() {
+        String url = "https://openapi.example.kr/svc/getList/{itemId}";
+        NormalizedOperation normalized = normalize(
+                document(url, row("serviceKey", "인증키", "100", "1", "-", "인증키"), row("itemId", "항목 ID", "10", "0", "", "항목 ID")),
+                extraction(documentOperation(url, query("serviceKey"),
+                        parameter("itemId", Location.QUERY, LlmValueType.STRING, Requirement.UNKNOWN, "", "", false))));
+
+        JsonNode itemId = null;
+        for (JsonNode parameter : api(normalized).get("requestParameters")) {
+            if ("itemId".equals(parameter.get("name").asText())) {
+                itemId = parameter;
+            }
+        }
+        assertEquals("path", itemId.get("in").asText());
+        assertTrue(itemId.get("required").asBoolean());
+        assertTrue(notes(normalized).stream().noneMatch(note -> note.contains("필수 여부를 알 수 없어")), notes(normalized).toString());
+    }
+
+    @Test
     void 숫자_타입인데_예시나_기본값이_앞자리_0이면_string으로_바꾸고_노트를_남긴다() {
         NormalizedOperation normalized = normalize(standardOperation().parameters(query("serviceKey"),
                 parameter("areaCode", Location.QUERY, LlmValueType.INTEGER, Requirement.OPTIONAL, "0311", "", false),
@@ -141,11 +160,10 @@ class IrNormalizerTest {
         assertFormat(ResponseFormat.BOTH, DefaultResponseFormat.JSON, "_type", "JSON", List.of());
         assertFormat(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "returnType", "XML", List.of());
         assertFormat(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "_type", "XML",
-                List.of("[정규화] 포맷 파라미터 _type는 generator가 값을 채우지 않고 기본 응답 형식도 알 수 없어 "
+                List.of("[정규화] 포맷 파라미터 _type가 요청 파라미터에 없고 기본 응답 형식도 알 수 없어 "
                         + "응답 경로를 정한 XML 예제를 따라 XML로 둠 (서버 기본 형식 확인 필요)"));
-        assertFormat(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "", "XML",
-                List.of("[정규화] 응답 형식을 고르는 파라미터가 없고 기본 응답 형식도 알 수 없어 "
-                        + "응답 경로를 정한 XML 예제를 따라 XML로 둠 (서버 기본 형식 확인 필요)"));
+        // LLM이 포맷 파라미터를 밝히지 않아도 generator가 아는 returnType이 있으면 생성 클라이언트가 형식을 채워 보낸다
+        assertFormat(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "", "XML", List.of());
         assertFormat(ResponseFormat.UNKNOWN, DefaultResponseFormat.UNKNOWN, "returnType", "XML",
                 List.of("[정규화] 응답 형식이 적혀 있지 않아 응답 경로를 정한 XML 예제를 따라 XML로 둠"));
     }
@@ -158,16 +176,32 @@ class IrNormalizerTest {
         NormalizedOperation unstated = normalize(standardOperation()
                 .format(ResponseFormat.UNKNOWN, DefaultResponseFormat.UNKNOWN, "").exampleFormat(ResponseExampleFormat.JSON));
         NormalizedOperation noExample = normalize(standardOperation()
-                .format(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "").structure(ResponseStructure.STANDARD_ASSUMED));
+                .format(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "").structure(ResponseStructure.STANDARD_ASSUMED)
+                .parameters(query("serviceKey")));
 
         assertEquals("JSON", api(json).get("responseFormat").asText());
-        assertEquals(List.of("[정규화] 포맷 파라미터 type는 generator가 값을 채우지 않고 기본 응답 형식도 알 수 없어 "
+        assertEquals(List.of("[정규화] 포맷 파라미터 type가 요청 파라미터에 없고 기본 응답 형식도 알 수 없어 "
                 + "응답 경로를 정한 JSON 예제를 따라 JSON으로 둠 (서버 기본 형식 확인 필요)"), notes(json));
         assertEquals("JSON", api(unstated).get("responseFormat").asText());
         assertEquals(List.of("[정규화] 응답 형식이 적혀 있지 않아 응답 경로를 정한 JSON 예제를 따라 JSON으로 둠"), notes(unstated));
         assertEquals("XML", api(noExample).get("responseFormat").asText());
         assertEquals(List.of("[정규화] 응답 형식을 고르는 파라미터가 없고 기본 응답 형식도 알 수 없어 XML로 둠 (서버 기본 형식 확인 필요)",
                 "[정규화] 응답 구조를 표준 구조로 가정함"), notes(noExample));
+    }
+
+    @Test
+    void 기본_형식을_모르면_형식_노트는_생성_클라이언트가_실제로_형식을_채우는지로_정하고_형식_선택_표시와_같다() {
+        // 문서가 밝힌 포맷 파라미터가 IR에 없으면 다른 파라미터가 있어도 형식을 고르지 못한다
+        NormalizedOperation missing = normalize(standardOperation()
+                .format(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, "returnType").parameters(query("serviceKey")));
+        NormalizedOperation filled = normalize(standardOperation()
+                .format(ResponseFormat.BOTH, DefaultResponseFormat.UNKNOWN, ""));
+
+        assertEquals(List.of("[정규화] 포맷 파라미터 returnType가 요청 파라미터에 없고 기본 응답 형식도 알 수 없어 "
+                + "응답 경로를 정한 XML 예제를 따라 XML로 둠 (서버 기본 형식 확인 필요)"), notes(missing));
+        assertFalse(missing.formatSelectable());
+        assertEquals(List.of(), notes(filled), "generator가 아는 returnType을 채워 보내므로 서버 기본 형식을 몰라도 된다");
+        assertTrue(filled.formatSelectable());
     }
 
     @Test

@@ -56,6 +56,39 @@ class CrossCheckerTest {
     }
 
     @Test
+    void 순서로는_검증에서_건너뛴_LLM_오퍼레이션이나_영문명이_서로_다른_오퍼레이션을_짝짓지_않아_LLM이_놓친_오퍼레이션을_알린다() {
+        // LLM이 공통 구간을 오퍼레이션으로 지어내 검증에서 건너뛰었고 getB는 놓쳤다
+        NormalizedOperation invented = new NormalizedOperation(null, "데이터 공통 사항", null, null,
+                "오퍼레이션 주소(Call Back URL 등)를 찾지 못했습니다", false);
+        CrossCheckResult missed = checker.check(List.of(llm("getA", "목록", ir(URL_A)), invented),
+                result(rule("getA", "목록", ir(URL_A)), rule("getB", "상세", ir(URL_B))));
+        // 영문명이 서로 다른 오퍼레이션은 순서가 같아도 같은 오퍼레이션이 아니다
+        CrossCheckResult different = checker.check(
+                List.of(llm("getA", "목록", ir(URL_A)), llm("getC", "", ir("https://api.example.kr/svc/getC"))),
+                result(rule("getA", "목록", ir(URL_A)), rule("getB", null, ir(URL_B))));
+
+        assertEquals(List.of("rule 엔진만 찾은 오퍼레이션: getB (" + URL_B + ")"), missed.warnings());
+        assertEquals(List.of("rule 엔진만 찾은 오퍼레이션: getB (" + URL_B + ")"), different.warnings());
+        assertEquals(List.of("[교차검증] " + CrossChecker.NOT_FOUND_BY_RULE), notes(different.operations().get(1)),
+                "getB 기준의 엉뚱한 차이 대신 rule 엔진이 찾지 못한 오퍼레이션이라고 알린다");
+    }
+
+    @Test
+    void 순서로_짝짓지_않은_자리도_건너뛰어_뒤의_오퍼레이션끼리_순서가_어긋나지_않는다() {
+        // 기능명이 맞지 않는 실제 오퍼레이션이 검증에서 건너뛰어졌다. 그 자리를 비우면 L2가 R1과 짝지어진다
+        NormalizedOperation dropped = new NormalizedOperation(null, "가 조회", null, null, "검증을 통과한 응답 필드가 없습니다", false);
+        List<RuleEngine.OperationResult> rule = List.of(rule(null, "첫 조회", ir(URL_A)), rule(null, "둘째 조회", ir(URL_B)));
+
+        CrossCheckResult result = checker.check(List.of(dropped, llm(null, "나 조회", ir(URL_B))), result(rule.toArray(
+                new RuleEngine.OperationResult[0])));
+
+        assertEquals(List.of(new CrossChecker.Pair(1, 1, CrossChecker.PairingKey.ORDER)), result.pairs());
+        assertEquals(List.of("rule 엔진만 찾은 오퍼레이션: 첫 조회 (" + URL_A + ")"), result.warnings(),
+                "LLM 결과에 IR이 없는 rule 오퍼레이션은 알린다");
+        assertEquals(List.of(), notes(result.operations().get(1)), "같은 자리의 오퍼레이션과 비교한다");
+    }
+
+    @Test
     void 짝이_없는_rule_엔진_오퍼레이션은_경고로_돌려준다() {
         CrossCheckResult result = checker.check(List.of(llm("getA", "목록", ir(URL_A))), result(
                 rule("getA", "목록", ir(URL_A)),
@@ -68,7 +101,7 @@ class CrossCheckerTest {
     }
 
     @Test
-    void 지원_범위_밖이나_검증에서_건너뛴_LLM_오퍼레이션도_짝을_지어_rule_엔진만_찾았다고_잘못_경고하지_않는다() {
+    void 지원_범위_밖이나_검증에서_건너뛴_LLM_오퍼레이션도_이름으로_짝을_지어_rule_엔진만_찾았다고_잘못_경고하지_않는다() {
         NormalizedOperation outOfScope = new NormalizedOperation("getA", "목록", "A", ir(URL_A), "인증 방식 미지원", true);
         NormalizedOperation dropped = new NormalizedOperation("getB", "상세", null, null, "검증을 통과한 응답 필드가 없습니다", false);
 

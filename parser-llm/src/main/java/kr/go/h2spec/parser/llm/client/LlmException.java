@@ -23,6 +23,11 @@ public class LlmException extends Exception {
         QUOTA,
         /** 회사의 호출 한도에 걸렸다 */
         RATE_LIMITED,
+        /**
+         * 회사가 재시도 대기 상한({@link RetryPolicy})보다 긴 시간을 기다린 뒤 부르라고 했다({@code retry-after}). 그 시간 전에는 다른 문서도
+         * 같은 이유로 거절되고, 회사는 그 전에 다시 부르지 말라고 하므로 CLI는 전체를 멈춘다
+         */
+        RETRY_LATER,
         /** 회사 서버 오류·과부하(스트림 중간에 알린 것 포함), 응답을 받기 전의 네트워크 오류 */
         UNAVAILABLE,
         /**

@@ -15,6 +15,7 @@ import kr.go.h2spec.parser.llm.client.SseReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.time.Duration;
+import java.util.Locale;
 
 /**
  * Claude Messages API의 응답을 {@link LlmResponse}와 {@link LlmException}으로 바꾼다.
@@ -68,7 +69,7 @@ public final class ClaudeResponses {
     }
 
     /**
-     * 2xx가 아닌 HTTP 응답을 실패 종류로 바꾼다. 종류는 상태 코드로 정하고, 본문의 오류 종류·메시지·요청 ID는 메시지에 옮긴다.
+     * 200이 아닌 HTTP 응답을 실패 종류로 바꾼다. 종류는 상태 코드로 정하고, 본문의 오류 종류·메시지·요청 ID는 메시지에 옮긴다.
      *
      * @param statusCode HTTP 상태 코드
      * @param body 오류 응답 본문. 읽지 못했으면 빈 문자열이나 null
@@ -76,14 +77,20 @@ public final class ClaudeResponses {
      * @return 던질 예외
      */
     public static LlmException fromHttpError(int statusCode, String body, Duration retryAfter) {
-        String detail = body == null ? "" : describeError(body);
+        JsonNode root = readQuietly(body == null ? "" : body);
+        String detail = body == null ? "" : describeError(root, body);
         Kind kind = statusKind(statusCode);
-        // 그 모델이 받지 않는 추론 깊이와 잔액 부족("Your credit balance is too low …")은 400으로도 온다.
-        // 문서마다 같은 400이 되므로 각각 설정 오류와 잔액 문제로 보고 실행을 멈추게 한다
-        String message = readQuietly(body == null ? "" : body).path("error").path("message").asText("");
-        if (kind == Kind.BAD_REQUEST && message.contains("effort")) {
+        // 그 모델이 받지 않는 추론 깊이·출력 한도, 잔액 부족("Your credit balance is too low …"), 지정한 사용 한도 도달
+        // ("You have reached your specified API usage limits …")은 400으로도 온다. 문서마다 같은 400이 되므로 각각 설정 오류와
+        // 잔액·사용 한도 문제로 보고 실행을 멈추게 한다. 입력과 출력 한도의 합이 컨텍스트를 넘는 400은 그 문서만의 문제라 그대로 둔다
+        String message = root.path("error").path("message").asText("");
+        String lower = message.toLowerCase(Locale.ROOT);
+        if (kind == Kind.BAD_REQUEST && (message.contains("effort") || lower.contains("maximum allowed number of output tokens"))) {
             kind = Kind.SETTINGS;
-        } else if (kind == Kind.BAD_REQUEST && message.contains("credit balance")) {
+        } else if (kind == Kind.BAD_REQUEST && (lower.contains("credit balance") || lower.contains("usage limit"))) {
+            kind = Kind.QUOTA;
+        } else if (kind == Kind.RATE_LIMITED && isSpendLimit(body == null ? "" : body)) {
+            // 월 지출 한도는 429로 오지만 다음 달까지 풀리지 않는다
             kind = Kind.QUOTA;
         }
         return new LlmException(kind,
@@ -105,8 +112,8 @@ public final class ClaudeResponses {
         if (statusCode == 404) {
             return Kind.SETTINGS;
         }
-        // 500·502·503·504와 과부하(529). 5xx는 모두 다시 부른다
-        if (statusCode >= 500) {
+        // 500·502·503·504와 과부하(529). 5xx는 모두 다시 부른다. 408·409는 공식 SDK도 다시 부른다
+        if (statusCode == 408 || statusCode == 409 || statusCode >= 500) {
             return Kind.UNAVAILABLE;
         }
         // 그 밖의 4xx와, 리다이렉트처럼 이 API가 내지 않는 응답은 다시 보내도 같다
@@ -126,16 +133,20 @@ public final class ClaudeResponses {
         };
     }
 
-    static Finish finish(String stopReason) throws LlmException {
+    /**
+     * 끝난 이유를 끝난 방식으로 바꾼다. 잘림·거절이 아닌 이유(도구를 쓰지 않는 이 요청에서는 나오지 않는 {@code tool_use}·{@code pause_turn}과
+     * 모르는 값)는 {@link Finish#COMPLETE}로 넘겨 출력 JSON으로 판단하게 한다. 출력은 스키마로 강제한 JSON이라 끝까지 적혀야만 읽히므로,
+     * 읽히지 않으면 llm 엔진이 JSON을 읽지 못한 응답처럼 한 번 더 부른 뒤 실패로 센다. 예외로 알리면 이미 과금된 토큰이 보고에서 빠진다
+     */
+    static Finish finish(String stopReason) {
         return switch (stopReason) {
-            case "end_turn", "stop_sequence" -> Finish.COMPLETE;
             case "max_tokens" -> Finish.TRUNCATED;
             // 입력과 출력을 합친 길이가 모델의 컨텍스트 창에 닿아 출력이 끊겼다. 출력이 끝나지 않은 것은 max_tokens와 같아 잘림으로 본다
             case "model_context_window_exceeded" -> Finish.TRUNCATED;
             // 안전 분류기가 거절했다. HTTP 200으로 오고, 그때까지의 출력은 스키마를 따르지 않을 수 있다
             case "refusal" -> Finish.REFUSED;
-            // tool_use·pause_turn은 도구를 쓰지 않는 이 요청에서 나오지 않는다. 모르는 값을 완료로 보면 덜 된 출력을 결과로 쓸 수 있어 실패로 알린다
-            default -> throw new LlmException(Kind.BAD_REQUEST, "Claude API 응답의 stop_reason을 해석할 수 없습니다: " + stopReason);
+            // end_turn·stop_sequence와 그 밖의 값
+            default -> Finish.COMPLETE;
         };
     }
 
@@ -169,9 +180,14 @@ public final class ClaudeResponses {
                 "Claude API 응답 스트림 오류 (" + type + "): " + error.path("message").asText(""));
     }
 
+    /** 월 지출 한도 도달({@code enforced_spend_limit_reached} 등). 오류 상세의 꼴이 정해져 있지 않아 본문 전체에서 찾는다 */
+    private static boolean isSpendLimit(String body) {
+        String lower = body.toLowerCase(Locale.ROOT);
+        return lower.contains("spend_limit") || lower.contains("spend limit");
+    }
+
     /** 오류 본문에서 종류·메시지·요청 ID를 꺼낸다. JSON이 아니면 앞부분만 한 줄로 옮긴다 */
-    private static String describeError(String body) {
-        JsonNode root = readQuietly(body);
+    private static String describeError(JsonNode root, String body) {
         JsonNode error = root.path("error");
         if (error.isObject()) {
             String detail = error.path("type").asText("") + ": " + error.path("message").asText("");

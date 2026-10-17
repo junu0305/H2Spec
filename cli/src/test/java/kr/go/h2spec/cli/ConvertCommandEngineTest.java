@@ -275,6 +275,125 @@ class ConvertCommandEngineTest {
                 run.err().lines().toList());
     }
 
+    @Test
+    void 회사가_긴_대기를_요구하면_남은_파일을_변환하지_않고_멈추며_멈추기_전까지의_토큰_합계를_알린다() throws Exception {
+        // 회사가 알려 준 시간 전에는 남은 문서도 같은 429를 받는다. 곧바로 부르면 회사가 부르지 말라고 한 때에 부르게 된다
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        for (String name : List.of("a.hwp", "b.hwp", "c.hwp")) {
+            Files.writeString(inputDir.resolve(name), "fake");
+        }
+        String retryLater = "LLM 회사가 한참 뒤에 다시 부르라고 해 변환하지 못했습니다. 알려 준 시간이 지난 뒤 다시 실행하세요 (b.hwp, claude): "
+                + "Claude API 오류 (HTTP 429) (회사가 90초 뒤에 다시 부르라고 해 기다리지 않았습니다)";
+        ParsedApi first = api("FirstApi");
+        ParsedApi last = api("LastApi");
+        FakeParser parser = new FakeParser(Map.of(
+                "a.hwp", () -> llmResult(false, new TokenUsage(10, 0, 0, 5), first),
+                "b.hwp", () -> {
+                    throw new SpecParseException(SpecParseException.Kind.RETRY_LATER, retryLater, null,
+                            new Engine("llm", "claude", "claude-sonnet-5-5", "medium", false, new TokenUsage(3, 0, 0, 2)));
+                },
+                "c.hwp", () -> llmResult(false, TokenUsage.NONE, last)));
+
+        Run run = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--input", inputDir.toString(), "--output", out("output"));
+
+        assertEquals(1, run.exit());
+        assertEquals(List.of("a.hwp", "b.hwp"), parser.parsed);
+        assertEquals(List.of(NOTICE, retryLater, "LLM 회사가 알려 준 시간 전에는 다시 부를 수 없는 상태라 남은 파일 1개는 변환하지 않고 멈춥니다"),
+                run.err().lines().toList());
+        assertEquals("멈추기 전까지 LLM 토큰 합계 입력 13 / 출력 7", lastLine(run.out()), "변환 요약이 없어도 과금된 토큰은 알린다");
+    }
+
+    @Test
+    void 다른_회사의_모델_이름이면_문서를_보내기_전에_멈추고_어느_회사도_모르는_이름은_그대로_보낸다() throws Exception {
+        // 회사를 키 환경변수로 고른 채(GOOGLE_API_KEY는 세지 않는다) 다른 회사용 모델 환경변수가 남아 있는 경우
+        Path doc = Files.writeString(tempDir.resolve("a.hwp"), "fake");
+        ParsedApi first = api("FirstApi");
+        FakeParser parser = new FakeParser(Map.of("a.hwp", () -> llmResult(false, TokenUsage.NONE, first)));
+
+        Run mismatch = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY, "GOOGLE_API_KEY", "google-key",
+                        "H2SPEC_LLM_MODEL", "gemini-3.8-flash"), parser),
+                "--engine", "llm", "--input", doc.toString(), "--output", out("output"));
+
+        assertEquals(1, mismatch.exit());
+        assertEquals(List.of("모델 'gemini-3.8-flash'은 gemini의 모델로 보이는데 회사가 claude로 정해져 문서를 보내지 않았습니다. "
+                + "회사(--provider, H2SPEC_LLM_PROVIDER, 키 환경변수)와 모델(--model, H2SPEC_LLM_MODEL) 가운데 틀린 쪽을 고치세요"),
+                mismatch.err().lines().toList());
+        assertEquals(0, factory.calls, "엔진을 만들지 않았다");
+        assertEquals(List.of(), parser.parsed);
+
+        Run unknown = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--model", "my-proxy-model", "--input", doc.toString(), "--output", out("unknown"));
+
+        assertEquals(0, unknown.exit(), unknown.err());
+        assertEquals("my-proxy-model", factory.settings.model());
+    }
+
+    @Test
+    void 명세_문서에서_쓰는_IR도_포맷_파라미터_힌트_값을_새_형식으로_바꿔_IR_JSON_입력과_같은_코드를_낸다() throws Exception {
+        // generator가 모르는 포맷 파라미터(type)는 힌트 값을 그대로 보낸다. 형식만 바꾸고 힌트를 두면 type=xml을 보내 JSON으로 읽는다
+        ParsedApi hinted = api("TypeApi");
+        ObjectNode ir = hinted.ir();
+        ir.withArray("/api/requestParameters").addObject().put("name", "type").put("in", "query").put("type", "string")
+                .put("required", false).put("description", "응답 형식");
+        ir.withObject("/generatorHints").putObject("responseFormatParameter").put("name", "type").put("value", "xml");
+        Path doc = Files.writeString(tempDir.resolve("a.hwp"), "fake");
+        Path inputIr = Files.writeString(tempDir.resolve("TypeApi.json"), ir.toPrettyString());
+        FakeParser parser = new FakeParser(Map.of("a.hwp", () -> llmResult(false, TokenUsage.NONE, hinted)));
+
+        Run fromDocument = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--format", "json", "--input", doc.toString(), "--output", out("from-document"));
+        Run fromIr = run(command(LlmProviders.ALL, Map.of(), UNUSED),
+                "--format", "json", "--input", inputIr.toString(), "--output", out("from-ir"));
+
+        assertEquals(0, fromDocument.exit(), fromDocument.err());
+        assertEquals(0, fromIr.exit(), fromIr.err());
+        Path client = Path.of("kr/go/h2spec/client/typeapi/TypeApiClient.java");
+        String documentClient = Files.readString(tempDir.resolve("from-document").resolve(client));
+        assertTrue(documentClient.contains("url.append(\"&type=json\");"), documentClient);
+        assertEquals(Files.readString(tempDir.resolve("from-ir").resolve(client)), documentClient);
+        assertEquals("json", new ObjectMapper().readTree(tempDir.resolve("from-document/ir/TypeApi.json").toFile())
+                .at("/generatorHints/responseFormatParameter/value").asText(), "커밋할 IR도 형식과 힌트가 맞는다");
+    }
+
+    @Test
+    void 예기치_않은_오류는_그_파일만_실패로_세고_나머지를_계속_변환한다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        for (String name : List.of("a.hwp", "b.hwp")) {
+            Files.writeString(inputDir.resolve(name), "fake");
+        }
+        ParsedApi last = api("LastApi");
+        FakeParser parser = new FakeParser(Map.of(
+                "a.hwp", () -> {
+                    throw new IllegalStateException("예기치 않은 상태");
+                },
+                "b.hwp", () -> llmResult(false, TokenUsage.NONE, last)));
+
+        Run run = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--input", inputDir.toString(), "--output", out("output"));
+
+        assertEquals(1, run.exit());
+        assertEquals(List.of("a.hwp", "b.hwp"), parser.parsed);
+        assertTrue(run.err().contains("a.hwp): 예기치 않은 오류 java.lang.IllegalStateException: 예기치 않은 상태"), run.err());
+        assertTrue(run.out().contains("2개 중 1개 변환 성공, 1개 실패"), run.out());
+    }
+
+    @Test
+    void rule_엔진에서_llm_엔진_옵션을_주면_쓰이지_않는다고_알리고_잘못된_패키지는_변환하기_전에_멈춘다() throws Exception {
+        Run options = run(command(List.of(CLAUDE), Map.of(), UNUSED),
+                "--provider", "claude", "--no-cache", "--input", irPath().toString(), "--output", out("output"));
+        Run badPackage = run(command(List.of(CLAUDE), Map.of(), UNUSED),
+                "--package", "com.example-x", "--input", irPath().toString(), "--output", out("bad"));
+
+        assertEquals(0, options.exit(), options.err());
+        assertEquals(List.of("--engine llm에서만 쓰는 옵션을 무시하고 rule 엔진으로 변환합니다: --provider, --no-cache"),
+                options.err().lines().toList());
+        assertEquals(0, environment.reads, "rule 엔진은 환경변수를 읽지 않는다");
+        assertEquals(1, badPackage.exit());
+        assertEquals(List.of("--package 값이 Java 패키지 이름이 아닙니다: com.example-x"), badPackage.err().lines().toList());
+        assertFalse(Files.exists(tempDir.resolve("bad")), "아무것도 쓰지 않는다");
+    }
+
     /** 가짜 환경변수와 가짜 llm 엔진으로 convert 명령을 만든다. 실행 뒤 {@link #environment}와 {@link #factory}로 본다 */
     private ConvertCommand command(List<LlmProviderFactory> providers, Map<String, String> env, SpecParser parser) {
         environment = new RecordingEnvironment(env);

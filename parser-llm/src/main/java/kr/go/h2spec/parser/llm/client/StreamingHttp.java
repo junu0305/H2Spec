@@ -30,14 +30,14 @@ import java.util.Objects;
  * 출력이 길고 추론 토큰까지 더해지면 응답이 몇 분씩 걸려, 한 번에 받으면 HTTP 타임아웃에 걸린다. 그래서 요청 타임아웃은 응답 머리를 받을
  * 때까지만 재고, 본문은 같은 시간 동안 아무것도 오지 않을 때만 끊는다.
  * <p>
- * 응답 머리를 기다리다 시간이 다 됐거나, 2xx 응답의 본문을 읽다가 멈추거나 끊긴 것({@link Kind#INTERRUPTED})은 다시 부르지 않는다.
+ * 응답 머리를 기다리다 시간이 다 됐거나, 200 응답의 본문을 읽다가 멈추거나 끊긴 것({@link Kind#INTERRUPTED})은 다시 부르지 않는다.
  * 회사가 요청을 받아 생성하는 중이었다면 끊긴 뒤에도 끝까지 생성해 과금할 수 있어, 다시 부르면 비용이 겹친다. 스트림이 끝을 알리기 전에
  * 끝났거나 해석할 수 없는 조각이 온 것도 같은 이유로 어댑터의 스트림 해석이 {@link Kind#INTERRUPTED}로 알린다. 회사가 스트림 중간에
  * 서버 오류를 보낸 것은 회사가 스스로 생성을 멈춘 것이라 HTTP 오류와 같이 다시 부른다.
  */
 public final class StreamingHttp {
 
-    /** 2xx 응답의 스트림 본문을 끝까지 읽어 결과로 바꾼다 */
+    /** 200 응답의 스트림 본문을 끝까지 읽어 결과로 바꾼다 */
     @FunctionalInterface
     public interface StreamParser {
 
@@ -50,7 +50,7 @@ public final class StreamingHttp {
         LlmResponse parse(Reader body) throws IOException, LlmException;
     }
 
-    /** 2xx가 아닌 응답을 실패 종류로 바꾼다 */
+    /** 200이 아닌 응답을 실패 종류로 바꾼다 */
     @FunctionalInterface
     public interface ErrorParser {
 
@@ -65,6 +65,11 @@ public final class StreamingHttp {
 
     /** 오류 응답은 메시지에 옮길 앞부분만 읽는다 */
     private static final int MAX_ERROR_BODY_BYTES = 64 * 1024;
+    /**
+     * 연결(TCP와 TLS 핸드셰이크)을 맺는 대기 시간. 없으면 JDK는 핸드셰이크에 답하지 않는 방화벽·프록시 앞에서 요청 대기 시간(10분·30분)을
+     * 다 쓴 뒤에야 연결 실패를 알리고, 연결 실패는 다시 부르므로 문서 하나에 그 몇 배가 걸린다
+     */
+    static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String apiName;
@@ -78,7 +83,8 @@ public final class StreamingHttp {
      * @param settings 키, 대기 시간, 재시도 횟수
      */
     public StreamingHttp(String apiName, LlmSettings settings) {
-        this(apiName, settings, HttpClient.newHttpClient(), RetryPolicy.of(settings), IdleTimeoutInputStream.Timer.SYSTEM);
+        this(apiName, settings, HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), RetryPolicy.of(settings),
+                IdleTimeoutInputStream.Timer.SYSTEM);
     }
 
     /** 재시도 대기와 본문 멈춤 감시를 실제 시간 대신 기록하는 대기·손으로 돌리는 시계로 바꿔 시험할 수 있게 받는다 */
@@ -109,8 +115,8 @@ public final class StreamingHttp {
      * 보내고 받는다. 다시 부르면 나을 수 있는 실패는 {@link RetryPolicy}가 다시 부른다.
      *
      * @param request 보낼 요청
-     * @param parser  2xx 응답의 스트림 해석
-     * @param errors  2xx가 아닌 응답의 분류
+     * @param parser  200 응답의 스트림 해석
+     * @param errors  200이 아닌 응답의 분류
      * @return 결과
      * @throws LlmException 재시도한 뒤에도 실패했을 때. 메시지에 API 키는 없다
      */
@@ -158,9 +164,11 @@ public final class StreamingHttp {
         HttpResponse<InputStream> response = connect(request);
         IdleTimeoutInputStream body = IdleTimeoutInputStream.watch(response.body(), settings.requestTimeout(), timer);
         try {
-            if (response.statusCode() / 100 != 2) {
-                // 실패 종류는 상태 코드가 정한다. 본문은 메시지에 옮길 앞부분만 읽고, 못 읽어도 종류는 그대로다
-                throw errors.parse(response.statusCode(), readErrorBody(body), retryAfter(response.headers()));
+            // 스트림은 200으로만 온다. 202·204 같은 다른 2xx(주소를 바꿔 쓰는 게이트웨이)를 스트림으로 읽으면 끊긴 스트림으로 잘못 알린다
+            if (response.statusCode() != 200) {
+                // 실패 종류는 어댑터가 상태 코드와 본문의 오류 정보로 가른다. 본문은 앞부분만 읽고, 못 읽으면 상태 코드만으로 가른다.
+                // 어댑터가 본문을 잘라 메시지에 옮기면 잘린 자리에 걸친 키는 나중에 가릴 수 없어, 자르기 전에 키를 가린다
+                throw errors.parse(response.statusCode(), maskApiKey(readErrorBody(body)), retryAfter(response.headers()));
             }
             return readStream(body, parser);
         } finally {
@@ -191,10 +199,10 @@ public final class StreamingHttp {
         } catch (HttpConnectTimeoutException e) {
             // 연결을 맺기 전에 시간이 다 됐다. 요청을 보내지 못했으므로 다시 불러도 비용이 겹치지 않는다
             throw new LlmException(Kind.UNAVAILABLE,
-                    apiName + "에 " + describe(settings.requestTimeout()) + " 안에 연결하지 못했습니다", e);
+                    apiName + "에 " + describe(connectTimeout()) + " 안에 연결하지 못했습니다", e);
         } catch (HttpTimeoutException e) {
             // 요청 타임아웃은 응답 머리를 받을 때까지만 잰다. 본문의 멈춤은 IdleTimeoutInputStream이 잰다.
-            // 연결하지 못한 것은 이보다 훨씬 일찍 IOException으로 오므로, 여기까지 왔으면 회사가 요청을 받고 답하지 않은 것이다
+            // 연결(TLS 포함)은 CONNECT_TIMEOUT이 따로 재므로, 여기까지 왔으면 회사가 요청을 받고 답하지 않은 것으로 본다
             throw new LlmException(Kind.INTERRUPTED,
                     apiName + "가 " + describe(settings.requestTimeout()) + " 안에 응답하지 않아 연결을 끊었습니다", e);
         } catch (IOException e) {
@@ -221,6 +229,17 @@ public final class StreamingHttp {
         } catch (IOException e) {
             // 버린다
         }
+    }
+
+    /** 연결 실패를 알린 대기 시간. 클라이언트의 연결 대기 시간이 없거나 요청 대기 시간보다 길면 요청 대기 시간이 먼저 끝난다 */
+    private Duration connectTimeout() {
+        return http.connectTimeout().filter(timeout -> timeout.compareTo(settings.requestTimeout()) < 0)
+                .orElse(settings.requestTimeout());
+    }
+
+    /** 오류 본문에 섞인 키를 가린다. 회사는 키를 돌려주지 않지만 주소를 바꿔 쓰는 프록시는 받은 머리를 그대로 돌려줄 수 있다 */
+    private String maskApiKey(String body) {
+        return body.replace(settings.apiKey(), LlmSettings.MASKED_API_KEY);
     }
 
     private LlmException stalled(Exception cause) {

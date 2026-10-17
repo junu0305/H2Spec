@@ -1,5 +1,6 @@
 package kr.go.h2spec.generator.emit;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /** IR의 파라미터/경로 이름을 Java 식별자 규칙으로 변환한다. */
@@ -23,9 +24,9 @@ public final class JavaNames {
         if (parts.length == 1) {
             return Character.toLowerCase(name.charAt(0)) + name.substring(1);
         }
-        StringBuilder sb = new StringBuilder(parts[0].toLowerCase());
+        StringBuilder sb = new StringBuilder(parts[0].toLowerCase(Locale.ROOT));
         for (int i = 1; i < parts.length; i++) {
-            sb.append(capitalize(parts[i].toLowerCase()));
+            sb.append(capitalize(parts[i].toLowerCase(Locale.ROOT)));
         }
         return sb.toString();
     }
@@ -41,7 +42,7 @@ public final class JavaNames {
         }
         StringBuilder sb = new StringBuilder();
         for (String part : parts) {
-            sb.append(capitalize(part.toLowerCase()));
+            sb.append(capitalize(part.toLowerCase(Locale.ROOT)));
         }
         return sb.toString();
     }

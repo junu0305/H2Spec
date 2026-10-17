@@ -6,6 +6,7 @@ import kr.go.h2spec.parser.llm.client.LlmSettings;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 
 /** OpenAI(GPT) 어댑터의 팩토리. {@link kr.go.h2spec.parser.llm.client.LlmProviders#ALL}에 적혀 있다. */
 public final class OpenAiProviderFactory implements LlmProviderFactory {
@@ -50,6 +51,13 @@ public final class OpenAiProviderFactory implements LlmProviderFactory {
     @Override
     public List<String> apiKeyEnvironmentVariables() {
         return List.of("OPENAI_API_KEY");
+    }
+
+    /** {@code gpt-}, {@code chatgpt-}, {@code o3}처럼 o와 숫자, 미세 조정 모델 {@code ft:gpt-}로 시작하는 이름 (대소문자 무시) */
+    @Override
+    public boolean recognizesModel(String model) {
+        String name = model.toLowerCase(Locale.ROOT);
+        return name.startsWith("gpt-") || name.startsWith("chatgpt-") || name.startsWith("ft:gpt-") || name.matches("o\\d.*");
     }
 
     @Override

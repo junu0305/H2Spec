@@ -129,6 +129,60 @@ class CodeGeneratorSafetyTest {
     }
 
     @Test
+    void 엔드포인트로_만든_메서드가_생성_헬퍼나_Object의_메서드와_겹치면_접두사를_붙이고_겹치지_않으면_그대로_둔다() throws Exception {
+        // /encode에 문자열 인자 하나면 생성 헬퍼 encode(String)와, 인자 없는 /getClass는 Object의 final 메서드와 겹친다
+        SampleIr encode = new SampleIr();
+        encode.endpoint = "/encode";
+        SampleIr getClass = new SampleIr();
+        getClass.endpoint = "/getClass";
+        getClass.params = new ArrayList<>(List.of(serviceKey("인증키")));
+        SampleIr overload = new SampleIr();
+        overload.endpoint = "/toString";
+
+        List<Path> encoded = new CodeGenerator().generate(encode.build(), tempDir.resolve("encode"));
+        List<Path> classed = new CodeGenerator().generate(getClass.build(), tempDir.resolve("get-class"));
+        List<Path> overloaded = new CodeGenerator().generate(overload.build(), tempDir.resolve("overload"));
+
+        assertTrue(Files.readString(encoded.get(1)).contains(" callEncode("), Files.readString(encoded.get(1)));
+        assertTrue(Files.readString(classed.get(1)).contains(" callGetClass("), Files.readString(classed.get(1)));
+        assertTrue(Files.readString(overloaded.get(1)).contains(" toString(\n"), "인자가 달라 겹치지 않는 이름은 바꾸지 않는다");
+        assertCompiles(encoded, tempDir.resolve("encode-classes"));
+        assertCompiles(classed, tempDir.resolve("get-class-classes"));
+        assertCompiles(overloaded, tempDir.resolve("overload-classes"));
+    }
+
+    @Test
+    void 메서드_인자의_Java_이름이_serviceKey가_되어도_인증키는_생성자로_받은_키를_보낸다() throws Exception {
+        // 게이트웨이 문서가 SERVICE_KEY를 따로 적으면 rule 엔진은 serviceKey를 하나 더 채운다. 인자 serviceKey가 필드를 가린다
+        SampleIr ir = new SampleIr();
+        ir.params.add(query("SERVICE_KEY", "문서에 적힌 다른 인증키 칸"));
+
+        List<Path> written = new CodeGenerator().generate(ir.build(), out());
+
+        String client = Files.readString(written.get(1));
+        assertTrue(client.contains("url.append(\"?serviceKey=\").append(encode(this.serviceKey));"), client);
+        assertTrue(client.contains("url.append(\"&SERVICE_KEY=\").append(encode(serviceKey));"), client);
+        assertCompiles(written, classes());
+    }
+
+    @Test
+    void getter가_getClass가_되는_응답_필드와_UTF8로_쓸_수_없는_글은_이유를_밝혀_거부한다() throws Exception {
+        SampleIr classField = new SampleIr();
+        classField.fields.add(field("response.body.items.item[]._class", "구분"));
+        SampleIr surrogate = new SampleIr();
+        surrogate.description = "설명\uD800";
+
+        IllegalArgumentException getter = assertThrows(IllegalArgumentException.class,
+                () -> new CodeGenerator().generate(classField.build(), out()));
+        IllegalArgumentException encoding = assertThrows(IllegalArgumentException.class,
+                () -> new CodeGenerator().generate(surrogate.build(), out()));
+
+        assertTrue(getter.getMessage().contains("Object.getClass()"), getter.getMessage());
+        assertTrue(encoding.getMessage().contains("짝 없는 서로게이트"), encoding.getMessage());
+        assertEquals(List.of(), filesUnder(tempDir));
+    }
+
+    @Test
     void Java_이름이_겹치는_응답_필드는_거부한다() throws Exception {
         // 원래 이름은 달라도 같은 필드 이름(stationName)이 되어 "already defined"로 컴파일되지 않는다
         SampleIr ir = new SampleIr();
@@ -158,7 +212,8 @@ class CodeGeneratorSafetyTest {
     @ParameterizedTest
     @ValueSource(strings = {"XML", "JSON"})
     void 공백_한글_하이픈_달러가_든_이름은_지금처럼_생성되고_컴파일된다(String responseFormat) throws Exception {
-        // JavaNames가 Java 이름으로 바꾸고 어노테이션과 URL은 원래 이름을 지킨다. 컴파일되는 이름은 막지 않는다
+        // JavaNames가 Java 이름으로 바꾸고 어노테이션과 URL은 원래 이름을 지킨다. 컴파일되는 이름은 막지 않는다.
+        // URL의 질의에는 공백을 그대로 넣으면 호출할 때 URI.create가 실패하므로 인코딩해 넣는다. 한글은 URI.create가 받아 그대로 둔다
         SampleIr ir = new SampleIr();
         ir.responseFormat = responseFormat;
         for (String name : List.of("relevant departments", "측정소", "sido-name", "a$b")) {
@@ -169,7 +224,10 @@ class CodeGeneratorSafetyTest {
         List<Path> written = new CodeGenerator().generate(ir.build(), out());
 
         assertCompiles(written, classes());
-        assertTrue(Files.readString(written.get(1)).contains("url.append(\"&relevant departments=\")"));
+        String client = Files.readString(written.get(1));
+        assertTrue(client.contains("url.append(\"&relevant%20departments=\")"), client);
+        assertTrue(client.contains("url.append(\"&측정소=\")"), client);
+        assertTrue(client.contains("url.append(\"&a$b=\")"), client);
         assertTrue(Files.readString(written.get(0)).contains("\"sido-name\""));
     }
 

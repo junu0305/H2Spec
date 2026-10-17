@@ -115,6 +115,10 @@ class OpenAiResponsesTest {
         assertEquals(LlmException.Kind.QUOTA, OpenAiResponses.fromHttpError(429,
                 "{\"error\":{\"message\":\"No credit\",\"type\":\"insufficient_quota\",\"code\":\"credit_balance_exhausted\"}}",
                 null).kind(), "잔액 문제는 기다려도 풀리지 않는다");
+        assertEquals(LlmException.Kind.BAD_REQUEST, OpenAiResponses.fromHttpError(429,
+                "{\"error\":{\"message\":\"Request too large for gpt-6.1-sol in organization org-x on tokens per min (TPM): "
+                        + "Limit 100000, Requested 131000.\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",
+                null).kind(), "요청 하나가 분당 한도를 넘으면 기다려도 같은 요청은 늘 넘지만, 작은 문서는 통과할 수 있다");
         assertEquals(LlmException.Kind.UNAVAILABLE, OpenAiResponses.fromHttpError(503, "<html>busy</html>", null).kind());
         assertEquals(LlmException.Kind.BAD_REQUEST, OpenAiResponses.fromHttpError(400, "{}", null).kind());
         assertEquals(LlmException.Kind.AUTH, OpenAiResponses.fromHttpError(403,

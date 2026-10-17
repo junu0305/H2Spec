@@ -42,3 +42,12 @@ tasks.named('test') {
 tasks.withType(AbstractPublishToMaven).configureEach {
     enabled = false
 }
+
+// build(assemble)마다 배포 묶음(zip·tar, 각 60MB 남짓)을 만들지 않는다. 실행은 ./gradlew :llm-eval:run으로 하고,
+// 실행 파일이 필요하면 ./gradlew :llm-eval:installDist를 쓴다
+tasks.named('distZip') {
+    enabled = false
+}
+tasks.named('distTar') {
+    enabled = false
+}

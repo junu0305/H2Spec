@@ -1,0 +1,179 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "mohw-emergency-safety-org.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "CallEmg02Api",
+      "apiName" : "보건복지부_응급안전안심 서비스 운영기관정보 조회",
+      "provider" : "",
+      "baseUrl" : "http://apis.data.go.kr/1352000/ODMS_EMG_02",
+      "endpoint" : "/callEmg02Api",
+      "httpMethod" : "GET",
+      "description" : "보건복지부에서 관리하는 응급안전안심 서비스 운영기관 정보(시도, 시군구, 운영기관명, 대표자, 상세주소 등)에 대한 정보를 제공합니다.",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : true,
+        "description" : "공공데이터포털에서 발급받은 인증키",
+        "example" : "인증키 (URL Encode)"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "한 페이지 결과 수(최대 :500)",
+        "example" : "10"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "integer",
+        "required" : true,
+        "description" : "페이지 번호",
+        "example" : "1"
+      }, {
+        "name" : "apiType",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "결과형식(XML/JSON)",
+        "example" : "XML"
+      }, {
+        "name" : "sido",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "시도명",
+        "example" : "경기도"
+      }, {
+        "name" : "sigungu",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "시군구명",
+        "example" : "고양시"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "결과코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "결과메시지"
+      }, {
+        "path" : "response.body.numOfRows",
+        "type" : "integer",
+        "description" : "한 페이지당 표출 데이터 수"
+      }, {
+        "path" : "response.body.pageNo",
+        "type" : "integer",
+        "description" : "페이지 수"
+      }, {
+        "path" : "response.body.totalCount",
+        "type" : "integer",
+        "description" : "해당 API에서 제공하는 데이터 전체 건수"
+      }, {
+        "path" : "response.body.items.item[].sido",
+        "type" : "string",
+        "description" : "시도명"
+      }, {
+        "path" : "response.body.items.item[].sigungu",
+        "type" : "string",
+        "description" : "시군구명"
+      }, {
+        "path" : "response.body.items.item[].organNm",
+        "type" : "string",
+        "description" : "운영기관명"
+      }, {
+        "path" : "response.body.items.item[].chrNm",
+        "type" : "string",
+        "description" : "대표자"
+      }, {
+        "path" : "response.body.items.item[].organTel",
+        "type" : "string",
+        "description" : "연락처"
+      }, {
+        "path" : "response.body.items.item[].organFax",
+        "type" : "string",
+        "description" : "FAX"
+      }, {
+        "path" : "response.body.items.item[].organZip",
+        "type" : "string",
+        "description" : "우편번호"
+      }, {
+        "path" : "response.body.items.item[].organAddr",
+        "type" : "string",
+        "description" : "상세주소"
+      }, {
+        "path" : "response.body.items.item[].organHomepage",
+        "type" : "string",
+        "description" : "홈페이지"
+      }, {
+        "path" : "response.body.items.item[].organEmail",
+        "type" : "string",
+        "description" : "이메일"
+      }, {
+        "path" : "response.body.items.item[].estbDt",
+        "type" : "string",
+        "description" : "설립일자"
+      }, {
+        "path" : "response.body.items.item[].qobnDt",
+        "type" : "string",
+        "description" : "서비스종료일자"
+      }, {
+        "path" : "response.body.items.item[].upperOrgan",
+        "type" : "string",
+        "description" : "상급기관"
+      }, {
+        "path" : "response.body.items.item[].bzType",
+        "type" : "string",
+        "description" : "업무구분"
+      }, {
+        "path" : "response.body.items.item[].organType",
+        "type" : "string",
+        "description" : "기관유형"
+      }, {
+        "path" : "response.body.items.item[].organCenterYn",
+        "type" : "string",
+        "description" : "거점기관유무"
+      }, {
+        "path" : "response.body.items.item[].bsnsRegNo",
+        "type" : "string",
+        "description" : "사업자등록번호"
+      }, {
+        "path" : "response.body.items.item[].fcltyAuthNo",
+        "type" : "string",
+        "description" : "시설인허가번호"
+      }, {
+        "path" : "response.body.items.item[].careOrgNo",
+        "type" : "string",
+        "description" : "장기요양기관번호"
+      }, {
+        "path" : "response.body.items.item[].corpNm",
+        "type" : "string",
+        "description" : "법인명"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.callemg02api",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

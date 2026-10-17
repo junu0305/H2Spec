@@ -61,9 +61,13 @@ public final class IrNormalizer {
     private static final String REQUIRED_UNKNOWN_NOTE = "필수 여부를 알 수 없어 선택(false)으로 둔 요청 파라미터";
     private static final String LEADING_ZERO_NOTE = "앞자리 0이 있는 숫자 값이라 string으로 둔 항목";
     private static final String STANDARD_ASSUMED_NOTE = "응답 구조를 표준 구조로 가정함";
-    /** 기본 응답 형식을 모른다고 적은 노트. 형식은 코드가 정하고 필요할 때만 알린다 */
-    private static final Pattern UNKNOWN_DEFAULT_FORMAT =
-            Pattern.compile("기본 (?:응답 )?(?:형식|포맷)[^.]*(?:밝혀|밝히지|알 수 없|적혀 있지 않|나와 있지 않|없)");
+    /**
+     * 기본 응답 형식을 모른다고 적은 노트. 형식은 코드가 정하고 필요할 때만 알린다. "포맷 파라미터 없이 부르면 XML이 온다"처럼
+     * 기본 형식을 밝힌 문장은 코드가 알리지 않는 내용이라 거르지 않도록, 모른다는 표현만 본다("없이"는 빼고 "없다·없음·없어"는 본다)
+     */
+    private static final Pattern UNKNOWN_DEFAULT_FORMAT = Pattern.compile("기본 (?:응답 )?(?:형식|포맷)[^.]*"
+            + "(?:밝히지 않|밝혀지지 않|밝혀져 있지 않|밝혀 두지 않|알 수 없|적혀 있지 않|나와 있지 않|명시되지 않|명시하지 않"
+            + "|정해져 있지 않|없(?!이))");
     private static final String NO_SUCCESS_CODE_NOTE = "문서에서 성공코드를 찾지 못해 00으로 둠";
     private static final String AUTH_SCOPE =
             "generator는 이름이 serviceKey인 쿼리 파라미터만 인증키로 받는다";
@@ -118,9 +122,10 @@ public final class IrNormalizer {
         IrConventions.addPathParameters(parameters, parts.endpoint());
         String authType = authType(source.auth(), parameters, outOfScope);
         JsonNode formatParameter = hintedFormatParameter(source, parameters);
-        String responseFormat = responseFormat(operation, formatParameter != null, notes);
-        boolean formatSelectable = source.responseFormat() == LlmOperation.ResponseFormat.BOTH
-                && (formatParameter != null || hasGeneratorFormatParameter(parameters));
+        // 형식 노트와 교차검증(formatSelectable)이 같은 기준을 쓴다
+        boolean clientSetsFormat = clientSetsFormat(LlmText.oneLine(source.formatParameter()), formatParameter, parameters);
+        String responseFormat = responseFormat(operation, clientSetsFormat, names(parameters), notes);
+        boolean formatSelectable = source.responseFormat() == LlmOperation.ResponseFormat.BOTH && clientSetsFormat;
         if (source.responseStructure() == null
                 || source.responseStructure() == LlmOperation.ResponseStructure.STANDARD_ASSUMED) {
             notes.add(STANDARD_ASSUMED_NOTE);
@@ -223,7 +228,10 @@ public final class IrNormalizer {
             node.put("name", name);
             node.put("in", location.name().toLowerCase(Locale.ROOT));
             node.put("type", type);
-            node.put("required", required(source.required(), location, name, notes));
+            // 주소의 경로 변수와 이름이 같으면 뒤에서 경로 변수(필수)가 되므로 필수 여부를 몰라도 알리지 않는다
+            boolean pathVariable = location == LlmRequestParameter.Location.PATH
+                    || IrConventions.pathVariableNames(endpoint).contains(name);
+            node.put("required", required(source.required(), pathVariable, name, notes));
             node.put("description", LlmText.oneLine(source.description()));
             if (!example.isEmpty()) {
                 node.put("example", example);
@@ -247,9 +255,9 @@ public final class IrNormalizer {
     }
 
     /** 경로 변수는 늘 필수다. 표기가 없는 파라미터는 선택으로 두고 알린다 */
-    private boolean required(LlmRequestParameter.Requirement requirement, LlmRequestParameter.Location location,
-                             String name, GroupedNotes notes) {
-        if (location == LlmRequestParameter.Location.PATH || requirement == LlmRequestParameter.Requirement.REQUIRED) {
+    private boolean required(LlmRequestParameter.Requirement requirement, boolean pathVariable, String name,
+                             GroupedNotes notes) {
+        if (pathVariable || requirement == LlmRequestParameter.Requirement.REQUIRED) {
             return true;
         }
         if (requirement != LlmRequestParameter.Requirement.OPTIONAL) {
@@ -298,9 +306,11 @@ public final class IrNormalizer {
      * 생성 클라이언트가 포맷 파라미터에 값을 채우지 못하면 서버 기본 형식이 오므로, 그 기본 형식을 모르면 알린다.
      * 문서가 정한 형식과 경로를 정한 예제의 형식이 다르면, 표준 구조가 아닌 한 경로가 맞는지 알린다.
      *
-     * @param hinted 포맷 파라미터를 generatorHints로 알려 생성 클라이언트가 값을 채우는지
+     * @param clientSetsFormat 생성 클라이언트가 포맷 파라미터에 값을 채우는지. generator가 아는 이름이거나 generatorHints로 알린 이름이다
+     * @param parameterNames   IR의 요청 파라미터 이름
      */
-    private String responseFormat(ValidatedOperation operation, boolean hinted, GroupedNotes notes) {
+    private String responseFormat(ValidatedOperation operation, boolean clientSetsFormat, List<String> parameterNames,
+                                  GroupedNotes notes) {
         LlmOperation source = operation.source();
         LlmOperation.ResponseFormat format = source.responseFormat() == null
                 ? LlmOperation.ResponseFormat.UNKNOWN
@@ -319,11 +329,16 @@ public final class IrNormalizer {
                 } else {
                     chosen = example == null ? XML : example;
                     String parameter = LlmText.oneLine(source.formatParameter());
-                    if (!hinted && !IrConventions.responseFormatParameters().contains(parameter)) {
-                        notes.add((parameter.isEmpty()
-                                ? "응답 형식을 고르는 파라미터가 없고"
-                                : "포맷 파라미터 " + parameter + "는 generator가 값을 채우지 않고")
-                                + " 기본 응답 형식도 알 수 없어 " + chosenBy(example) + " (서버 기본 형식 확인 필요)");
+                    if (!clientSetsFormat) {
+                        String why;
+                        if (parameter.isEmpty()) {
+                            why = "응답 형식을 고르는 파라미터가 없고";
+                        } else if (!parameterNames.contains(parameter)) {
+                            why = "포맷 파라미터 " + parameter + "가 요청 파라미터에 없고";
+                        } else {
+                            why = "포맷 파라미터 " + parameter + "는 generator가 값을 채우지 않고";
+                        }
+                        notes.add(why + " 기본 응답 형식도 알 수 없어 " + chosenBy(example) + " (서버 기본 형식 확인 필요)");
                     }
                 }
             }
@@ -394,6 +409,24 @@ public final class IrNormalizer {
         return responseFormat.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 생성 클라이언트가 IR의 응답 형식을 포맷 파라미터 값으로 채워 보내는지. LLM이 포맷 파라미터를 밝혔으면 그 파라미터를 채우는지만 본다.
+     * 문서의 포맷 파라미터가 IR에 없으면 다른 이름의 파라미터를 채워도 형식이 골라지지 않는다. 밝히지 않았으면 generator가 아는 이름의
+     * 파라미터가 있는지 본다(rule 엔진의 IR과 같은 기준).
+     *
+     * @param formatParameter LLM이 밝힌 포맷 파라미터 이름. 없으면 빈 문자열
+     * @param hinted          generatorHints로 알릴 포맷 파라미터. 없으면 null
+     */
+    private static boolean clientSetsFormat(String formatParameter, JsonNode hinted, ArrayNode parameters) {
+        if (hinted != null) {
+            return true;
+        }
+        if (formatParameter.isEmpty()) {
+            return hasGeneratorFormatParameter(parameters);
+        }
+        return IrConventions.responseFormatParameters().contains(formatParameter) && names(parameters).contains(formatParameter);
+    }
+
     /** 생성 클라이언트가 IR의 응답 형식을 값으로 채워 보내는 포맷 파라미터가 있는지 ({@code ClientEmitter}) */
     private static boolean hasGeneratorFormatParameter(ArrayNode parameters) {
         for (JsonNode parameter : parameters) {
@@ -405,7 +438,7 @@ public final class IrNormalizer {
     }
 
     private ArrayNode responseFields(ValidatedOperation operation, GroupedNotes notes, List<String> outOfScope) {
-        String fieldName = resultCodeFieldName(operation.source());
+        String fieldName = operation.resultCodeField();
         String fieldLeaf = fieldName.substring(fieldName.lastIndexOf('.') + 1);
         ArrayNode fields = objectMapper.createArrayNode();
         Set<String> roots = new LinkedHashSet<>();
@@ -445,7 +478,7 @@ public final class IrNormalizer {
                                  String successCode) {
         ObjectNode errorSpec = IrConventions.errorSpec();
         errorSpec.put("successResultCode", successCode);
-        String fieldName = resultCodeFieldName(operation.source());
+        String fieldName = operation.resultCodeField();
         ArrayNode candidates = (ArrayNode) errorSpec.get("resultCodeFieldCandidates");
         if (!fieldName.isEmpty() && JavaNameRules.isSafeRawName(fieldName) && !contains(candidates, fieldName)) {
             // 기본 목록에 없는 결과코드 위치만 앞에 더한다. generator가 마지막 마디를 결과코드 이름으로 인터셉터에 넘긴다
@@ -538,10 +571,6 @@ public final class IrNormalizer {
     private static String apiId(ValidatedOperation operation) {
         IrConventions.UrlParts parts = operation.address() == null ? null : operation.address().parts();
         return parts == null ? null : parts.apiId();
-    }
-
-    private static String resultCodeFieldName(LlmOperation source) {
-        return source.resultCode() == null ? "" : LlmText.oneLine(source.resultCode().fieldName());
     }
 
     private static List<String> names(ArrayNode parameters) {

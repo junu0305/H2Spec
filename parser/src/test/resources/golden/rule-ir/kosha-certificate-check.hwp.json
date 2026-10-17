@@ -1,0 +1,100 @@
+{
+  "skipped" : [ ],
+  "apis" : [ {
+    "metadata" : {
+      "sourceFile" : "kosha-certificate-check.hwp",
+      "sourceFormat" : "HWP",
+      "engine" : "rule",
+      "manualReviewRequired" : false,
+      "reviewNotes" : [ ]
+    },
+    "api" : {
+      "apiId" : "Koshagw",
+      "apiName" : "방호장치 자율안전확인신고서 발급문서 조회",
+      "provider" : "",
+      "baseUrl" : "https://portal.kosha.or.kr/openapi/v1",
+      "endpoint" : "/koshagw",
+      "httpMethod" : "GET",
+      "description" : "인증번호 조건을 이용하여 문서 진위확인 여부 정보를 조회하는 기능",
+      "authType" : "SERVICE_KEY_QUERY_PARAM",
+      "responseFormat" : "XML",
+      "requestParameters" : [ {
+        "name" : "serviceKey",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "시스템에서 발급받은 인증키",
+        "example" : "인증키"
+      }, {
+        "name" : "callApiId",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "api 호출 아이디",
+        "example" : "1150"
+      }, {
+        "name" : "certNo",
+        "in" : "query",
+        "type" : "string",
+        "required" : false,
+        "description" : "인증번호",
+        "example" : "24-AV3FH-0027"
+      }, {
+        "name" : "numOfRows",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "한 페이지 결과수 Default : 10",
+        "example" : "10"
+      }, {
+        "name" : "pageNo",
+        "in" : "query",
+        "type" : "integer",
+        "required" : false,
+        "description" : "페이지 번호 Default : 1",
+        "example" : "1"
+      } ],
+      "responseFields" : [ {
+        "path" : "response.header.resultCode",
+        "type" : "string",
+        "description" : "API호출 결과 코드",
+        "isResultIndicator" : true
+      }, {
+        "path" : "response.header.resultMsg",
+        "type" : "string",
+        "description" : "API호출 결과 메시지"
+      }, {
+        "path" : "response.body.items.item[].crtdcIssuYmd",
+        "type" : "string",
+        "description" : "인증서 발급일자"
+      }, {
+        "path" : "response.body.items.item[].docAuthYn",
+        "type" : "string",
+        "description" : "문서 진위여부"
+      }, {
+        "path" : "response.body.totalCount",
+        "type" : "integer",
+        "description" : "검색결과 총건수"
+      }, {
+        "path" : "response.body.numOfRows",
+        "type" : "integer",
+        "description" : "한 페이지당 표출 데이터 수"
+      }, {
+        "path" : "response.body.pageNo",
+        "type" : "integer",
+        "description" : "페이지 번호"
+      } ],
+      "errorSpec" : {
+        "successResultCode" : "00",
+        "resultCodeFieldCandidates" : [ "response.header.resultCode", "resultCode", "RESULT_CODE", "cmmMsgHeader.returnReasonCode" ]
+      }
+    },
+    "generatorHints" : {
+      "targetClientType" : "RestTemplate",
+      "targetPackage" : "kr.go.h2spec.client.koshagw",
+      "generateInterceptor" : true,
+      "generateDto" : true,
+      "dtoNamingStrategy" : "PascalCase"
+    }
+  } ]
+}

@@ -61,9 +61,13 @@ public final class LlmEval {
             out.println(EvalOptions.USAGE);
             return 0;
         }
+        // 같은 날 다른 녹화(모델 비교 등)를 돌려도 서로 덮어쓰지 않게 녹화 디렉터리 이름을 붙인다
+        Path responsesName = options.responses() == null ? null
+                : options.responses().toAbsolutePath().normalize().getFileName();
+        String label = responsesName == null ? options.engine() : options.engine() + "-" + responsesName;
         Path outDir = options.out() != null
                 ? options.out()
-                : options.root().resolve(REPORTS).resolve(date + "-" + options.engine());
+                : options.root().resolve(REPORTS).resolve(date + "-" + label);
         try {
             if (!options.sets().isEmpty()) {
                 baseline(options, outDir, date, out);
@@ -90,7 +94,19 @@ public final class LlmEval {
         EvalEngine engine = new RuleEvalEngine();
         if (options.responses() != null) {
             out.println("녹화 응답: " + options.responses());
-            engine = new ReplayLlmEvalEngine(options.responses(), warning -> out.println("    경고: " + warning));
+            ReplayLlmEvalEngine replay = new ReplayLlmEvalEngine(options.responses(),
+                    warning -> out.println("    경고: " + warning),
+                    documents.stream().map(EvalDocument::document).toList());
+            long recorded = documents.stream().filter(document -> replay.recording(document.document()).isPresent()).count();
+            if (recorded == 0) {
+                // 이름이 맞지 않는 디렉터리를 주면 모든 문서가 지표에서 빠진 빈 리포트가 성공으로 끝난다
+                throw new IllegalStateException("녹화 응답 디렉터리에 평가할 문서의 응답이 하나도 없습니다: " + options.responses()
+                        + " (문서마다 <문서 파일 이름>.json 또는 <문서 이름>.json)");
+            }
+            if (recorded < documents.size()) {
+                out.println("녹화 응답이 없는 문서 " + (documents.size() - recorded) + "개는 지표에서 뺍니다");
+            }
+            engine = replay;
         }
         BaselineEvaluator evaluator = new BaselineEvaluator(engine, new GeneratorCheck());
         BaselineReport report = evaluator.evaluate(set, documents, options.root(), date,

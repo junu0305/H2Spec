@@ -31,8 +31,10 @@ class ExtractionCacheTest {
         cache.store(used, new LlmResponse("{}", "claude-sonnet-5-5", USAGE, LlmResponse.Finish.COMPLETE));
         Path tempFile = Files.writeString(tempDir.resolve(idle.sha256() + ".json.123.tmp"), "{");
         Path other = Files.writeString(tempDir.resolve("README.txt"), "사용자가 둔 파일");
+        // --cache-dir로 다른 파일이 있는 디렉터리를 줄 수 있다. 캐시가 만든 꼴이 아닌 임시 파일은 남의 것이다
+        Path othersTemp = Files.writeString(tempDir.resolve("download.tmp"), "다른 프로그램의 임시 파일");
         FileTime old = FileTime.from(Instant.now().minus(Duration.ofDays(40)));
-        for (Path file : new Path[] {file(idle), file(used), tempFile, other}) {
+        for (Path file : new Path[] {file(idle), file(used), tempFile, other, othersTemp}) {
             Files.setLastModifiedTime(file, old);
         }
 
@@ -44,6 +46,7 @@ class ExtractionCacheTest {
         assertFalse(Files.exists(tempFile), "저장하다 멈춘 임시 파일도 지운다");
         assertTrue(Files.exists(file(used)), "꺼낸 응답은 시각을 새로 해 남긴다");
         assertTrue(Files.exists(other), "응답 파일 꼴이 아닌 파일은 건드리지 않는다");
+        assertTrue(Files.exists(othersTemp), "캐시가 저장할 때 만드는 꼴이 아닌 .tmp 파일은 건드리지 않는다");
         assertEquals(0, ExtractionCache.disabled().prune(ExtractionCache.DEFAULT_MAX_IDLE, Instant.now()));
     }
 

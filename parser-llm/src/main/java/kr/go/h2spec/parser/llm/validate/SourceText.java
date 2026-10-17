@@ -44,8 +44,11 @@ final class SourceText {
     /** 응답 예제(XML)에서 값 하나만 담은 요소 */
     private static final Pattern XML_ELEMENT = Pattern.compile(
             "<([A-Za-z_][\\w.:-]*)(?:\\s[^<>]*)?>\\s*([A-Za-z0-9_-]+)\\s*</\\1\\s*>");
-    /** 에러코드 표에서 성공 행을 알아보는 표지 (소문자로 비교) */
-    private static final List<String> NORMAL_MARKERS = List.of("정상", "normal");
+    /**
+     * 에러코드 표에서 성공 행을 알아보는 표지 (소문자로 비교). "비정상"과 "abnormal"은 오류 행이라 앞 글자를 본다.
+     * {@code NORMAL_SERVICE}처럼 밑줄로 이은 표기는 맞는다
+     */
+    private static final Pattern NORMAL_MARKER = Pattern.compile("(?<!비)정상|(?<![a-z])normal");
 
     private final List<Cell> cells = new ArrayList<>();
     private final List<List<Cell>> rows = new ArrayList<>();
@@ -154,15 +157,25 @@ final class SourceText {
     }
 
     /**
-     * 영문 오퍼레이션명을 찾는다. rule 엔진처럼 표 칸의 원래 글 전체가 공백 없는 식별자로 그 이름일 때만 맞는다
-     * ({@link IrConventions#operationName}). 공백을 지운 글로는 보지 않는다.
+     * 영문 오퍼레이션명을 찾는다. rule 엔진처럼 표의 행에서 이름표({@link IrConventions#isOperationNameLabel}) 다음의 빈칸이 아닌 칸이고,
+     * 그 칸의 원래 글 전체가 공백 없는 식별자로 그 이름일 때만 맞는다({@link IrConventions#operationName}). 목록 표·제목에만 있는 이름은
+     * rule 엔진도 쓰지 않으므로 맞지 않는다. 공백을 지운 글로는 보지 않는다.
      */
     List<Hit> operationNames(String name, Set<Integer> evidence) {
         List<Hit> hits = new ArrayList<>();
-        for (Cell cell : cells) {
-            if (cell.table && name.equals(IrConventions.operationName(cell.text))) {
-                int start = cell.text.indexOf(name);
-                hits.add(new Hit(cell, start, start + name.length()));
+        for (List<Cell> row : rows) {
+            Cell label = null;
+            for (Cell cell : row) {
+                if (cell.text.isBlank()) {
+                    // 병합으로 가려진 칸은 Reader가 비워 둔다. rule 엔진도 빈칸을 건너뛰고 다음 칸을 값으로 읽는다
+                    continue;
+                }
+                if (label != null && IrConventions.isOperationNameLabel(label.text)
+                        && name.equals(IrConventions.operationName(cell.text))) {
+                    int start = cell.text.indexOf(name);
+                    hits.add(new Hit(cell, start, start + name.length()));
+                }
+                label = cell;
             }
         }
         return rank(hits, evidence);
@@ -195,13 +208,18 @@ final class SourceText {
         return rank(hits, evidence);
     }
 
-    /** 에러코드 표에서 정상이나 NORMAL이 적힌 행의 코드를 찾는다 */
+    /**
+     * 에러코드 표에서 정상이나 NORMAL이 적힌 행의 코드를 찾는다. 응답 필드 표의 결과코드·결과메시지 행(샘플 "NORMAL SERVICE")은
+     * 에러코드 표의 행이 아니라 그 행의 크기·구분 칸을 성공코드로 보지 않는다
+     */
     List<Hit> codesInNormalRows(String code, Set<Integer> evidence) {
         List<Hit> hits = new ArrayList<>();
         for (List<Cell> row : rows) {
-            boolean normal = row.stream().map(cell -> cell.text.toLowerCase(Locale.ROOT))
-                    .anyMatch(text -> NORMAL_MARKERS.stream().anyMatch(text::contains));
-            if (!normal) {
+            boolean normal = row.stream()
+                    .anyMatch(cell -> NORMAL_MARKER.matcher(cell.text.toLowerCase(Locale.ROOT)).find());
+            boolean resultField = row.stream()
+                    .anyMatch(cell -> IrConventions.isResultCodeOrMessageField(IrConventions.cleanName(cell.text)));
+            if (!normal || resultField) {
                 continue;
             }
             for (Cell cell : row) {

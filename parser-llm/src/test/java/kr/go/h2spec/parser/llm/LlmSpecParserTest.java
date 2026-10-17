@@ -21,7 +21,6 @@ import kr.go.h2spec.parser.llm.schema.LlmResponseField;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
@@ -31,8 +30,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import static kr.go.h2spec.parser.llm.SampleDocument.standardOperation;
 import static kr.go.h2spec.parser.llm.ScriptedLlmClient.complete;
@@ -108,8 +105,8 @@ class LlmSpecParserTest {
     // ---- 실패 처리 ----
 
     @ParameterizedTest
-    @CsvSource({"AUTH, AUTH", "SETTINGS, SETTINGS", "QUOTA, QUOTA", "RATE_LIMITED, RETRYABLE", "UNAVAILABLE, RETRYABLE",
-            "INTERRUPTED, RETRYABLE", "BAD_REQUEST, FAILED"})
+    @CsvSource({"AUTH, AUTH", "SETTINGS, SETTINGS", "QUOTA, QUOTA", "RATE_LIMITED, RETRYABLE", "RETRY_LATER, RETRY_LATER",
+            "UNAVAILABLE, RETRYABLE", "INTERRUPTED, RETRYABLE", "BAD_REQUEST, FAILED"})
     void 호출_실패를_CLI가_가르는_실패_종류로_바꾸고_다시_부르지_않는다(LlmException.Kind kind, SpecParseException.Kind expected) {
         LlmException failure = new LlmException(kind, "Claude API 오류 (HTTP 4xx): 테스트 오류");
         ScriptedLlmClient client = new ScriptedLlmClient().fail(failure);
@@ -221,6 +218,65 @@ class LlmSpecParserTest {
                 result.apis().stream().map(ParsedApi::apiId).toList());
     }
 
+    @Test
+    void 나눠_부른_뒤_호출이_다_적힌_오퍼레이션_없이_잘려도_앞서_받은_오퍼레이션은_쓰고_그만_부른다() throws Exception {
+        String whole = json(standardOperation());
+        String cut = whole.substring(0, whole.length() - 2) + ",{\"operationName\":\"getNext";
+        ScriptedLlmClient client = new ScriptedLlmClient().reply(
+                new LlmResponse(cut, ScriptedLlmClient.MODEL, ScriptedLlmClient.USAGE, LlmResponse.Finish.TRUNCATED),
+                truncated(128_000));
+
+        SpecParseResult result = parser(client, options()).extract(BLOCKS, FILE, "DOCX");
+
+        assertEquals(2, client.calls(), "같은 요청은 같은 자리에서 잘릴 것이라 더 부르지 않는다");
+        assertEquals(List.of("MsrstnList"), result.apis().stream().map(ParsedApi::apiId).toList(), "앞서 받은 오퍼레이션을 버리지 않는다");
+        assertEquals(new TokenUsage(2_000, 200, 300, 132_000), result.engine().tokenUsage(), "두 호출 모두 과금된다");
+        assertEquals(List.of(FILE + ": 나눠 부른 호출이 출력 한도 128000 토큰에 걸려 잘렸고 다 적힌 오퍼레이션이 없어 그만 부릅니다 "
+                        + "(출력 128000 토큰, thinking 포함). 뒤의 오퍼레이션이 빠졌을 수 있습니다",
+                FILE + ": 출력이 출력 한도에 걸려 잘려 오퍼레이션을 20개씩 나눠 불렀습니다 (나눠 부른 호출 1번, 오퍼레이션 1개)"), warnings);
+    }
+
+    @Test
+    void 나눠_부르는_중_실패하면_앞서_부른_호출의_토큰을_실패에_담는다() throws Exception {
+        // 처음부터 나눠 부르는 경우: 2개씩, 첫 파트는 답했고 둘째 파트에서 호출 한도에 걸렸다
+        String document = "msrstn-info.docx";
+        ObjectNode recorded = (ObjectNode) MAPPER.readTree(TestDocuments.recording(TestDocuments.PROVIDER,
+                TestDocuments.recordingName(document)));
+        ScriptedLlmClient split = new ScriptedLlmClient().reply(complete(part(recorded, 0, 2, true)))
+                .fail(new LlmException(LlmException.Kind.RATE_LIMITED, "Claude API 오류 (HTTP 429)"));
+        // 잘린 첫 호출에서 이어 부르다 회사가 긴 대기를 요구한 경우
+        String whole = json(standardOperation());
+        ScriptedLlmClient continued = new ScriptedLlmClient().reply(new LlmResponse(
+                        whole.substring(0, whole.length() - 2) + ",{", ScriptedLlmClient.MODEL, ScriptedLlmClient.USAGE,
+                        LlmResponse.Finish.TRUNCATED))
+                .fail(new LlmException(LlmException.Kind.RETRY_LATER, "Claude API 오류 (HTTP 429)"));
+
+        SpecParseException fromStart = assertThrows(SpecParseException.class,
+                () -> parser(split, options().withOperationsPerCall(2)).extract(TestDocuments.path(document)));
+        SpecParseException afterTruncation = assertThrows(SpecParseException.class,
+                () -> parser(continued, options()).extract(BLOCKS, FILE, "DOCX"));
+
+        assertEquals(SpecParseException.Kind.RETRYABLE, fromStart.kind());
+        assertEquals(Optional.of(new Engine("llm", PROVIDER, MODEL, EFFORT, false, ONE_CALL)), fromStart.engine(),
+                "답을 받은 첫 파트도 과금됐다");
+        assertEquals(SpecParseException.Kind.RETRY_LATER, afterTruncation.kind());
+        assertEquals(Optional.of(new Engine("llm", PROVIDER, MODEL, EFFORT, false, ONE_CALL)), afterTruncation.engine(),
+                "잘린 첫 호출도 과금됐다");
+    }
+
+    @Test
+    void 한_번에_적을_오퍼레이션_수는_회사_한도와_출력_상한_안에_들게_줄이고_이미_맞으면_그대로_둔다() {
+        LlmSpecParser.Options defaults = LlmSpecParser.Options.defaults();
+        LlmSpecParser.Options gemini = defaults.fittedTo(65_536);
+        LlmSpecParser.Options lowered = defaults.withMaxOutputTokens(32_000).fittedTo(128_000);
+
+        assertEquals(defaults, defaults.fittedTo(128_000));
+        assertEquals(65_536, gemini.maxOutputTokens());
+        assertEquals(10, gemini.operationsPerCall(), "오퍼레이션당 6천 토큰으로 잡아 회사 한도 안에 들게 줄인다");
+        assertEquals(32_000, lowered.maxOutputTokens());
+        assertEquals(5, lowered.operationsPerCall(), "낮춘 출력 상한에 들어가지 않는 수를 적게 하면 나눠 불러도 매번 잘린다");
+    }
+
     /** 녹화 응답에서 오퍼레이션 일부만 담은 응답. 첫 호출이 아니면 지시대로 문서 공통 값을 비운다 */
     private static String part(ObjectNode recorded, int from, int to, boolean first) {
         ObjectNode part = recorded.deepCopy();
@@ -251,25 +307,6 @@ class LlmSpecParserTest {
         assertEquals(1, result.apis().size());
         assertEquals(new TokenUsage(2_000, 400, 600, 8_000), result.engine().tokenUsage());
         assertEquals(Optional.of(valid), cache.find(key(client.requests().get(0))).map(LlmResponse::json));
-    }
-
-    static Stream<Arguments> schemaViolations() throws JsonProcessingException {
-        String valid = json(standardOperation());
-        return Stream.of(
-                Arguments.of("빈 글", ""),
-                Arguments.of("최상위 null", "null"),
-                Arguments.of("마크다운 코드 블록", "```json\n" + valid + "\n```"),
-                Arguments.of("JSON 뒤에 붙은 글", valid + "\n이상입니다."),
-                Arguments.of("필드가 빠짐", edit(valid, tree -> tree.remove("documentNotes"))),
-                Arguments.of("필드가 null", edit(valid, tree -> tree.putNull("provider"))),
-                Arguments.of("모르는 필드", edit(valid, tree -> tree.put("confidence", "high"))),
-                Arguments.of("모르는 enum 값", edit(valid, tree -> operation(tree).put("httpMethod", "FETCH"))),
-                Arguments.of("숫자로 쓴 enum", edit(valid, tree -> operation(tree).put("httpMethod", 0))),
-                Arguments.of("문자열 자리의 숫자", edit(valid, tree -> tree.put("serviceName", 1))),
-                Arguments.of("불리언 자리의 글", edit(valid, tree ->
-                        ((ObjectNode) operation(tree).get("requestParameters").get(0)).put("common", "false"))),
-                Arguments.of("배열 안의 null", edit(valid, tree -> ((ArrayNode) tree.get("operations")).addNull())),
-                Arguments.of("겹친 키", "{\"serviceName\":\"측정소\"," + valid.substring(1)));
     }
 
     // ---- 검증 결과를 알려 다시 부르기 ----
@@ -379,10 +416,6 @@ class LlmSpecParserTest {
         return LlmSpecParser.Options.defaults().withCache(ExtractionCache.disabled()).withWarnings(warnings::add);
     }
 
-    private SpecParseException failure(ScriptedLlmClient client) {
-        return assertThrows(SpecParseException.class, () -> parser(client, options()).extract(BLOCKS, FILE, "DOCX"));
-    }
-
     private static ExtractionCache.Key key(LlmRequest request) {
         return ExtractionCache.key(request, PROVIDER, MODEL, EFFORT);
     }
@@ -425,16 +458,6 @@ class LlmSpecParserTest {
 
     private static String json(LlmFixtures.OperationBuilder... operations) throws JsonProcessingException {
         return MAPPER.writeValueAsString(LlmFixtures.extraction("한국환경공단", List.of(), operations));
-    }
-
-    private static String edit(String json, Consumer<ObjectNode> change) throws JsonProcessingException {
-        ObjectNode tree = (ObjectNode) MAPPER.readTree(json);
-        change.accept(tree);
-        return MAPPER.writeValueAsString(tree);
-    }
-
-    private static ObjectNode operation(ObjectNode extraction) {
-        return (ObjectNode) extraction.get("operations").get(0);
     }
 
     private static ObjectNode withoutParsedAt(ObjectNode ir) {

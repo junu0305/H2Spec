@@ -23,7 +23,7 @@ public final class RuleSpecParser implements SpecParser {
     public SpecParseResult parse(Path document) throws IOException, SpecParseException {
         DocumentReaders.Format format = DocumentReaders.find(document).orElseThrow(
                 () -> new IllegalArgumentException("명세 문서(.docx, .hwp, .hwpx)가 아닙니다: " + document.getFileName()));
-        SpecParseResult result = assemble(document, format.reader(), format.sourceFormat());
+        SpecParseResult result = assemble(format.read(document), document.getFileName().toString(), format.sourceFormat());
         if (result.apis().isEmpty()) {
             throw new SpecParseException(SpecParseException.Kind.FAILED,
                     SpecBlockAssembler.notFoundMessage(document.getFileName().toString(), result.skipped()));
@@ -43,8 +43,11 @@ public final class RuleSpecParser implements SpecParser {
      * @throws IOException 문서를 읽지 못했을 때
      */
     static SpecParseResult assemble(Path document, DocumentReader reader, String sourceFormat) throws IOException {
-        RuleEngine.Result result = new RuleEngine().assemble(
-                reader.read(document), document.getFileName().toString(), sourceFormat);
+        return assemble(reader.read(document), document.getFileName().toString(), sourceFormat);
+    }
+
+    private static SpecParseResult assemble(List<Block> blocks, String sourceFile, String sourceFormat) {
+        RuleEngine.Result result = new RuleEngine().assemble(blocks, sourceFile, sourceFormat);
         List<SpecParseResult.Operation> operations = result.operations().stream()
                 .map(operation -> new SpecParseResult.Operation(operation.operationName(), operation.title(),
                         operation.api(), operation.skipReason(), false))

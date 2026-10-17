@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -184,6 +185,17 @@ public final class IrConventions {
         }
         String value = cellText.strip();
         return IDENTIFIER.matcher(value).matches() ? value : null;
+    }
+
+    /**
+     * 정보 표에서 영문 오퍼레이션명을 담는 칸의 이름표("오퍼레이션명(영문)", "상세기능명" 등)인지 본다. rule 엔진은 행 안에서 이 이름표 다음의
+     * 빈칸이 아닌 칸을 이름 칸으로 읽는다. llm 엔진의 원문 대조도 같은 칸만 이름 칸으로 본다.
+     *
+     * @param cellText 칸의 원래 글
+     * @return 이름표면 true
+     */
+    public static boolean isOperationNameLabel(String cellText) {
+        return cellText != null && SpecLabels.isOperationNameKey(cellText);
     }
 
     /**
@@ -434,11 +446,18 @@ public final class IrConventions {
         }
         String segment = url.substring(operationSlash + 1);
         String operation = segment.split("/")[0];
-        if (operation.isEmpty()) {
-            // "http://{host}"처럼 경로 변수 앞에 오퍼레이션 칸이 없다
+        int scheme = url.indexOf("://");
+        if (operation.isEmpty() || (scheme >= 0 && operationSlash <= scheme + 2)) {
+            // "http://{host}"처럼 경로 변수 앞에 오퍼레이션 칸이 없거나, "http://apis.data.go.kr"처럼 호스트 뒤에 경로가 없다.
+            // 호스트를 오퍼레이션으로 나누면 baseUrl이 "http:/"가 된다
             return UrlParts.failed(noOperationPath(url));
         }
-        return new UrlParts(url.substring(0, operationSlash), "/" + segment, toApiId(operation), null);
+        String baseUrl = url.substring(0, operationSlash);
+        if (baseUrl.indexOf('{') >= 0 || baseUrl.indexOf('}') >= 0) {
+            // 생성 클라이언트는 endpoint의 경로 변수만 채운다. baseUrl에 남은 자리표시는 그대로 요청 주소가 되어 호출이 실패한다
+            return UrlParts.failed("경로 변수가 endpoint가 아니라 baseUrl에 있습니다: " + url);
+        }
+        return new UrlParts(baseUrl, "/" + segment, toApiId(operation), null);
     }
 
     private static String noOperationPath(String url) {
@@ -477,6 +496,19 @@ public final class IrConventions {
      * @param requestParameters IR의 api.requestParameters 배열. 이 배열을 고친다
      * @param endpoint          {@link #splitUrl}이 나눈 endpoint
      */
+    /**
+     * @param endpoint 나눈 endpoint
+     * @return endpoint의 경로 변수 이름({@code {itemId}}의 {@code itemId}). {@link #addPathParameters}가 경로 변수로 채우는 이름과 같다
+     */
+    public static Set<String> pathVariableNames(String endpoint) {
+        Set<String> names = new LinkedHashSet<>();
+        Matcher template = PATH_TEMPLATE.matcher(endpoint);
+        while (template.find()) {
+            names.add(template.group(1));
+        }
+        return names;
+    }
+
     public static void addPathParameters(ArrayNode requestParameters, String endpoint) {
         Matcher template = PATH_TEMPLATE.matcher(endpoint);
         int insertAt = 0;
@@ -643,7 +675,8 @@ public final class IrConventions {
     public static ObjectNode generatorHints(String apiId) {
         ObjectNode hints = JsonNodeFactory.instance.objectNode();
         hints.put("targetClientType", "RestTemplate");
-        hints.put("targetPackage", "kr.go.h2spec.client." + apiId.toLowerCase());
+        // 기본 로캘을 따르면 같은 문서도 PC에 따라 패키지가 달라진다(터키어 로캘의 "Info" → "ınfo")
+        hints.put("targetPackage", "kr.go.h2spec.client." + apiId.toLowerCase(Locale.ROOT));
         hints.put("generateInterceptor", true);
         hints.put("generateDto", true);
         hints.put("dtoNamingStrategy", "PascalCase");

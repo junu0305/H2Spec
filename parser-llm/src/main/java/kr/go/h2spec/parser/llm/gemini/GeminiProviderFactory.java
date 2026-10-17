@@ -6,6 +6,7 @@ import kr.go.h2spec.parser.llm.client.LlmSettings;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 
 /** Google Gemini 어댑터의 팩토리. {@link kr.go.h2spec.parser.llm.client.LlmProviders#ALL}에 적혀 있다. */
 public final class GeminiProviderFactory implements LlmProviderFactory {
@@ -69,6 +70,13 @@ public final class GeminiProviderFactory implements LlmProviderFactory {
     @Override
     public List<String> detectionEnvironmentVariables() {
         return List.of("GEMINI_API_KEY");
+    }
+
+    /** {@code gemini-}나 모델 목록이 주는 꼴 {@code models/gemini-}로 시작하는 이름 (대소문자 무시) */
+    @Override
+    public boolean recognizesModel(String model) {
+        String name = model.toLowerCase(Locale.ROOT);
+        return name.startsWith("gemini-") || name.startsWith("models/gemini-");
     }
 
     @Override

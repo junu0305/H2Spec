@@ -90,7 +90,7 @@ public final class GeminiResponses {
     }
 
     /**
-     * 2xx가 아닌 HTTP 응답을 실패 종류로 바꾼다. Gemini는 틀린 키를 400으로 돌려주므로 오류 상세의 이유({@code API_KEY_INVALID} 등)로
+     * 200이 아닌 HTTP 응답을 실패 종류로 바꾼다. Gemini는 틀린 키를 400으로 돌려주므로 오류 상세의 이유({@code API_KEY_INVALID} 등)로
      * 키 오류를 가르고, 429는 오류 상세의 {@code QuotaFailure}로 하루 할당량을 가른다. 대기 시간은 {@code retry-after} 머리가 없으면
      * 오류 상세의 {@code RetryInfo.retryDelay}를 쓴다.
      *
@@ -133,7 +133,8 @@ public final class GeminiResponses {
         if (statusCode == 429) {
             return isLongQuota(error) ? Kind.QUOTA : Kind.RATE_LIMITED;
         }
-        if (statusCode == 408 || statusCode >= 500) {
+        // 408·409(ABORTED)는 공식 SDK도 다시 부른다
+        if (statusCode == 408 || statusCode == 409 || statusCode >= 500) {
             return Kind.UNAVAILABLE;
         }
         return Kind.BAD_REQUEST;
@@ -232,25 +233,33 @@ public final class GeminiResponses {
     }
 
     /**
-     * HTTP 200으로 시작한 스트림 중간의 오류. 오류 객체가 HTTP 오류와 같은 꼴이라 숫자 코드가 있으면 HTTP 오류와 똑같이 가르고,
-     * 없으면 상태 이름으로 가른다. 서버 오류는 회사가 스스로 생성을 멈춘 것이라 다시 부른다
+     * HTTP 200으로 시작한 스트림 중간의 오류. 오류 객체가 HTTP 오류와 같은 꼴이라 HTTP 오류와 똑같이 가른다. 숫자 코드가 없으면 상태
+     * 이름을 그 이름의 HTTP 상태 코드로 바꿔 가르므로, 키·생각 수준·할당량 같은 상세 판정도 HTTP 오류와 같다. 서버 오류와 모르는 상태는
+     * 회사가 스스로 생성을 멈춘 것이라 다시 부른다
      */
     private static LlmException streamError(JsonNode error) {
         String status = error.path("status").asText("");
-        Kind kind;
-        if (error.path("code").isInt()) {
-            kind = statusKind(error.path("code").asInt(), error);
-        } else {
-            kind = switch (status) {
-                case "RESOURCE_EXHAUSTED" -> isLongQuota(error) ? Kind.QUOTA : Kind.RATE_LIMITED;
-                case "INVALID_ARGUMENT" -> Kind.BAD_REQUEST;
-                case "FAILED_PRECONDITION", "PERMISSION_DENIED", "UNAUTHENTICATED" -> Kind.AUTH;
-                case "DEADLINE_EXCEEDED" -> Kind.INTERRUPTED;
-                default -> Kind.UNAVAILABLE;
-            };
-        }
-        return new LlmException(kind, "Gemini API 응답 스트림 오류 (" + status + "): " + error.path("message").asText(""),
-                null, retryDelay(error));
+        JsonNode code = error.path("code");
+        int statusCode = code.isInt() || (code.isTextual() && code.asText().matches("\\d{3}"))
+                ? code.asInt() : statusCodeOf(status);
+        return new LlmException(statusKind(statusCode, error),
+                "Gemini API 응답 스트림 오류 (" + status + "): " + error.path("message").asText(""), null, retryDelay(error));
+    }
+
+    /** Google API 상태 이름에 대응하는 HTTP 상태 코드. 모르는 이름은 서버 오류(500)로 본다 */
+    private static int statusCodeOf(String status) {
+        return switch (status) {
+            case "INVALID_ARGUMENT", "FAILED_PRECONDITION", "OUT_OF_RANGE" -> 400;
+            case "UNAUTHENTICATED" -> 401;
+            case "PERMISSION_DENIED" -> 403;
+            case "NOT_FOUND" -> 404;
+            case "ALREADY_EXISTS", "ABORTED" -> 409;
+            case "RESOURCE_EXHAUSTED" -> 429;
+            case "UNIMPLEMENTED" -> 501;
+            case "UNAVAILABLE" -> 503;
+            case "DEADLINE_EXCEEDED" -> 504;
+            default -> 500;
+        };
     }
 
     private static String describe(JsonNode error) {

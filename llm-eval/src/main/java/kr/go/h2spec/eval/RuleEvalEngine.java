@@ -1,6 +1,7 @@
 package kr.go.h2spec.eval;
 
 import kr.go.h2spec.parser.Block;
+import kr.go.h2spec.parser.DocumentReaders;
 import kr.go.h2spec.parser.RuleEngine;
 
 import java.io.IOException;
@@ -23,7 +24,7 @@ public final class RuleEvalEngine implements EvalEngine {
 
     @Override
     public List<EngineOperation> extract(Path document) throws IOException {
-        return operations(Documents.read(document), document);
+        return operations(DocumentReaders.read(document), document);
     }
 
     /**
@@ -35,7 +36,8 @@ public final class RuleEvalEngine implements EvalEngine {
      */
     public static List<EngineOperation> operations(List<Block> blocks, Path document) {
         RuleEngine.Result result = new RuleEngine()
-                .assemble(blocks, document.getFileName().toString(), Documents.sourceFormat(document));
+                .assemble(blocks, document.getFileName().toString(),
+                        DocumentReaders.find(document).map(DocumentReaders.Format::sourceFormat).orElse(null));
         return result.operations().stream()
                 .map(op -> new EngineOperation(op.operationName(), op.title(),
                         op.api() == null ? null : op.api().ir(), op.skipReason(), false))
