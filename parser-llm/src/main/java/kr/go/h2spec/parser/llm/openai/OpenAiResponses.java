@@ -116,6 +116,10 @@ public final class OpenAiResponses {
         if (statusCode == 404) {
             return Kind.SETTINGS;
         }
+        // OpenAI는 잔액 부족을 429로 알리지만 설정의 baseUrl로 거치는 게이트웨이는 402로 알리기도 한다. 기다려도 풀리지 않는다
+        if (statusCode == 402) {
+            return Kind.QUOTA;
+        }
         if (statusCode == 429) {
             if (isQuota(error)) {
                 return Kind.QUOTA;

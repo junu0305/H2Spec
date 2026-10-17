@@ -379,6 +379,83 @@ class ConvertCommandEngineTest {
     }
 
     @Test
+    void 다시_하면_될_수_있는_실패와_그_밖의_실패는_그_파일만_실패로_세고_실패한_문서의_토큰도_합계에_더한다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        for (String name : List.of("a.hwp", "b.hwp", "c.hwp")) {
+            Files.writeString(inputDir.resolve(name), "fake");
+        }
+        String retryable = "LLM 응답이 중간에 끊겨 변환하지 못했습니다 (a.hwp, claude)";
+        String failed = "LLM 출력이 잘려 변환하지 못했습니다 (b.hwp, claude)";
+        ParsedApi last = api("LastApi");
+        FakeParser parser = new FakeParser(Map.of(
+                "a.hwp", () -> {
+                    throw new SpecParseException(SpecParseException.Kind.RETRYABLE, retryable, null,
+                            new Engine("llm", "claude", "claude-sonnet-5-5", "medium", false, new TokenUsage(3, 0, 0, 2)));
+                },
+                "b.hwp", () -> {
+                    throw new SpecParseException(SpecParseException.Kind.FAILED, failed, null,
+                            new Engine("llm", "claude", "claude-sonnet-5-5", "medium", false, new TokenUsage(100, 0, 0, 50)));
+                },
+                "c.hwp", () -> llmResult(false, new TokenUsage(10, 0, 0, 5), last)));
+
+        Run run = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser), "--engine", "llm",
+                "--cache-dir", out("cache"), "--input", inputDir.toString(), "--output", out("output"));
+
+        assertEquals(1, run.exit());
+        assertEquals(List.of("a.hwp", "b.hwp", "c.hwp"), parser.parsed, "남은 문서는 계속 변환한다");
+        assertEquals(List.of(NOTICE, retryable, failed), run.err().lines().toList(), "rule 엔진으로 대신 변환하지 않는다");
+        assertEquals("엔진: llm (claude / claude-sonnet-5-5, 추론 깊이 medium), 캐시 없음, 토큰 입력 3 / 출력 2 (thinking 포함)",
+                lineAfter(run.out().lines().toList(), "=== a.hwp ==="), "실패해도 LLM이 답한 뒤였으면 과금된 토큰을 알린다");
+        assertEquals("3개 중 1개 변환 성공, 2개 실패 · LLM 토큰 합계 입력 113 / 출력 57", lastLine(run.out()));
+    }
+
+    @Test
+    void 회사를_정하지_못하면_엔진을_만들지_않고_아무_문서도_보내지_않는다() throws Exception {
+        Path inputDir = Files.createDirectories(tempDir.resolve("input"));
+        Files.writeString(inputDir.resolve("a.hwp"), "fake");
+        FakeParser parser = new FakeParser(Map.of());
+
+        Run noKey = run(command(LlmProviders.ALL, Map.of(), parser),
+                "--engine", "llm", "--input", inputDir.toString(), "--output", out("no-key"));
+        Run unknown = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser),
+                "--engine", "llm", "--provider", "mystery", "--input", inputDir.toString(), "--output", out("unknown"));
+
+        assertEquals(1, noKey.exit());
+        assertEquals(1, noKey.err().lines().count(), noKey.err());
+        assertTrue(noKey.err().startsWith("LLM API 키가 없습니다"), noKey.err());
+        assertEquals(1, unknown.exit());
+        assertEquals(1, unknown.err().lines().count(), unknown.err());
+        assertTrue(unknown.err().startsWith("알 수 없는 LLM 회사입니다: mystery"), unknown.err());
+        assertFalse(unknown.err().contains(KEY));
+        assertEquals(0, factory.calls, "엔진을 만들지 않았다");
+        assertEquals(List.of(), parser.parsed);
+        assertFalse(Files.exists(tempDir.resolve("no-key")), "아무것도 쓰지 않는다");
+        assertFalse(Files.exists(tempDir.resolve("unknown")));
+    }
+
+    @Test
+    void 캐시와_교차검증_옵션을_llm_엔진_설정에_옮기고_no_cache는_cache_dir보다_앞선다() throws Exception {
+        Path doc = Files.writeString(tempDir.resolve("a.hwp"), "fake");
+        Path cacheDir = tempDir.resolve("cache");
+        ParsedApi first = api("FirstApi");
+        FakeParser parser = new FakeParser(Map.of("a.hwp", () -> llmResult(false, TokenUsage.NONE, first)));
+
+        Run moved = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser), "--engine", "llm",
+                "--cache-dir", cacheDir.toString(), "--input", doc.toString(), "--output", out("moved"));
+        assertEquals(0, moved.exit(), moved.err());
+        assertTrue(factory.options.cache().enabled());
+        assertEquals(cacheDir, factory.options.cache().directory().orElse(null));
+        assertTrue(factory.options.crossCheck(), "교차검증은 기본으로 켠다");
+
+        Run disabled = run(command(LlmProviders.ALL, Map.of("ANTHROPIC_API_KEY", KEY), parser), "--engine", "llm",
+                "--no-cache", "--cache-dir", cacheDir.toString(), "--no-cross-check",
+                "--input", doc.toString(), "--output", out("disabled"));
+        assertEquals(0, disabled.exit(), disabled.err());
+        assertFalse(factory.options.cache().enabled(), "끄라는 뜻이 위치를 바꾸라는 뜻보다 분명하다");
+        assertFalse(factory.options.crossCheck());
+    }
+
+    @Test
     void rule_엔진에서_llm_엔진_옵션을_주면_쓰이지_않는다고_알리고_잘못된_패키지는_변환하기_전에_멈춘다() throws Exception {
         Run options = run(command(List.of(CLAUDE), Map.of(), UNUSED),
                 "--provider", "claude", "--no-cache", "--input", irPath().toString(), "--output", out("output"));

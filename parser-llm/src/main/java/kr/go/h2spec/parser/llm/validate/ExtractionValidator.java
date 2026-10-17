@@ -490,8 +490,9 @@ public final class ExtractionValidator {
 
     /**
      * 겹치는 응답 필드를 하나만 남긴다 (V12). 같은 경로는 공통 구간 것보다 오퍼레이션 것을, 같은 쪽끼리는 앞의 것을 남긴다.
-     * 같은 부모 아래에서 Java 이름이 같아지는 칸({@code station_name}과 {@code stationName})은 한 DTO 클래스의 필드가 되어
-     * 컴파일되지 않으므로 앞의 것을 남기고 노트를 남긴다.
+     * 같은 부모 아래에서 Java 이름이 같아지는 칸({@code station_name}과 {@code stationName})이나 getter·setter 이름이 같아지는
+     * 칸({@code items}와 {@code _items}의 {@code getItems})은 한 DTO 클래스에 들어가 컴파일되지 않으므로 앞의 것을 남기고 노트를 남긴다.
+     * generator의 {@code CodeGenerator}와 같은 규칙이다.
      */
     private List<Field> distinctFields(Draft draft, List<Field> fields) {
         Set<String> own = fields.stream().filter(field -> !field.source().common())
@@ -507,7 +508,7 @@ public final class ExtractionValidator {
                 distinct.add(field);
             }
         }
-        // 부모 경로 → (Java 이름 → 칸 이름)
+        // 부모 경로 → (Java 이름·getter 이름 키 → 칸 이름)
         Map<String, Map<String, String>> children = new HashMap<>();
         List<Field> kept = new ArrayList<>();
         for (Field field : distinct) {
@@ -520,7 +521,10 @@ public final class ExtractionValidator {
             String parent = "";
             for (String segment : field.path().split("\\.")) {
                 String name = bare(segment);
-                children.computeIfAbsent(parent, key -> new HashMap<>()).putIfAbsent(javaKey(name), name);
+                Map<String, String> siblings = children.computeIfAbsent(parent, key -> new HashMap<>());
+                for (String key : javaKeys(name)) {
+                    siblings.putIfAbsent(key, name);
+                }
                 parent = parent + "/" + name;
             }
             kept.add(field);
@@ -533,17 +537,25 @@ public final class ExtractionValidator {
         String parent = "";
         for (String segment : path.split("\\.")) {
             String name = bare(segment);
-            String existing = children.getOrDefault(parent, Map.of()).get(javaKey(name));
-            if (existing != null && !existing.equals(name)) {
-                return existing;
+            Map<String, String> siblings = children.getOrDefault(parent, Map.of());
+            for (String key : javaKeys(name)) {
+                String existing = siblings.get(key);
+                if (existing != null && !existing.equals(name)) {
+                    return existing;
+                }
             }
             parent = parent + "/" + name;
         }
         return null;
     }
 
-    private static String javaKey(String name) {
-        return JavaNameRules.canonicalIdentifier(JavaNameRules.javaName(name));
+    /**
+     * 생성 DTO에서 같은 필드가 되는지 보는 키와 같은 getter·setter가 되는지 보는 키. 둘 중 하나라도 같으면 겹친다
+     * ({@link JavaNameRules#accessorNameCollisions})
+     */
+    private static List<String> javaKeys(String name) {
+        return List.of("field:" + JavaNameRules.canonicalIdentifier(JavaNameRules.javaName(name)),
+                "accessor:" + JavaNameRules.accessorKey(name));
     }
 
     /**
@@ -719,11 +731,15 @@ public final class ExtractionValidator {
                 && JavaNameRules.hasValidJavaName(name);
     }
 
-    /** 경로의 각 칸이 이름 규칙을 지키고 {@code []}가 칸 끝에만 오는지 본다 (V6) */
+    /**
+     * 경로의 각 칸이 이름 규칙을 지키고 {@code []}가 칸 끝에만 오는지 본다 (V6).
+     * 칸은 DTO 필드가 되므로 getter가 Object의 final 메서드 {@code getClass()}가 되는 이름({@code _class})도 거른다.
+     */
     private static boolean hasValidSegments(List<String> segments) {
         for (String segment : segments) {
             String name = bare(segment);
-            if (name.isEmpty() || name.indexOf('[') >= 0 || name.indexOf(']') >= 0 || !isUsableName(name)) {
+            if (name.isEmpty() || name.indexOf('[') >= 0 || name.indexOf(']') >= 0 || !isUsableName(name)
+                    || JavaNameRules.accessorKey(name).equals("Class")) {
                 return false;
             }
         }

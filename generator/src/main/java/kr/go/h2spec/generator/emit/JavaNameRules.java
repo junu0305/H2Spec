@@ -72,6 +72,30 @@ public final class JavaNameRules {
     }
 
     /**
+     * DTO 필드의 getter·setter 이름이 같아지는 원래 이름을 묶는다. getter·setter 이름은 필드 이름({@link #javaName})이 아니라
+     * {@link JavaNames#pascal}로 만들어서, 필드 이름은 첫 글자 대소문자만 달라 겹치지 않아도({@code items}와 {@code _items}의
+     * {@code Items}) getter·setter는 같아져({@code getItems}) 컴파일되지 않는다. 필드 이름이 같아지는지는 따로
+     * {@link #javaNameCollisions}로 본다. 둘은 서로를 다 덮지 않는다({@code İtems}와 {@code items}는 필드 이름만 같다).
+     * 키는 {@link #accessorKey}, 값은 입력 순서대로의 원래 이름이다. 겹치는 묶음만 담는다.
+     */
+    public static Map<String, List<String>> accessorNameCollisions(Collection<String> rawNames) {
+        Map<String, List<String>> byAccessor = new LinkedHashMap<>();
+        for (String rawName : rawNames) {
+            byAccessor.computeIfAbsent(accessorKey(rawName), key -> new ArrayList<>()).add(rawName);
+        }
+        byAccessor.values().removeIf(names -> names.size() < 2);
+        return byAccessor;
+    }
+
+    /**
+     * @param rawName 응답 경로의 칸 이름
+     * @return javac가 보는 getter·setter 이름에서 get·set을 뺀 부분({@code getItems}의 {@code Items})
+     */
+    public static String accessorKey(String rawName) {
+        return canonicalIdentifier(JavaNames.pascal(rawName));
+    }
+
+    /**
      * javac가 두 식별자를 같은지 볼 때의 꼴. javac는 무시 가능 문자(soft hyphen·zero width space 같은 서식 문자)를
      * 빼고 읽어서, 문서에서 따라 들어온 이런 글자 하나 차이인 두 이름은 같은 이름이 된다.
      */

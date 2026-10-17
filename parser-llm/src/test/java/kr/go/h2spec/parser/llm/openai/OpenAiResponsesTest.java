@@ -115,6 +115,9 @@ class OpenAiResponsesTest {
         assertEquals(LlmException.Kind.QUOTA, OpenAiResponses.fromHttpError(429,
                 "{\"error\":{\"message\":\"No credit\",\"type\":\"insufficient_quota\",\"code\":\"credit_balance_exhausted\"}}",
                 null).kind(), "잔액 문제는 기다려도 풀리지 않는다");
+        assertEquals(LlmException.Kind.QUOTA, OpenAiResponses.fromHttpError(402,
+                "{\"error\":{\"message\":\"Insufficient credits\",\"code\":402}}", null).kind(),
+                "게이트웨이가 402로 알리는 잔액 부족도 기다려도 풀리지 않는다");
         assertEquals(LlmException.Kind.BAD_REQUEST, OpenAiResponses.fromHttpError(429,
                 "{\"error\":{\"message\":\"Request too large for gpt-6.1-sol in organization org-x on tokens per min (TPM): "
                         + "Limit 100000, Requested 131000.\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}",

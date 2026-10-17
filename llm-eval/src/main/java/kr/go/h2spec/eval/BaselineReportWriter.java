@@ -13,6 +13,7 @@ import kr.go.h2spec.eval.GoldFile.GoldOperation;
 import kr.go.h2spec.eval.OperationPairing.Method;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,6 +49,12 @@ final class BaselineReportWriter {
      */
     List<Path> write(BaselineReport report, Path outDir) throws IOException {
         Path documents = Files.createDirectories(outDir.resolve(DOCUMENTS));
+        // 같은 디렉터리에 다시 쓰면(같은 날 같은 엔진) 이번에 평가하지 않은 문서의 지난 JSON이 남아 섞인다
+        try (DirectoryStream<Path> stale = Files.newDirectoryStream(documents, "*.json")) {
+            for (Path file : stale) {
+                Files.delete(file);
+            }
+        }
         List<Path> written = new ArrayList<>();
         Path summary = outDir.resolve(SUMMARY);
         Files.writeString(summary, summary(report));

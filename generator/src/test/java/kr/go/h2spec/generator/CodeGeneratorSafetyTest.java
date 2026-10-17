@@ -197,6 +197,22 @@ class CodeGeneratorSafetyTest {
     }
 
     @Test
+    void getter_이름이_겹치는_응답_필드는_거부한다() throws Exception {
+        // 필드 이름은 sido와 Sido로 다르지만 getter·setter가 둘 다 getSido·setSido가 되어 "already defined"로 컴파일되지 않는다
+        SampleIr ir = new SampleIr();
+        ir.fields.add(field("response.body.items.item[].sido", "시도"));
+        ir.fields.add(field("response.body.items.item[]._sido", "시도 구분"));
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new CodeGenerator().generate(ir.build(), out()));
+
+        assertTrue(e.getMessage().contains("'getSido'"), e.getMessage());
+        assertTrue(e.getMessage().contains("response.body.items.item.sido, response.body.items.item._sido"),
+                e.getMessage());
+        assertEquals(List.of(), filesUnder(tempDir));
+    }
+
+    @Test
     void 생성에_실패하면_아무_파일도_쓰지_않는다() throws Exception {
         // DTO를 먼저 써 두면 ClientEmitter가 serviceKey가 없어 실패할 때 DTO 파일만 남는다
         SampleIr ir = new SampleIr();

@@ -490,13 +490,6 @@ public final class IrConventions {
     }
 
     /**
-     * endpoint의 경로 변수({@code {your_appkey}})가 요청 파라미터에 없으면 필수 path 파라미터로 맨 앞부터 채운다.
-     * 같은 이름의 파라미터가 있으면 path·필수로 바꾼다.
-     *
-     * @param requestParameters IR의 api.requestParameters 배열. 이 배열을 고친다
-     * @param endpoint          {@link #splitUrl}이 나눈 endpoint
-     */
-    /**
      * @param endpoint 나눈 endpoint
      * @return endpoint의 경로 변수 이름({@code {itemId}}의 {@code itemId}). {@link #addPathParameters}가 경로 변수로 채우는 이름과 같다
      */
@@ -509,6 +502,13 @@ public final class IrConventions {
         return names;
     }
 
+    /**
+     * endpoint의 경로 변수({@code {your_appkey}})가 요청 파라미터에 없으면 필수 path 파라미터로 맨 앞부터 채운다.
+     * 같은 이름의 파라미터가 있으면 path·필수로 바꾼다.
+     *
+     * @param requestParameters IR의 api.requestParameters 배열. 이 배열을 고친다
+     * @param endpoint          {@link #splitUrl}이 나눈 endpoint
+     */
     public static void addPathParameters(ArrayNode requestParameters, String endpoint) {
         Matcher template = PATH_TEMPLATE.matcher(endpoint);
         int insertAt = 0;

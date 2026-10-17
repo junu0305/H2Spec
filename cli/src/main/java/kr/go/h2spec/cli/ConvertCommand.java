@@ -111,7 +111,7 @@ public class ConvertCommand implements Callable<Integer> {
     private String model;
 
     @Option(names = "--effort", description = "llm 엔진의 추론 깊이 (기본: H2SPEC_LLM_EFFORT, 없으면 회사별 기본값. "
-            + "기본은 medium. claude는 low~max, openai는 none~max, gemini는 low~high). 높을수록 출력 토큰(비용)과 시간이 는다")
+            + "기본은 medium. claude는 low~max, openai는 none~max, gemini는 low~high). 높을수록 출력 토큰(비용)과 시간이 늘어난다")
     private String effort;
 
     @Option(names = "--no-cross-check", description = "llm 엔진의 결과를 rule 엔진의 결과와 대조하지 않는다")

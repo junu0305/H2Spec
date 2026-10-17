@@ -9,6 +9,7 @@ import kr.go.h2spec.eval.OperationPairing.Key;
 import kr.go.h2spec.eval.OperationPairing.Match;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -61,7 +62,12 @@ final class BaselineEvaluator {
             }
             return new BaselineReport(set, engine.name(), date, results);
         } finally {
-            deleteRecursively(work);
+            try {
+                deleteRecursively(work);
+            } catch (IOException | UncheckedIOException e) {
+                // 임시 디렉터리를 못 지운 것으로 낸 지표나 평가 중의 예외를 잃지 않는다. 남은 디렉터리는 알리기만 한다
+                progress.accept("경고: 임시 디렉터리를 지우지 못했습니다: " + work + " (" + e.getMessage() + ")");
+            }
         }
     }
 

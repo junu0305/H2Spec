@@ -36,14 +36,19 @@ class LlmEvalTest {
         Files.copy(TestPaths.corpus("kdic-account-deposit.expected.json"),
                 corpus.resolve("kdic-account-deposit.expected.json"));
 
+        // 같은 날 앞서 돌린 실행이 남긴, 이번에는 평가하지 않는 문서의 JSON
+        Path reports = tempDir.resolve("llm-eval/build/reports/2026-10-11-rule");
+        Path stale = Files.createDirectories(reports.resolve("documents")).resolve("removed.hwp.json");
+        Files.writeString(stale, "{}");
+
         int code = run("--set", "A", "--engine", "rule", "--root", tempDir.toString());
 
         assertEquals(0, code, err());
-        Path reports = tempDir.resolve("llm-eval/build/reports/2026-10-11-rule");
         String summary = Files.readString(reports.resolve("summary.md"));
         assertTrue(summary.contains("| 오퍼레이션 재현율 | 100.0% (1/1) |"), summary);
         assertTrue(summary.contains("| generator 통과율 | 100.0% (1/1) |"), summary);
         assertTrue(Files.exists(reports.resolve("documents/kdic-account-deposit.hwp.json")));
+        assertFalse(Files.exists(stale), "이번 실행의 문서별 JSON만 남는다");
         assertTrue(out().contains("generator 통과 1/1"), out());
     }
 
@@ -113,6 +118,24 @@ class LlmEvalTest {
         assertEquals(1, code);
         assertTrue(err().contains("녹화 응답 디렉터리에 평가할 문서의 응답이 하나도 없습니다"), err());
         assertFalse(Files.exists(tempDir.resolve("llm-eval/build/reports/2026-10-11-llm-empty")));
+    }
+
+    @Test
+    void proxy만_주면_세트_A_없이_대리_지표만_쓴다() throws Exception {
+        Path documents = Files.createDirectories(tempDir.resolve("set-c/sub"));
+        Files.copy(TestPaths.repoRoot().resolve("parser/src/test/resources/docs/msrstn-info.docx"),
+                documents.resolve("msrstn-info.docx"));
+        Path reports = tempDir.resolve("reports");
+
+        int code = run("--proxy", tempDir.resolve("set-c").toString(), "--out", reports.toString(),
+                "--root", tempDir.toString());
+
+        assertEquals(0, code, err());
+        assertTrue(Files.readString(reports.resolve("proxy-summary.md")).contains("- 문서: 1개"),
+                "하위 디렉터리의 문서도 센다");
+        assertTrue(Files.readString(reports.resolve("proxy.json")).contains("msrstn-info.docx"));
+        assertFalse(Files.exists(reports.resolve("summary.md")), "세트 A는 평가하지 않는다");
+        assertTrue(out().contains("대리 지표 요약: " + reports.resolve("proxy-summary.md")), out());
     }
 
     private int run(String... args) {

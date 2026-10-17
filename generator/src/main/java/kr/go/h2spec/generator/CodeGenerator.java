@@ -137,7 +137,7 @@ public class CodeGenerator {
                         + " — 식별자가 아니거나 예약어입니다.");
             }
             // getter가 Object의 final 메서드 getClass()가 되는 이름("_class" → Class)은 컴파일되지 않는다
-            if (JavaNameRules.canonicalIdentifier(JavaNames.pascal(child.name())).equals("Class")) {
+            if (JavaNameRules.accessorKey(child.name()).equals("Class")) {
                 throw new IllegalArgumentException("응답 필드 이름의 getter가 Object.getClass()와 겹칩니다: " + quote(child.name())
                         + " (" + path + "." + child.name() + ") — IR 경로 세그먼트 이름을 바꿔 주세요.");
             }
@@ -148,6 +148,14 @@ public class CodeGenerator {
             List<String> paths = first.getValue().stream().map(name -> path + "." + name).toList();
             throw new IllegalArgumentException("응답 필드의 Java 이름 충돌: " + quote(first.getKey())
                     + " (" + String.join(", ", paths) + ") — 한 클래스의 필드가 되므로 IR 경로 세그먼트 이름을 구분해 주세요.");
+        }
+        // 필드 이름은 달라도 첫 글자 대소문자만 다르면 getter·setter가 같아진다(items와 _items → getItems)
+        Map<String, List<String>> accessors = JavaNameRules.accessorNameCollisions(node.children().keySet());
+        if (!accessors.isEmpty()) {
+            Map.Entry<String, List<String>> first = accessors.entrySet().iterator().next();
+            List<String> paths = first.getValue().stream().map(name -> path + "." + name).toList();
+            throw new IllegalArgumentException("응답 필드의 getter 이름 충돌: " + quote("get" + first.getKey())
+                    + " (" + String.join(", ", paths) + ") — 한 클래스의 getter·setter가 되므로 IR 경로 세그먼트 이름을 구분해 주세요.");
         }
         for (DtoNode child : node.children().values()) {
             if (!child.isLeaf()) {

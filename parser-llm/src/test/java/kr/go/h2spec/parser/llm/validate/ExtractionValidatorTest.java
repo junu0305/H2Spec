@@ -183,6 +183,34 @@ class ExtractionValidatorTest {
                 operation.notes());
     }
 
+    // ---- V6, V12 ----
+
+    @Test
+    void V6_V12_생성_DTO에서_필드나_getter가_겹치거나_getClass가_되는_응답_필드는_제거하고_노트를_남긴다() {
+        List<Block> blocks = withResponseTable(
+                row("sido", "시도", "20", "1", "서울", "시도"),
+                row("_sido", "시도 구분", "20", "1", "서울", "getter가 getSido로 sido와 같다"),
+                row("station_name", "측정소명", "30", "1", "종로구", "필드 이름이 stationName과 같다"),
+                row("_class", "구분", "10", "1", "1", "getter가 getClass"));
+
+        ValidatedOperation operation = validate(blocks, standardOperation().fields(
+                field("response.body.items.item[].stationName", FIELD_TABLE),
+                field("response.body.items.item[].sido", FIELD_TABLE),
+                field("response.body.items.item[]._sido", FIELD_TABLE),
+                field("response.body.items.item[].station_name", FIELD_TABLE),
+                field("response.body.items.item[]._class", FIELD_TABLE)));
+
+        assertEquals(List.of("response.body.items.item[].stationName", "response.body.items.item[].sido"),
+                paths(operation));
+        assertEquals(List.of(
+                "[검증] 이름 규칙에 맞지 않는 응답 경로를 제거함 (1개): response.body.items.item[]._class",
+                "[검증] Java 이름이 같은 자리의 앞 필드와 겹치는 응답 필드를 제거함 (2개): "
+                        + "response.body.items.item[]._sido(sido와 겹침), "
+                        + "response.body.items.item[].station_name(stationName와 겹침)"),
+                operation.notes());
+        assertEquals(List.of("V6", "V12", "V12"), rules(operation));
+    }
+
     // ---- V8 ----
 
     @Test
@@ -307,6 +335,15 @@ class ExtractionValidatorTest {
         List<List<String>> request = new ArrayList<>(((Block.Table) blocks.get(5)).rows());
         request.addAll(List.of(rows));
         blocks.set(5, new Block.Table(request));
+        return blocks;
+    }
+
+    @SafeVarargs
+    private List<Block> withResponseTable(List<String>... rows) {
+        List<Block> blocks = new ArrayList<>(SampleDocument.standard());
+        List<List<String>> response = new ArrayList<>(((Block.Table) blocks.get(7)).rows());
+        response.addAll(List.of(rows));
+        blocks.set(7, new Block.Table(response));
         return blocks;
     }
 
