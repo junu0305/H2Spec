@@ -2,7 +2,11 @@ package kr.go.h2spec.parser;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -175,6 +179,16 @@ class ResponseExampleTest {
         assertEquals("XML", api.get("responseFormat").asText());
     }
 
+    @Test
+    void 닫히지_않은_XML_예제는_건너뛰고_표준_오류에_파서_메시지를_남기지_않는다() throws Throwable {
+        // 세종특별자치시 CCTV 활용가이드: 응답 예제의 item이 닫히지 않았다. JDK XML 파서는 오류 처리기가 없으면
+        // 변환은 이어 가면서 "[Fatal Error] …"를 표준 오류에 찍는다
+        String stderr = stderrOf(() -> assertEquals(List.of(), DocumentExamples.of(
+                "<response><body><items><item><cctvNm>시청</cctvNm></items></body></response>").examples()));
+
+        assertEquals("", stderr);
+    }
+
     /** 결과코드·메시지와 데이터 필드 둘 */
     private Block.Table fields() {
         return table(HEADER, row("resultCode", "결과코드", "2", "1", "00", "결과코드"),
@@ -246,5 +260,17 @@ class ResponseExampleTest {
 
     private List<String> row(String... cells) {
         return List.of(cells);
+    }
+
+    private static String stderrOf(Executable action) throws Throwable {
+        PrintStream original = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            action.execute();
+        } finally {
+            System.setErr(original);
+        }
+        return captured.toString(StandardCharsets.UTF_8);
     }
 }

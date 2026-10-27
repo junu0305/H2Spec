@@ -1,6 +1,7 @@
 package kr.go.h2spec.client.interceptor;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -10,7 +11,9 @@ import org.springframework.mock.http.client.MockClientHttpResponse;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -147,6 +150,16 @@ class PublicDataErrorInterceptorTest {
         assertDoesNotThrow(() -> intercept("""
                 <?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>\
                 <response><data>&xxe;</data></response>"""));
+    }
+
+    @Test
+    void XML로_읽지_못하는_응답에도_표준_오류에_파서_메시지를_남기지_않는다() throws Throwable {
+        // 대전 빅데이터포털이 준 HTML 페이지: DOCTYPE과 닫히지 않은 태그가 있다. JDK XML 파서는 오류 처리기가 없으면
+        // 응답마다 "[Fatal Error] …"를 사용자 애플리케이션의 표준 오류에 찍는다
+        String stderr = stderrOf(() -> assertDoesNotThrow(() -> intercept(
+                "<!DOCTYPE html><html><head><title>목록</title></head><body><p>안내<br></body></html>")));
+
+        assertEquals("", stderr);
     }
 
     @Test
@@ -355,5 +368,17 @@ class PublicDataErrorInterceptorTest {
         MockClientHttpResponse response =
                 new MockClientHttpResponse(body.getBytes(StandardCharsets.UTF_8), HttpStatus.OK);
         return target.intercept(request, new byte[0], (req, requestBody) -> response);
+    }
+
+    private static String stderrOf(Executable action) throws Throwable {
+        PrintStream original = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            action.execute();
+        } finally {
+            System.setErr(original);
+        }
+        return captured.toString(StandardCharsets.UTF_8);
     }
 }

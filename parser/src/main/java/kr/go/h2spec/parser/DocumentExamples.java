@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXParseException;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -54,6 +56,24 @@ final class DocumentExamples {
                     JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES)
             .build();
     private static final DocumentBuilderFactory XML = secureXmlFactory();
+    /**
+     * 닫히지 않은 태그 같은 문서 예제의 오타를 표준 오류에 찍지 않고 예외로만 알린다. 처리기를 주지 않으면 JDK 파서가
+     * 변환은 이어 가면서 "[Fatal Error] …"를 찍는다. 그런 예제는 건너뛴다
+     */
+    private static final ErrorHandler QUIET_XML_ERRORS = new ErrorHandler() {
+        @Override
+        public void warning(SAXParseException e) {
+        }
+
+        @Override
+        public void error(SAXParseException e) {
+        }
+
+        @Override
+        public void fatalError(SAXParseException e) throws SAXParseException {
+            throw e;
+        }
+    };
 
     private final List<Example> examples;
     private final List<String> urls;
@@ -239,8 +259,9 @@ final class DocumentExamples {
     private static Optional<ExNode> parseXml(String raw) {
         String cleaned = clean(raw).replaceAll("&(?![A-Za-z]+;|#\\d+;|#x[0-9A-Fa-f]+;)", "&amp;");
         try {
-            var document = XML.newDocumentBuilder()
-                    .parse(new ByteArrayInputStream(cleaned.getBytes(StandardCharsets.UTF_8)));
+            var builder = XML.newDocumentBuilder();
+            builder.setErrorHandler(QUIET_XML_ERRORS);
+            var document = builder.parse(new ByteArrayInputStream(cleaned.getBytes(StandardCharsets.UTF_8)));
             return Optional.of(fromXml(document.getDocumentElement()));
         } catch (Exception e) {
             return Optional.empty();

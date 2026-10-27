@@ -3,6 +3,8 @@ package kr.go.h2spec.client.interceptor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXParseException;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -37,6 +39,25 @@ final class PublicDataErrorDetector {
      * 스레드 안전하지 않은 DocumentBuilder만 호출마다 새로 만든다.
      */
     private static final DocumentBuilderFactory XML_FACTORY = secureXmlFactory();
+
+    /**
+     * XML로 읽지 못하는 응답(HTML 오류 페이지 등)을 표준 오류에 찍지 않고 예외로만 알린다. 처리기를 주지 않으면
+     * JDK 파서가 응답마다 "[Fatal Error] …"를 사용자 애플리케이션의 표준 오류에 찍는다. 상태가 없어 공유한다.
+     */
+    private static final ErrorHandler QUIET_XML_ERRORS = new ErrorHandler() {
+        @Override
+        public void warning(SAXParseException e) {
+        }
+
+        @Override
+        public void error(SAXParseException e) {
+        }
+
+        @Override
+        public void fatalError(SAXParseException e) throws SAXParseException {
+            throw e;
+        }
+    };
 
     private static List<String> errorKeywords() {
         List<String> keywords = new ArrayList<>();
@@ -132,6 +153,7 @@ final class PublicDataErrorDetector {
     private ResultInfo parseXml(String content) {
         try {
             var builder = XML_FACTORY.newDocumentBuilder();
+            builder.setErrorHandler(QUIET_XML_ERRORS);
             try (InputStream input = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
                 var document = builder.parse(input);
                 return new ResultInfo(resultCodeText(document), firstTagText(document, RESULT_MSG_KEYS, Integer.MAX_VALUE));
