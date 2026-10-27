@@ -26,6 +26,14 @@ class IrConventionsTest {
     }
 
     @Test
+    void 슬래시_뒤를_띄어_쓴_주소는_이어_붙이고_띄어_쓴_한글_설명은_주소에_넣지_않는다() {
+        assertEquals("http://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch",
+                IrConventions.firstUrl("http://apis.data.go.kr/1230000/ad/BidPublicInfoService/ "
+                        + "getBidPblancListInfoThngPPSSrch?type=xml&inqryDiv=1"));
+        assertEquals("https://www.data.go.kr", IrConventions.firstUrl("https://www.data.go.kr/ 에서 활용신청"));
+    }
+
+    @Test
     void 호스트만_있거나_baseUrl에_경로_변수가_남는_주소는_나누지_않고_이유를_돌려준다() {
         // 호스트를 오퍼레이션으로 나누면 baseUrl이 "http:/"인 IR이 나오고 generator도 받아 버린다
         IrConventions.UrlParts hostOnly = IrConventions.splitUrl("http://apis.data.go.kr");

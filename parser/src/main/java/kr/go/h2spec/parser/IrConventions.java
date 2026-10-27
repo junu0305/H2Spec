@@ -29,6 +29,8 @@ public final class IrConventions {
             Pattern.CASE_INSENSITIVE);
     /** 산문 속 URL 뒤에 붙어 나오는 문장부호 */
     private static final Pattern URL_TRAILER = Pattern.compile("[/.,;:]+$");
+    /** 주소 안에서 슬래시 뒤를 띄어 쓴 자리("…/BidPublicInfoService/ getBidPblancListInfoServcPPSSrch"). 다음 주소의 시작은 아니다 */
+    private static final Pattern SPACE_AFTER_SLASH = Pattern.compile("(?<=\\w/)\\h+(?=[A-Za-z_])(?!https?://)");
     /** "portal.kosha.or.kr/openapi/v1/koshagw"처럼 스킴 없이 적은 주소 */
     private static final Pattern SCHEMELESS_URL =
             Pattern.compile("(?i)[a-z0-9-]+(\\.[a-z0-9-]+)+(:\\d+)?/[\\w./{}-]*");
@@ -102,7 +104,8 @@ public final class IrConventions {
 
     /**
      * 칸이나 문단에서 첫 http(s) 주소를 꺼낸다. 질의 문자열과 끝 문장부호는 버린다.
-     * 칸 폭 때문에 주소가 여러 줄로 꺾여 있으면 줄바꿈을 지우고 이어 붙인다.
+     * 칸 폭 때문에 주소가 여러 줄로 꺾여 있으면 줄바꿈을 지우고 이어 붙인다. 슬래시 뒤를 띄어 쓴 경로도 이어 붙인다.
+     * 공백에서 끊으면 요청 예제가 서비스 주소 자체를 부르는 것으로 보여 {@link #endpointUrl}이 오퍼레이션 경로를 버린다.
      * 표 안의 주소 행, "요청 URL" 문단, 요청 예제 칸에 쓴다.
      *
      * @param text 칸(문단)의 원래 글
@@ -112,7 +115,8 @@ public final class IrConventions {
         if (text == null) {
             return null;
         }
-        Matcher matcher = URL.matcher(text.replaceAll("(?<=[/\\w.-])[\\r\\n]+(?=[/\\w.-])", ""));
+        String joined = text.replaceAll("(?<=[/\\w.-])[\\r\\n]+(?=[/\\w.-])", "");
+        Matcher matcher = URL.matcher(SPACE_AFTER_SLASH.matcher(joined).replaceAll(""));
         if (!matcher.find()) {
             return null;
         }

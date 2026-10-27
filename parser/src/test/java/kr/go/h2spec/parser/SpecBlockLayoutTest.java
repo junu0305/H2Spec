@@ -241,6 +241,27 @@ class SpecBlockLayoutTest {
     }
 
     @Test
+    void 요청_예제_주소가_슬래시_뒤에서_띄어_써져도_서비스_주소_자체를_부르는_것으로_보지_않는다() {
+        // 조달청 나라장터 입찰공고정보서비스: Call Back URL이 N/A이고 요청 예제가 "…/BidPublicInfoService/ getBid…"처럼
+        // 슬래시 뒤를 띄어 썼다. 공백에서 주소를 끊으면 예제가 서비스 주소 자체를 부르는 것으로 보여, 오퍼레이션 셋이
+        // 같은 주소가 되고 apiId가 겹쳐 둘이 사라진다
+        String service = "http://apis.data.go.kr/1230000/ad/BidPublicInfoService";
+        List<ParsedApi> apis = parse(List.of(
+                heading("서비스 개요"),
+                table(row("서비스URL", "개발환경", service), row("", "운영환경", service)),
+                heading("[나라장터검색조건에 의한 입찰공고용역조회] 오퍼레이션 명세"),
+                table(row("오퍼레이션명(영문)", "getBidPblancListInfoServcPPSSrch"), row("Call Back URL", "N/A")),
+                heading("요청 메시지 명세"),
+                table(HEADER, row("serviceKey", "서비스키", "400", "1", "키", "인증키")),
+                heading("응답 메시지 명세"),
+                table(HEADER, row("resultCode", "결과코드", "2", "1", "00", "결과코드")),
+                heading("요청/응답 메시지 예제"),
+                table(row("REST(URI)"), row(service + "/ getBidPblancListInfoServcPPSSrch?type=xml&inqryDiv=1"))));
+
+        assertEquals(service + "/getBidPblancListInfoServcPPSSrch", url(apis, 0));
+    }
+
+    @Test
     void Call_Back_URL이_자리표시면_요청_예제의_주소를_쓴다() {
         // 한국환경공단 순환자원정보센터: Call Back URL 칸에 "서비스URL/getBidPbancRsltInfo"만 적었다
         List<ParsedApi> apis = parse(List.of(
