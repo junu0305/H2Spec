@@ -33,7 +33,8 @@ public class DtoEmitter {
             "JsonIgnoreProperties", "JsonProperty", "JsonCreator", "JsonRootName",
             "JacksonXmlRootElement", "JacksonXmlProperty", "JacksonXmlElementWrapper",
             "IOException", "JsonParser", "DeserializationContext", "JsonDeserializer", "JsonDeserialize",
-            "Override", "NumberFormatException", "LenientLong", "LenientDouble", "LenientBoolean");
+            "Override", "NumberFormatException", "LenientLong", "LenientDouble", "LenientBoolean",
+            "BigDecimal", "ArithmeticException");
     /**
      * 숫자·불리언 필드를 너그럽게 읽는 역직렬화기의 클래스 이름. 공공데이터 응답은 값이 없는 측정값에 "-"를 넣거나 금액에 천 단위
      * 쉼표("82,500")를 넣어, 그대로 읽으면 값 하나 때문에 응답 전체를 읽지 못한다. 생성 DTO가 interceptor-core 같은 다른 라이브러리의
@@ -156,6 +157,9 @@ public class DtoEmitter {
         boolean lenient = !lenientTypes(root).isEmpty();
         if (lenient) {
             sb.append("import java.io.IOException;\n");
+        }
+        if (lenientTypes(root).contains("Long")) {
+            sb.append("import java.math.BigDecimal;\n");
         }
         if (hasList) {
             sb.append("import java.util.List;\n");
@@ -351,6 +355,8 @@ public class DtoEmitter {
      * 숫자·불리언 필드의 역직렬화기를 루트 클래스 안에 만든다. JSON의 숫자·불리언 값은 그대로 읽는다. 글로 온 값(XML은 모든 값이 글이다)은
      * 앞뒤 공백을 떼고 읽는데, 숫자는 천 단위로 끊은 쉼표("82,500")만 떼고, 읽을 수 없는 글("-", "")은 응답 전체를 실패시키지 않고 null로 둔다.
      * 소수점 쉼표("1,5")처럼 천 단위 꼴이 아닌 쉼표는 떼지 않아 null이 된다(다른 값으로 잘못 읽지 않는다). 불리언은 Y·N과 1·0도 읽는다.
+     * 정수 칸은 JSON 숫자와 글 모두 정수로 딱 떨어지는 값만 읽는다. 3.0은 3이고 2.5는 null이다. 칸 타입은 문서의 샘플값으로 정해서,
+     * 샘플이 정수였던 칸에 소수가 오기도 한다. 그때 JSON 숫자만 소수점 아래를 버리면 같은 응답이 형식에 따라 다르게 읽힌다.
      * 객체·배열처럼 값이 아닌 것은 지금처럼 실패한다. 역직렬화기 안의 타입은 import한 이름만 쓴다. 완전한 이름(java.util.…)은
      * 이름이 java나 com인 응답 필드에 가려진다.
      */
@@ -358,21 +364,23 @@ public class DtoEmitter {
         for (String type : types) {
             sb.append("\n");
             switch (type) {
-                case "Long" -> appendNumberDeserializer(sb, "LenientLong", "Long", "getLongValue",
-                        "숫자 칸을 너그럽게 읽는다. 천 단위 쉼표(\"82,500\")와 앞뒤 공백은 떼고, 값이 없을 때의 \"-\"처럼 숫자가 아닌 글은 null로 둔다");
-                case "Double" -> appendNumberDeserializer(sb, "LenientDouble", "Double", "getDoubleValue",
+                case "Long" -> appendNumberDeserializer(sb, "LenientLong", "Long",
+                        "숫자 칸을 너그럽게 읽는다. 천 단위 쉼표(\"82,500\")와 앞뒤 공백은 떼고, 값이 없을 때의 \"-\"처럼 숫자가 아닌 글과 정수로 떨어지지 않는 수(2.5)는 null로 둔다");
+                case "Double" -> appendNumberDeserializer(sb, "LenientDouble", "Double",
                         "실수 칸을 너그럽게 읽는다. 천 단위 쉼표와 앞뒤 공백은 떼고, 값이 없을 때의 \"-\"처럼 숫자가 아닌 글은 null로 둔다");
                 default -> appendBooleanDeserializer(sb);
             }
         }
     }
 
-    private void appendNumberDeserializer(StringBuilder sb, String className, String type, String numberGetter,
-                                          String javadoc) {
+    private void appendNumberDeserializer(StringBuilder sb, String className, String type, String javadoc) {
         String i1 = INDENT;
         String i2 = INDENT.repeat(2);
         String i3 = INDENT.repeat(3);
         String i4 = INDENT.repeat(4);
+        boolean integer = "Long".equals(type);
+        String fromNumber = integer ? "exactLong(p.getDecimalValue())" : "p.getDoubleValue()";
+        String fromText = integer ? "exactLong(new BigDecimal(number))" : type + ".valueOf(number)";
         sb.append(i1).append("/** ").append(javadoc).append(" */\n");
         sb.append(i1).append("public static class ").append(className).append(" extends JsonDeserializer<").append(type)
           .append("> {\n");
@@ -380,7 +388,7 @@ public class DtoEmitter {
         sb.append(i2).append("public ").append(type)
           .append(" deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {\n");
         sb.append(i3).append("if (p.currentToken().isNumeric()) {\n");
-        sb.append(i4).append("return p.").append(numberGetter).append("();\n");
+        sb.append(i4).append("return ").append(fromNumber).append(";\n");
         sb.append(i3).append("}\n");
         sb.append(i3).append("String text = p.getValueAsString();\n");
         sb.append(i3).append("if (text == null) {\n");
@@ -392,11 +400,21 @@ public class DtoEmitter {
         sb.append(i4).append("number = number.replace(\",\", \"\");\n");
         sb.append(i3).append("}\n");
         sb.append(i3).append("try {\n");
-        sb.append(i4).append("return ").append(type).append(".valueOf(number);\n");
+        sb.append(i4).append("return ").append(fromText).append(";\n");
         sb.append(i3).append("} catch (NumberFormatException e) {\n");
         sb.append(i4).append("return null;\n");
         sb.append(i3).append("}\n");
         sb.append(i2).append("}\n");
+        if (integer) {
+            sb.append("\n");
+            sb.append(i2).append("private static Long exactLong(BigDecimal value) {\n");
+            sb.append(i3).append("try {\n");
+            sb.append(i4).append("return value.longValueExact();\n");
+            sb.append(i3).append("} catch (ArithmeticException e) {\n");
+            sb.append(i4).append("return null;\n");
+            sb.append(i3).append("}\n");
+            sb.append(i2).append("}\n");
+        }
         sb.append(i1).append("}\n");
     }
 

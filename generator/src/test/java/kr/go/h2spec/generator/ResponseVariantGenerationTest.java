@@ -124,6 +124,35 @@ class ResponseVariantGenerationTest {
     }
 
     @Test
+    void 정수_칸에_소수가_오면_형식과_상관없이_null로_두고_소수점_아래가_0이면_정수로_읽는다() throws Throwable {
+        // 칸 타입은 문서의 샘플값으로 정한다. 샘플이 정수였던 칸에 소수가 오면 JSON 숫자는 소수점 아래를 버리고(2.5 → 2)
+        // XML 글은 null이 되어, 같은 응답이 형식에 따라 다르게 읽혔다(기상청 중기해상예보의 파고)
+        List<String> values = List.of("2.5", "3.0", "4");
+        for (String format : List.of("XML", "JSON")) {
+            TestIr ir = new TestIr();
+            ir.responseFormat = format;
+            ir.fields = new ArrayList<>(List.of(field("response.header.resultCode", "string"),
+                    field("response.body.items.item[].waveHeight", "integer")));
+            StringBuilder body = new StringBuilder(format.equals("XML")
+                    ? "<response><header><resultCode>00</resultCode></header><body><items>"
+                    : "{\"response\": {\"header\": {\"resultCode\": \"00\"}, \"body\": {\"items\": {\"item\": [");
+            for (int i = 0; i < values.size(); i++) {
+                body.append(format.equals("XML")
+                        ? "<item><waveHeight>" + values.get(i) + "</waveHeight></item>"
+                        : (i > 0 ? ", " : "") + "{\"waveHeight\": " + values.get(i) + "}");
+            }
+            body.append(format.equals("XML") ? "</items></body></response>" : "]}}}}");
+
+            Path classes = generateAndCompile(ir);
+            JsonNode item = call(classes, body.toString()).at("/body/items/item");
+
+            assertTrue(item.get(0).get("waveHeight").isNull(), format + " 2.5는 정수가 아니다: " + item);
+            assertEquals(3, item.get(1).get("waveHeight").asLong(), format + " 3.0: " + item);
+            assertEquals(4, item.get(2).get("waveHeight").asLong(), format + " 4: " + item);
+        }
+    }
+
+    @Test
     void 응답_필드_이름이_역직렬화기가_쓰는_이름과_같아도_중첩_클래스_이름을_바꿔_컴파일된다() throws Exception {
         // 중첩 클래스 이름은 루트 클래스 안에서 같은 이름의 타입을 가린다. Override면 @Override가, LenientLong이면 어노테이션이 엉뚱한 타입을 가리킨다
         TestIr ir = new TestIr();
