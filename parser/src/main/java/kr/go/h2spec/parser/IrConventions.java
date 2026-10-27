@@ -90,7 +90,11 @@ public final class IrConventions {
      * 두 목록이 같은지는 IrConventionsTest가 확인한다.
      */
     private static final Set<String> RESPONSE_FORMAT_PARAMETERS = Set.of("returnType", "dataType", "resultType");
-    private static final String PARSER_VERSION = "0.1.0";
+    /** 매니페스트가 없는 실행(테스트, IDE의 클래스 디렉터리)에서 적는 파서 버전 */
+    private static final String DEV_VERSION = "dev";
+    /** IR의 metadata.parserVersion. 배포판 jar 매니페스트의 버전이다(parser/build.gradle) */
+    private static final String PARSER_VERSION =
+            parserVersion(IrConventions.class.getPackage().getImplementationVersion());
     /** metadata.engine에 적는 rule 엔진 이름. {@link SpecParseResult.Engine#RULE}의 이름과 같다 */
     private static final String ENGINE = "rule";
     private static final String SUCCESS_RESULT_CODE = "00";
@@ -721,6 +725,19 @@ public final class IrConventions {
      * @param reviewNotes  검수 노트
      * @return metadata
      */
+    /**
+     * jar 매니페스트의 버전을 IR에 적는 파서 버전으로 바꾼다. JitPack과 릴리스는 태그 이름(v0.2.1)을 버전으로 넘기므로 v를 뗀다.
+     *
+     * @param implementationVersion jar 매니페스트의 Implementation-Version. 매니페스트가 없으면 null
+     * @return 파서 버전. 매니페스트가 없으면 {@value #DEV_VERSION}
+     */
+    static String parserVersion(String implementationVersion) {
+        if (implementationVersion == null || implementationVersion.isBlank()) {
+            return DEV_VERSION;
+        }
+        return implementationVersion.startsWith("v") ? implementationVersion.substring(1) : implementationVersion;
+    }
+
     public static ObjectNode metadata(String sourceFile, String sourceFormat, List<String> reviewNotes) {
         ObjectNode metadata = JsonNodeFactory.instance.objectNode();
         metadata.put("sourceFile", sourceFile);

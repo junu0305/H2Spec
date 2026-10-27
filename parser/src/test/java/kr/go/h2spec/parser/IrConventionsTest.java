@@ -1,5 +1,6 @@
 package kr.go.h2spec.parser;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.generator.emit.ClientEmitter;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +49,22 @@ class IrConventionsTest {
         assertEquals(SERVICE, trailing.baseUrl());
         assertEquals("/getList/{id}", trailing.endpoint());
         assertEquals("List", trailing.apiId());
+    }
+
+    @Test
+    void 매니페스트가_없는_실행에서는_파서_버전을_고정값이_아니라_dev로_적는다() {
+        // parserVersion이 판과 상관없이 0.1.0으로 고정돼 있어, 커밋된 IR이 어느 판에서 나왔는지 가를 수 없었다.
+        // 테스트는 클래스 디렉터리에서 돌아 jar 매니페스트가 없다
+        ObjectNode metadata = IrConventions.metadata("a.hwp", "HWP", List.of());
+
+        assertEquals("dev", metadata.get("parserVersion").asText());
+    }
+
+    @Test
+    void 파서_버전은_jar_매니페스트의_버전에서_태그의_v를_뗀다() {
+        assertEquals("0.2.1", IrConventions.parserVersion("v0.2.1"));
+        assertEquals("0.3.0-SNAPSHOT", IrConventions.parserVersion("0.3.0-SNAPSHOT"));
+        assertEquals("dev", IrConventions.parserVersion(" "));
     }
 
     @Test
