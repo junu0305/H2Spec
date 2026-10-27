@@ -16,10 +16,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -55,6 +57,22 @@ class HwpSpecReaderTest {
         assertTrue(e.getMessage().startsWith("HWP 파일을 읽을 수 없습니다: broken.hwp"), e.getMessage());
         assertTrue(e.getMessage().contains("(" + cause.getClass().getSimpleName() + ": " + cause.getMessage() + ")"),
                 e.getMessage());
+    }
+
+    @Test
+    void HWP_라이브러리가_끝나지_않으면_정한_시간_뒤_그_파일만_실패로_알린다() throws Exception {
+        // hwplib 1.1.10은 일부 문서(rhwp samples/exam_science.hwp)에서 HWPReader.memo를 빠져나오지 못한다. 시간 제한이 없어
+        // CLI가 끝나지 않았다. 실제 루프는 인터럽트를 보지 않지만, 테스트는 남은 스레드가 CPU를 쓰지 않도록 잠드는 읽기로 흉내 낸다
+        Path hwp = Files.writeString(tempDir.resolve("endless.hwp"), "x");
+        HwpSpecReader reader = new HwpSpecReader(Duration.ofMillis(200), file -> {
+            Thread.sleep(Long.MAX_VALUE);
+            return null;
+        });
+
+        IOException e = assertTimeoutPreemptively(Duration.ofSeconds(10),
+                () -> assertThrows(IOException.class, () -> reader.read(hwp)));
+
+        assertTrue(e.getMessage().startsWith("HWP 파일을 제시간에 읽지 못했습니다: endless.hwp"), e.getMessage());
     }
 
     @Test

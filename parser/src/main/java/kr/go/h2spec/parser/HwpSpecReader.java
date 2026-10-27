@@ -15,14 +15,20 @@ import kr.dogfoot.hwplib.object.bodytext.paragraph.text.HWPCharNormal;
 import kr.dogfoot.hwplib.object.bodytext.paragraph.text.ParaText;
 import kr.dogfoot.hwplib.reader.HWPReader;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * HWP 파일을 읽어 문단/표를 문서 순서 그대로 {@link Block} 목록으로 변환한다.
@@ -39,6 +45,30 @@ public class HwpSpecReader implements DocumentReader {
     private static final long DEFAULT_LINE_HEIGHT = 1000;
     /** HWP 3.0 문서의 맨 앞 글자("HWP Document File V3.00") */
     private static final byte[] HWP3_SIGNATURE = "HWP Document File V3".getBytes(StandardCharsets.US_ASCII);
+    /** 문서 하나를 읽을 때 기다리는 시간. 큰 기술문서도 몇 초 안에 읽는다 */
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
+
+    private final Duration readTimeout;
+    private final HwpFileReader fileReader;
+
+    public HwpSpecReader() {
+        this(READ_TIMEOUT, HWPReader::fromFile);
+    }
+
+    /**
+     * @param readTimeout 문서 하나를 읽을 때 기다리는 시간
+     * @param fileReader  HWP 파일을 읽는 함수. 테스트가 끝나지 않는 읽기를 넣는다
+     */
+    HwpSpecReader(Duration readTimeout, HwpFileReader fileReader) {
+        this.readTimeout = readTimeout;
+        this.fileReader = fileReader;
+    }
+
+    /** hwplib의 {@code HWPReader.fromFile}과 같은 꼴의 읽기 */
+    @FunctionalInterface
+    interface HwpFileReader {
+        HWPFile read(File file) throws Exception;
+    }
 
     @Override
     public List<Block> read(Path hwp) throws IOException {
@@ -58,10 +88,25 @@ public class HwpSpecReader implements DocumentReader {
             throw new IOException("HWP 3.0 문서는 지원하지 않습니다: " + hwp.getFileName()
                     + " — 한글에서 열어 HWP나 HWPX로 다시 저장한 뒤 변환해 주세요");
         }
+        // hwplib는 일부 문서에서 끝나지 않는다(HWPReader.memo의 반복). 그 반복은 인터럽트를 보지 않아 멈출 수 없으므로,
+        // 읽기를 데몬 스레드에서 돌리고 시간이 지나면 이 파일만 실패로 알린다. 남은 스레드는 프로그램이 끝날 때 함께 끝난다
+        FutureTask<HWPFile> task = new FutureTask<>(() -> fileReader.read(hwp.toFile()));
+        Thread thread = new Thread(task, "hwp-reader");
+        thread.setDaemon(true);
+        thread.start();
         try {
-            return HWPReader.fromFile(hwp.toFile());
-        } catch (Exception e) {
-            throw new IOException("HWP 파일을 읽을 수 없습니다: " + hwp.getFileName() + DocumentReaders.causeOf(e), e);
+            return task.get(readTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            task.cancel(true);
+            throw new IOException("HWP 파일을 제시간에 읽지 못했습니다: " + hwp.getFileName() + " (" + readTimeout.toSeconds()
+                    + "초 안에 문서를 읽는 라이브러리 hwplib가 끝나지 않았습니다)", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            throw new IOException("HWP 파일을 읽을 수 없습니다: " + hwp.getFileName() + DocumentReaders.causeOf(cause), cause);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            task.cancel(true);
+            throw new IOException("HWP 파일을 읽다가 중단되었습니다: " + hwp.getFileName(), e);
         }
     }
 
