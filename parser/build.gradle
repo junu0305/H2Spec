@@ -5,7 +5,12 @@ plugins {
 description = '공공데이터포털 표준 기술문서(DOCX/HWP/HWPX)를 중간 규격(IR) JSON으로 변환'
 
 dependencies {
-    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    // poi-ooxml이 끌어오는 poi-ooxml-lite는 POI 자체 테스트가 쓰는 스키마만 담는다. 머리글의 글상자를 품은 VML 도형(v:polyline 등)을
+    // 만나면 SchemaTypeLoaderException으로 문서 전체를 읽지 못해, 전체 스키마판으로 바꾼다. 둘은 같은 클래스를 담아 함께 두지 않는다
+    implementation('org.apache.poi:poi-ooxml:5.2.5') {
+        exclude group: 'org.apache.poi', module: 'poi-ooxml-lite'
+    }
+    implementation 'org.apache.poi:poi-ooxml-full:5.2.5'
     // POI가 log4j2-api를 쓰므로 구현체가 없으면 StatusLogger 에러가 출력됨
     runtimeOnly 'org.apache.logging.log4j:log4j-core:2.23.1'
     // HWP(바이너리) 문서 파싱. 외부 의존성 없이 자체 OLE 리더를 내장하고 있음
