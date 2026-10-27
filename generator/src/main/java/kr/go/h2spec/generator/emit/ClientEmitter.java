@@ -226,6 +226,9 @@ public class ClientEmitter {
         }
         sb.append("import org.springframework.http.client.BufferingClientHttpRequestFactory;\n");
         sb.append("import org.springframework.http.client.SimpleClientHttpRequestFactory;\n");
+        if (key.masksByValue()) {
+            sb.append("import org.springframework.web.client.ResourceAccessException;\n");
+        }
         sb.append("import org.springframework.web.client.RestTemplate;\n");
         sb.append("\n");
 
@@ -430,12 +433,31 @@ public class ClientEmitter {
             }
         }
         sb.append(indent2).append("URI uri = URI.create(url.toString());\n");
+        // RestTemplate은 네트워크 오류(읽기 시간 초과, 연결 거부)를 요청 주소를 담은 ResourceAccessException으로 알린다.
+        // 질의 문자열은 빼지만 경로는 남기므로, 키 값으로 가리는 클라이언트는 같은 예외로 바꿔 던지며 메시지의 키를 가린다.
+        // 원인으로는 주소가 없는 IOException만 남긴다. 원래 예외를 원인으로 달면 로그의 원인 줄에 키가 다시 찍힌다
+        boolean masksRequestError = key.masksByValue();
+        String requestIndent = masksRequestError ? indent3 : indent2;
+        String bodyAssign = masksRequestError ? "body = " : "byte[] body = ";
+        if (masksRequestError) {
+            sb.append(indent2).append("byte[] body;\n");
+            sb.append(indent2).append("try {\n");
+        }
         if (key.placement() == AuthKey.Placement.HEADER) {
-            sb.append(indent2).append("byte[] body = restTemplate.exchange(\n");
-            sb.append(INDENT.repeat(4)).append("RequestEntity.get(uri).header(\"").append(JavaText.literal(key.name()))
-              .append("\", ").append(keyRef).append(").build(), byte[].class).getBody();\n");
+            sb.append(requestIndent).append(bodyAssign).append("restTemplate.exchange(\n");
+            sb.append(requestIndent).append(INDENT.repeat(2)).append("RequestEntity.get(uri).header(\"")
+              .append(JavaText.literal(key.name())).append("\", ").append(keyRef)
+              .append(").build(), byte[].class).getBody();\n");
         } else {
-            sb.append(indent2).append("byte[] body = restTemplate.getForObject(uri, byte[].class);\n");
+            sb.append(requestIndent).append(bodyAssign).append("restTemplate.getForObject(uri, byte[].class);\n");
+        }
+        if (masksRequestError) {
+            sb.append(indent2).append("} catch (ResourceAccessException e) {\n");
+            sb.append(indent3).append("throw new ResourceAccessException(ServiceKeyMasker.mask(e.getMessage(), ")
+              .append(keyRef).append("),\n");
+            sb.append(indent3).append(INDENT.repeat(2))
+              .append("e.getCause() instanceof IOException ? (IOException) e.getCause() : null);\n");
+            sb.append(indent2).append("}\n");
         }
         sb.append(indent2).append("try {\n");
         String mapperVar = mapperVar(isXml);

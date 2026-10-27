@@ -13,6 +13,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
@@ -32,12 +33,28 @@ import java.nio.file.Path;
 public final class GeneratedClientCall implements ClientHttpRequestFactory {
 
     private final String responseBody;
+    /** 요청을 보낼 때 던질 오류. null이면 responseBody로 답한다 */
+    private final IOException failure;
     private URI uri;
     private HttpHeaders headers;
 
     /** @param responseBody HTTP 200으로 돌려줄 바디 */
     public GeneratedClientCall(String responseBody) {
+        this(responseBody, null);
+    }
+
+    private GeneratedClientCall(String responseBody, IOException failure) {
         this.responseBody = responseBody;
+        this.failure = failure;
+    }
+
+    /**
+     * 응답 대신 네트워크 오류를 내는 호출. RestTemplate은 이 오류를 요청 주소를 담은 ResourceAccessException으로 바꾼다.
+     *
+     * @param failure 요청을 보낼 때 던질 오류(읽기 시간 초과, 연결 거부 등)
+     */
+    public static GeneratedClientCall failing(IOException failure) {
+        return new GeneratedClientCall("", failure);
     }
 
     /**
@@ -89,7 +106,10 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
         headers = requestHeaders;
         return new ClientHttpRequest() {
             @Override
-            public ClientHttpResponse execute() {
+            public ClientHttpResponse execute() throws IOException {
+                if (failure != null) {
+                    throw failure;
+                }
                 return response();
             }
 

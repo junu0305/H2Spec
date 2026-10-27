@@ -9,8 +9,12 @@ import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.SocketTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -118,6 +122,33 @@ class AuthKeyGenerationTest {
                 assertTrue(text.contains("****"), text);
             }
             assertEquals("30", failed.getResultCode());
+        }
+    }
+
+    @Test
+    void 요청이_네트워크_오류로_실패해도_예외에서_경로와_질의의_키_값을_가린다() throws Throwable {
+        // 읽기 시간 초과·연결 거부는 RestTemplate이 요청 주소를 담은 ResourceAccessException으로 바꾼다. 질의 문자열은
+        // 빼지만 경로는 남겨, 경로에 넣은 키가 메시지에 그대로 드러났다(제주데이터허브 {your_appkey}). 로그에 원인까지 찍히므로
+        // 원인 예외들도 함께 본다
+        TestIr pathKey = new TestIr();
+        pathKey.endpoint = "/getSample/{appkey}";
+        pathKey.params = new ArrayList<>(List.of(path("appkey")));
+        pathKey.auth = new ApiAuth(ApiAuth.PATH, "appkey");
+        TestIr queryKey = new TestIr();
+        queryKey.params = new ArrayList<>(List.of(query("apiKey", true)));
+        queryKey.auth = new ApiAuth(ApiAuth.QUERY, "apiKey");
+
+        for (TestIr ir : List.of(pathKey, queryKey)) {
+            Path classes = generateAndCompile(ir);
+
+            ResourceAccessException failed = assertThrows(ResourceAccessException.class,
+                    () -> GeneratedClientCall.failing(new SocketTimeoutException("Read timed out"))
+                            .call(classes, CLIENT_CLASS, KEY));
+
+            String trace = stackTrace(failed);
+            assertFalse(trace.contains("K3y"), trace);
+            assertTrue(failed.getMessage().contains("Read timed out"), failed.getMessage());
+            assertTrue(failed.getCause() instanceof SocketTimeoutException, String.valueOf(failed.getCause()));
         }
     }
 
@@ -310,6 +341,12 @@ class AuthKeyGenerationTest {
     private JsonNode openApi(TestIr ir, String name) throws IOException {
         List<Path> written = new CodeGenerator().generate(ir.build(), tempDir.resolve(name));
         return new ObjectMapper().readTree(written.get(2).toFile());
+    }
+
+    private static String stackTrace(Throwable e) {
+        StringWriter out = new StringWriter();
+        e.printStackTrace(new PrintWriter(out));
+        return out.toString();
     }
 
     private static List<Path> filesUnder(Path dir) throws IOException {
