@@ -119,6 +119,37 @@ class PublicDataErrorCatalogTest {
     }
 
     @Test
+    void 포털_밖_기관의_같은_번호_코드에는_뜻이_다른_포털_안내를_붙이지_않는다() {
+        // 농사로는 code 11을 인증키 미등록으로 쓴다. 코드만 보고 찾아 포털의 11번(필수요청 파라메터 없음) 조치를 붙였다
+        var exception = new PublicDataApiException(
+                "http://api.nongsaro.go.kr/service/evrfrndFarmng/evrfrndFarmngLst?apiKey=****", 200, "11",
+                "인증키가 등록되지 않았습니다.", "<response/>");
+
+        assertFalse(exception.getMessage().contains("NO_MANDATORY_REQUEST_PARAMETERS_ERROR"), exception.getMessage());
+        assertFalse(exception.getMessage().contains("조치:"), exception.getMessage());
+    }
+
+    @Test
+    void 포털_밖_기관도_결과메시지가_그_코드의_에러명이면_조치_안내를_붙인다() {
+        // 전주시는 포털 표준 코드를 그대로 쓰고 결과메시지에 에러명을 띄어 쓴다
+        var exception = new PublicDataApiException(
+                "http://openapi.jeonju.go.kr/rest/autodispenser/getAutoDispenser", 200, "30",
+                "SERVICE KEY IS NOT REGISTERED ERROR.", "<response/>");
+
+        assertTrue(exception.getMessage().contains("조치:"), exception.getMessage());
+    }
+
+    @Test
+    void 포털_게이트웨이_응답은_결과코드만으로_조치_안내를_붙인다() {
+        var exception = new PublicDataApiException(
+                "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getMsrstnList?serviceKey=abc", 200, "22",
+                "요청 제한", "<response/>");
+
+        assertTrue(exception.getMessage().contains("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"), exception.getMessage());
+        assertTrue(exception.getMessage().contains("조치:"), exception.getMessage());
+    }
+
+    @Test
     void 사전에_없는_코드면_메시지가_그대로다() {
         var exception = new PublicDataApiException(
                 "http://apis.data.go.kr/svc", 200, "7777", "MYSTERY", "<response/>");

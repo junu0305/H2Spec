@@ -19,7 +19,7 @@ public class PublicDataApiException extends RuntimeException {
         super(String.format(
                 "[H2Spec] 공공데이터 API 응답 오류 감지 (HTTP %d 이지만 실제로는 실패) - uri=%s, resultCode=%s, resultMsg=%s%s",
                 httpStatus, ServiceKeyMasker.mask(requestUri), resultCode, ServiceKeyMasker.mask(resultMsg),
-                guidance(resultCode, resultMsg)
+                guidance(requestUri, resultCode, resultMsg)
         ));
         this.requestUri = ServiceKeyMasker.mask(requestUri);
         this.httpStatus = httpStatus;
@@ -29,11 +29,11 @@ public class PublicDataApiException extends RuntimeException {
     }
 
     /**
-     * 사전에 있는 코드면 뜻과 조치를 덧붙인다. 없으면 메시지를 그대로 둔다.
-     * 응답의 resultMsg가 이미 그 뜻이나 에러명을 담고 있으면 같은 말을 두 번 적지 않는다.
+     * 사전에 있는 코드면 뜻과 조치를 덧붙인다. 없으면 메시지를 그대로 둔다. 포털 밖 기관의 응답이면 요청 주소로 가른다
+     * ({@link PublicDataErrorCatalog#lookup}). 응답의 resultMsg가 이미 그 뜻이나 에러명을 담고 있으면 같은 말을 두 번 적지 않는다.
      */
-    private static String guidance(String resultCode, String resultMsg) {
-        return PublicDataErrorCatalog.lookup(resultCode, resultMsg)
+    private static String guidance(String requestUri, String resultCode, String resultMsg) {
+        return PublicDataErrorCatalog.lookup(requestUri, resultCode, resultMsg)
                 .map(entry -> meaningOf(entry, resultMsg) + String.format(" | 조치: %s", entry.action()))
                 .orElse("");
     }

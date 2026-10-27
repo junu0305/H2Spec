@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +23,8 @@ import java.util.Optional;
 public final class PublicDataErrorCatalog {
 
     private static final String RESOURCE = "error-codes.json";
+    /** 공공데이터포털 게이트웨이의 호스트. 사전의 코드는 이 게이트웨이가 주는 코드다 */
+    private static final String PORTAL_GATEWAY_HOST = "apis.data.go.kr";
 
     private static final List<ErrorCode> ENTRIES = load();
     private static final Map<String, ErrorCode> BY_CODE = indexByCode(ENTRIES);
@@ -51,10 +54,39 @@ public final class PublicDataErrorCatalog {
                 .findFirst();
     }
 
-    /** 결과코드를 먼저 보고, 없으면 결과메시지로 다시 찾는다. */
-    static Optional<ErrorCode> lookup(String resultCode, String resultMsg) {
-        Optional<ErrorCode> byCode = find(resultCode);
+    /**
+     * 결과코드를 먼저 보고, 없으면 결과메시지로 다시 찾는다. 사전의 코드는 공공데이터포털 게이트웨이의 코드라서
+     * 포털 밖 기관(농사로 등)의 같은 번호는 뜻이 다를 수 있다. 그런 응답은 결과메시지가 그 코드의 에러명이나 뜻을 담을 때만
+     * 코드로 찾은 항목을 쓴다. 포털 표준 코드를 그대로 쓰는 기관도 있어서다. 주소를 알 수 없으면 지금까지처럼 포털 응답으로 본다.
+     */
+    static Optional<ErrorCode> lookup(String requestUri, String resultCode, String resultMsg) {
+        Optional<ErrorCode> byCode = find(resultCode)
+                .filter(entry -> isPortalGateway(requestUri) || mentions(resultMsg, entry));
         return byCode.isPresent() ? byCode : findByMessage(resultMsg);
+    }
+
+    private static boolean isPortalGateway(String requestUri) {
+        if (requestUri == null) {
+            return true;
+        }
+        try {
+            String host = URI.create(requestUri).getHost();
+            return host == null || PORTAL_GATEWAY_HOST.equalsIgnoreCase(host);
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
+    }
+
+    /** 결과메시지가 항목의 에러명(띄어쓰기·밑줄·대소문자 무시)이나 뜻을 담는지 */
+    private static boolean mentions(String resultMsg, ErrorCode entry) {
+        if (resultMsg == null) {
+            return false;
+        }
+        return lettersAndDigits(resultMsg).contains(lettersAndDigits(entry.name())) || resultMsg.contains(entry.meaning());
+    }
+
+    private static String lettersAndDigits(String text) {
+        return text.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
     }
 
     /**
