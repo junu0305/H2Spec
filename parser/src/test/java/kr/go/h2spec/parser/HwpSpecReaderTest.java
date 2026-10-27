@@ -12,10 +12,15 @@ import kr.dogfoot.hwplib.writer.HWPWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * HWP 문단 안에는 줄바꿈(Shift+Enter)이 새 문단이 아니라 문단 내부의 문자 컨트롤(code 10)로 저장된다.
@@ -37,6 +42,31 @@ class HwpSpecReaderTest {
 
         Block.Heading heading = (Block.Heading) blocks.get(0);
         assertEquals("1줄\n2줄", heading.text());
+    }
+
+    @Test
+    void HWP_라이브러리가_읽지_못하면_원인을_메시지에_붙인다() throws Exception {
+        // 메시지가 파일 이름만 담아 CLI에 "HWP 파일을 읽을 수 없습니다"만 찍혔다. 원인은 cause로만 붙어 사용자에게 보이지 않았다
+        Path hwp = Files.writeString(tempDir.resolve("broken.hwp"), "HWP 문서가 아니다");
+
+        IOException e = assertThrows(IOException.class, () -> new HwpSpecReader().read(hwp));
+
+        Throwable cause = e.getCause();
+        assertTrue(e.getMessage().startsWith("HWP 파일을 읽을 수 없습니다: broken.hwp"), e.getMessage());
+        assertTrue(e.getMessage().contains("(" + cause.getClass().getSimpleName() + ": " + cause.getMessage() + ")"),
+                e.getMessage());
+    }
+
+    @Test
+    void HWP_3_0_문서는_지원하지_않는_형식이라고_알린다() throws Exception {
+        // hwplib는 HWP 5.0(OLE 복합 파일)만 읽는다. HWP 3.0 문서는 "Invalid header signature" 같은 원인만으로는 알아보기 어렵다
+        byte[] header = "HWP Document File V3.00 \u001a\u0001\u0002\u0003\u0004\u0005".getBytes(StandardCharsets.US_ASCII);
+        Path hwp = Files.write(tempDir.resolve("old.hwp"), header);
+
+        IOException e = assertThrows(IOException.class, () -> new HwpSpecReader().read(hwp));
+
+        assertTrue(e.getMessage().contains("HWP 3.0"), e.getMessage());
+        assertTrue(e.getMessage().contains("old.hwp"), e.getMessage());
     }
 
     private void buildSingleParagraphFile(Path out, String firstLine, String secondLine) throws Exception {

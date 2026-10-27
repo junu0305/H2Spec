@@ -13,6 +13,8 @@ import kr.dogfoot.hwpxlib.writer.HWPXWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -29,6 +31,18 @@ class HwpxSpecReaderTest {
 
     private static final List<String> HEADER =
             List.of("항목명(영문)", "항목명(국문)", "항목크기", "항목구분", "샘플데이터", "항목설명");
+
+    @Test
+    void HWPX_라이브러리가_읽지_못하면_원인을_메시지에_붙인다() throws Exception {
+        // 메시지가 파일 이름만 담아 CLI에 "HWPX 파일을 읽을 수 없습니다"만 찍혔다
+        Path hwpx = Files.writeString(tempDir.resolve("broken.hwpx"), "HWPX 문서가 아니다");
+
+        IOException e = assertThrows(IOException.class, () -> new HwpxSpecReader().read(hwpx));
+
+        Throwable cause = e.getCause();
+        assertTrue(e.getMessage().startsWith("HWPX 파일을 읽을 수 없습니다: broken.hwpx"), e.getMessage());
+        assertTrue(e.getMessage().contains("(" + cause.getClass().getSimpleName()), e.getMessage());
+    }
 
     @Test
     void 문단과_표를_문서_순서대로_읽는다() throws Exception {

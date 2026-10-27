@@ -16,8 +16,12 @@ import kr.dogfoot.hwplib.object.bodytext.paragraph.text.ParaText;
 import kr.dogfoot.hwplib.reader.HWPReader;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -33,6 +37,8 @@ public class HwpSpecReader implements DocumentReader {
 
     /** 줄 높이 정보가 없는 문단의 첫 줄 높이 (HWPUNIT, 10pt 글자 한 줄) */
     private static final long DEFAULT_LINE_HEIGHT = 1000;
+    /** HWP 3.0 문서의 맨 앞 글자("HWP Document File V3.00") */
+    private static final byte[] HWP3_SIGNATURE = "HWP Document File V3".getBytes(StandardCharsets.US_ASCII);
 
     @Override
     public List<Block> read(Path hwp) throws IOException {
@@ -48,10 +54,26 @@ public class HwpSpecReader implements DocumentReader {
     }
 
     private HWPFile readFile(Path hwp) throws IOException {
+        if (isHwp3(hwp)) {
+            throw new IOException("HWP 3.0 문서는 지원하지 않습니다: " + hwp.getFileName()
+                    + " — 한글에서 열어 HWP나 HWPX로 다시 저장한 뒤 변환해 주세요");
+        }
         try {
             return HWPReader.fromFile(hwp.toFile());
         } catch (Exception e) {
-            throw new IOException("HWP 파일을 읽을 수 없습니다: " + hwp.getFileName(), e);
+            throw new IOException("HWP 파일을 읽을 수 없습니다: " + hwp.getFileName() + DocumentReaders.causeOf(e), e);
+        }
+    }
+
+    /**
+     * HWP 3.0 문서인지 파일 맨 앞 글자로 본다. hwplib는 HWP 5.0(OLE 복합 파일)만 읽어, HWP 3.0 문서에는 OLE 서명이 틀렸다는
+     * 원인만 남긴다. 파일을 열지 못하면 HWP 3.0이 아닌 것으로 보고 hwplib가 이유를 알리게 둔다.
+     */
+    private static boolean isHwp3(Path hwp) {
+        try (InputStream in = Files.newInputStream(hwp)) {
+            return Arrays.equals(in.readNBytes(HWP3_SIGNATURE.length), HWP3_SIGNATURE);
+        } catch (IOException e) {
+            return false;
         }
     }
 

@@ -49,7 +49,7 @@ public class HwpxSpecReader implements DocumentReader {
         try {
             return HWPXReader.fromFile(hwpx.toFile());
         } catch (Exception e) {
-            throw new IOException("HWPX 파일을 읽을 수 없습니다: " + hwpx.getFileName(), e);
+            throw new IOException("HWPX 파일을 읽을 수 없습니다: " + hwpx.getFileName() + DocumentReaders.causeOf(e), e);
         }
     }
 

@@ -44,10 +44,21 @@ public final class DocumentReaders {
             try {
                 return reader.read(document);
             } catch (RuntimeException e) {
-                String detail = e.getMessage() == null || e.getMessage().isBlank() ? "" : ": " + e.getMessage();
-                throw new IOException("문서를 해석하지 못했습니다 (" + e.getClass().getSimpleName() + detail + ")", e);
+                throw new IOException("문서를 해석하지 못했습니다" + causeOf(e), e);
             }
         }
+    }
+
+    /**
+     * 문서 라이브러리가 던진 예외를 메시지 끝에 붙일 꼴로 적는다(" (IllegalStateException: 지원하지 않는 도형)").
+     * CLI는 예외의 메시지만 찍으므로, 원인을 cause로만 달면 사용자에게 보이지 않는다.
+     *
+     * @param e 문서 라이브러리가 던진 예외
+     * @return 앞에 공백을 둔 괄호 안의 예외 클래스 이름과 메시지
+     */
+    static String causeOf(Throwable e) {
+        String detail = e.getMessage() == null || e.getMessage().isBlank() ? "" : ": " + e.getMessage();
+        return " (" + e.getClass().getSimpleName() + detail + ")";
     }
 
     /**
