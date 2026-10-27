@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
@@ -67,7 +68,11 @@ public class RTMSDataSvcAptTradeDevClient {
             url.append("&pageNo=").append(pageNo);
         }
         URI uri = URI.create(url.toString());
-        byte[] body = restTemplate.getForObject(uri, byte[].class);
+        ResponseEntity<byte[]> response = restTemplate.getForEntity(uri, byte[].class);
+        byte[] body = response.getBody();
+        if (body == null || body.length == 0) {
+            throw new IllegalStateException("응답 본문이 비어 있음 (HTTP " + response.getStatusCode().value() + "): " + ServiceKeyMasker.mask(uri.toString()));
+        }
         try {
             return xmlMapper.readValue(body, RTMSDataSvcAptTradeDevResponse.class);
         } catch (IOException e) {

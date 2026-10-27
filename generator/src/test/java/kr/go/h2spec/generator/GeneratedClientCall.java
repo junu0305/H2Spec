@@ -32,6 +32,7 @@ import java.nio.file.Path;
  */
 public final class GeneratedClientCall implements ClientHttpRequestFactory {
 
+    private final HttpStatus status;
     private final String responseBody;
     /** 요청을 보낼 때 던질 오류. null이면 responseBody로 답한다 */
     private final IOException failure;
@@ -40,12 +41,23 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
 
     /** @param responseBody HTTP 200으로 돌려줄 바디 */
     public GeneratedClientCall(String responseBody) {
-        this(responseBody, null);
+        this(HttpStatus.OK, responseBody, null);
     }
 
-    private GeneratedClientCall(String responseBody, IOException failure) {
+    private GeneratedClientCall(HttpStatus status, String responseBody, IOException failure) {
+        this.status = status;
         this.responseBody = responseBody;
         this.failure = failure;
+    }
+
+    /**
+     * 정한 HTTP 상태로 답하는 호출. 오류가 아닌 상태(3xx)는 RestTemplate이 예외 없이 생성 코드에 넘긴다.
+     *
+     * @param status       돌려줄 HTTP 상태
+     * @param responseBody 돌려줄 바디
+     */
+    public static GeneratedClientCall responding(HttpStatus status, String responseBody) {
+        return new GeneratedClientCall(status, responseBody, null);
     }
 
     /**
@@ -54,7 +66,7 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
      * @param failure 요청을 보낼 때 던질 오류(읽기 시간 초과, 연결 거부 등)
      */
     public static GeneratedClientCall failing(IOException failure) {
-        return new GeneratedClientCall("", failure);
+        return new GeneratedClientCall(HttpStatus.OK, "", failure);
     }
 
     /**
@@ -140,12 +152,12 @@ public final class GeneratedClientCall implements ClientHttpRequestFactory {
         return new ClientHttpResponse() {
             @Override
             public HttpStatusCode getStatusCode() {
-                return HttpStatus.OK;
+                return status;
             }
 
             @Override
             public String getStatusText() {
-                return "OK";
+                return status.getReasonPhrase();
             }
 
             @Override

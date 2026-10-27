@@ -9,6 +9,7 @@ import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.io.IOException;
@@ -149,6 +150,31 @@ class AuthKeyGenerationTest {
             assertFalse(trace.contains("K3y"), trace);
             assertTrue(failed.getMessage().contains("Read timed out"), failed.getMessage());
             assertTrue(failed.getCause() instanceof SocketTimeoutException, String.valueOf(failed.getCause()));
+        }
+    }
+
+    @Test
+    void 본문이_빈_응답은_HTTP_상태와_키를_가린_주소를_담아_알린다() throws Throwable {
+        // 의령군 공중화장실 API는 https로 넘기는 302를 본문 없이 준다. HttpURLConnection은 http에서 https로 넘기는 리다이렉트를
+        // 따라가지 않아 빈 본문을 그대로 받고, 매퍼가 'argument "src" is null'만 던져 무엇이 실패했는지 알 수 없었다
+        TestIr pathKey = new TestIr();
+        pathKey.endpoint = "/getSample/{appkey}";
+        pathKey.params = new ArrayList<>(List.of(path("appkey")));
+        pathKey.auth = new ApiAuth(ApiAuth.PATH, "appkey");
+        TestIr serviceKey = new TestIr();
+        serviceKey.params = new ArrayList<>(List.of(query("serviceKey", true)));
+
+        for (TestIr ir : List.of(pathKey, serviceKey)) {
+            Path classes = generateAndCompile(ir);
+
+            IllegalStateException failed = assertThrows(IllegalStateException.class,
+                    () -> GeneratedClientCall.responding(HttpStatus.FOUND, "").call(classes, CLIENT_CLASS, KEY));
+
+            String message = failed.getMessage();
+            assertTrue(message.contains("HTTP 302"), message);
+            assertTrue(message.contains(ir.baseUrl + "/getSample"), message);
+            assertTrue(message.contains("****"), message);
+            assertFalse(message.contains("K3y"), message);
         }
     }
 

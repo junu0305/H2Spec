@@ -218,8 +218,8 @@ class ClientEmitterTest {
 
         String source = new ClientEmitter().emit(ir);
 
-        assertTrue(source.contains("byte[] body = restTemplate.getForObject(uri, byte[].class);"));
-        assertFalse(source.contains("String body = restTemplate.getForObject(uri, String.class);"));
+        assertTrue(source.contains("ResponseEntity<byte[]> response = restTemplate.getForEntity(uri, byte[].class);"), source);
+        assertFalse(source.contains("String.class"), source);
     }
 
     @Test

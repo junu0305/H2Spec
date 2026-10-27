@@ -24,7 +24,7 @@ public class ClientEmitter {
      * API 메서드 본문이 이미 쓰는 지역 변수와 필드. 인자의 Java 이름이 지역 변수와 같으면 "already defined"로,
      * 필드와 같으면 필드가 인자에 가려져 컴파일되지 않는다. 매퍼 필드는 포맷에 따라 하나만 쓰므로 따로 본다.
      */
-    private static final Set<String> METHOD_BODY_NAMES = Set.of("url", "uri", "body", "e", "restTemplate");
+    private static final Set<String> METHOD_BODY_NAMES = Set.of("url", "uri", "response", "body", "e", "restTemplate");
     /** 엔드포인트로 만든 메서드명이 식별자가 아닐 때 앞에 붙인다. 메서드는 모두 API를 부르는 일이라 동사 call을 쓴다 */
     private static final String METHOD_NAME_PREFIX = "call";
     /**
@@ -224,6 +224,7 @@ public class ClientEmitter {
         if (key.placement() == AuthKey.Placement.HEADER) {
             sb.append("import org.springframework.http.RequestEntity;\n");
         }
+        sb.append("import org.springframework.http.ResponseEntity;\n");
         sb.append("import org.springframework.http.client.BufferingClientHttpRequestFactory;\n");
         sb.append("import org.springframework.http.client.SimpleClientHttpRequestFactory;\n");
         if (key.masksByValue()) {
@@ -438,18 +439,18 @@ public class ClientEmitter {
         // 원인으로는 주소가 없는 IOException만 남긴다. 원래 예외를 원인으로 달면 로그의 원인 줄에 키가 다시 찍힌다
         boolean masksRequestError = key.masksByValue();
         String requestIndent = masksRequestError ? indent3 : indent2;
-        String bodyAssign = masksRequestError ? "body = " : "byte[] body = ";
+        String responseAssign = masksRequestError ? "response = " : "ResponseEntity<byte[]> response = ";
         if (masksRequestError) {
-            sb.append(indent2).append("byte[] body;\n");
+            sb.append(indent2).append("ResponseEntity<byte[]> response;\n");
             sb.append(indent2).append("try {\n");
         }
         if (key.placement() == AuthKey.Placement.HEADER) {
-            sb.append(requestIndent).append(bodyAssign).append("restTemplate.exchange(\n");
+            sb.append(requestIndent).append(responseAssign).append("restTemplate.exchange(\n");
             sb.append(requestIndent).append(INDENT.repeat(2)).append("RequestEntity.get(uri).header(\"")
               .append(JavaText.literal(key.name())).append("\", ").append(keyRef)
-              .append(").build(), byte[].class).getBody();\n");
+              .append(").build(), byte[].class);\n");
         } else {
-            sb.append(requestIndent).append(bodyAssign).append("restTemplate.getForObject(uri, byte[].class);\n");
+            sb.append(requestIndent).append(responseAssign).append("restTemplate.getForEntity(uri, byte[].class);\n");
         }
         if (masksRequestError) {
             sb.append(indent2).append("} catch (ResourceAccessException e) {\n");
@@ -459,15 +460,22 @@ public class ClientEmitter {
               .append("e.getCause() instanceof IOException ? (IOException) e.getCause() : null);\n");
             sb.append(indent2).append("}\n");
         }
+        // 빈 본문과 파싱 실패의 예외에도 인증키가 남지 않도록 URI를 마스킹해서 넣는다
+        String masked = key.masksByValue()
+                ? "ServiceKeyMasker.mask(uri.toString(), " + keyRef + ")"
+                : "ServiceKeyMasker.mask(uri.toString())";
+        // 본문이 없으면 매퍼가 'argument "src" is null'만 던져 무엇이 실패했는지 알 수 없다. https로 넘기는 302를 본문 없이 주는
+        // 서버가 있고, 생성 클라이언트의 HttpURLConnection은 http에서 https로 넘기는 리다이렉트를 따라가지 않는다. 상태와 주소를 담아 알린다
+        sb.append(indent2).append("byte[] body = response.getBody();\n");
+        sb.append(indent2).append("if (body == null || body.length == 0) {\n");
+        sb.append(indent3).append("throw new IllegalStateException(\"응답 본문이 비어 있음 (HTTP \" + response.getStatusCode().value() + \"): \" + ")
+          .append(masked).append(");\n");
+        sb.append(indent2).append("}\n");
         sb.append(indent2).append("try {\n");
         String mapperVar = mapperVar(isXml);
         sb.append(indent3).append("return ").append(mapperVar).append(".readValue(body, ")
           .append(responseClassName).append(".class);\n");
         sb.append(indent2).append("} catch (IOException e) {\n");
-        // 파싱 실패 예외에도 인증키가 남지 않도록 URI를 마스킹해서 넣는다
-        String masked = key.masksByValue()
-                ? "ServiceKeyMasker.mask(uri.toString(), " + keyRef + ")"
-                : "ServiceKeyMasker.mask(uri.toString())";
         sb.append(indent3).append("throw new IllegalStateException(\"응답 파싱 실패: \" + ").append(masked).append(", e);\n");
         sb.append(indent2).append("}\n");
         sb.append(INDENT).append("}\n");
