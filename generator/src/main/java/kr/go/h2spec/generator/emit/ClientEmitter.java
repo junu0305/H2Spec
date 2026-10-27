@@ -304,12 +304,8 @@ public class ClientEmitter {
     // 결과코드 이름은 상수로 두지 않고 인자에 바로 쓴다. List 상수는 static 초기화 블록을 만들어서,
     // 생성 클라이언트에 static 블록이 없음을 보는 안전장치 테스트(CodeGeneratorSafetyTest)가 끼워 넣은 코드와 구별하지 못한다.
     // 키 값으로 가리는 클라이언트는 키를 받아 인터셉터에 넘긴다. 인터셉터가 오류 응답의 예외에서 키를 가린다
-    // TODO(interceptor-core 배포): 생성 코드가 지금 배포된 유일한 판 v0.1.0(2026-08-27)에 없는 API를 부른다.
-    //   결과코드 이름을 넘기는 PublicDataErrorInterceptor(String, List)(PR #52), 키를 넘기는 PublicDataErrorInterceptor(String, List, String)과
-    //   ServiceKeyMasker.mask(String, String)(api.auth). 이런 생성 코드는 interceptor-core v0.1.0을 쓰는 프로젝트에서 컴파일되지 않는다.
-    //   성공코드만 넘기는 클라이언트(rule 엔진의 IR)는 v0.1.0으로도 된다.
-    //   할 것: main에 머지한 뒤 새 태그(v0.2.0 등)를 만들어 JitPack으로 배포하고, README의 의존성 줄(interceptor-core:v0.1.0)을 그 판으로
-    //   바꾼다. 관련 자리는 "TODO(interceptor-core 배포)"로 찾는다.
+    // 결과코드 이름이나 키를 넘기는 PublicDataErrorInterceptor 생성자와 ServiceKeyMasker.mask(String, String)은
+    // interceptor-core v0.2.0부터 개발되었다.
     private void appendDefaultRestTemplateFactory(StringBuilder sb, List<String> resultCodeKeys, boolean masksByValue) {
         String indent2 = INDENT.repeat(2);
         String indent4 = INDENT.repeat(4);
@@ -447,7 +443,6 @@ public class ClientEmitter {
           .append(responseClassName).append(".class);\n");
         sb.append(indent2).append("} catch (IOException e) {\n");
         // 파싱 실패 예외에도 인증키가 남지 않도록 URI를 마스킹해서 넣는다
-        // TODO(interceptor-core 배포): mask(String, String)은 v0.1.0에 없다. 자세한 내용은 appendDefaultRestTemplateFactory
         String masked = key.masksByValue()
                 ? "ServiceKeyMasker.mask(uri.toString(), " + keyRef + ")"
                 : "ServiceKeyMasker.mask(uri.toString())";

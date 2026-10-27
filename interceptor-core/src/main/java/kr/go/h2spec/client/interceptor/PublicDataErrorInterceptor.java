@@ -40,9 +40,6 @@ public class PublicDataErrorInterceptor implements ClientHttpRequestInterceptor 
         this.serviceKey = null;
     }
 
-    // TODO(interceptor-core 배포): 아래 두 생성자는 배포된 v0.1.0 뒤에 더했고 generator가 만드는 코드가 부른다. 새 판을 배포해야 한다.
-    //   자세한 내용은 generator의 ClientEmitter.appendDefaultRestTemplateFactory
-
     /**
      * 기본으로 찾는 이름(resultCode, RESULT_CODE, returnReasonCode, errorCode, ERROR_CODE)이 아닌 이름으로
      * 결과코드를 주는 API에 쓴다. 주어진 이름을 기본 이름보다 먼저 찾고, 없으면 기본 이름으로 찾는다.

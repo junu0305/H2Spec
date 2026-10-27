@@ -98,14 +98,14 @@ Java 17 이상이 필요합니다.
 ### 1. 설치
 
 ```bash
-curl -sL -o h2spec.zip https://github.com/junu0305/H2Spec/releases/download/v0.1.0/h2spec-v0.1.0.zip
+curl -sL -o h2spec.zip https://github.com/junu0305/H2Spec/releases/download/v0.2.0/h2spec-v0.2.0.zip
 unzip h2spec.zip
 ```
 
 ### 2. 명세서 변환
 
 ```bash
-./h2spec-v0.1.0/bin/h2spec convert \
+./h2spec-v0.2.0/bin/h2spec convert \
     --input 기술문서.docx \
     --output generated \
     --package com.example.publicdata
@@ -143,7 +143,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.1.0'
+    implementation 'com.github.junu0305.H2Spec:interceptor-core:v0.2.0'
 
     // XML 응답을 사용할 때만 추가합니다.
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.1'
