@@ -22,7 +22,12 @@
     "httpMethod": "GET",
     "description": "지역코드와 계약월을 기준으로 아파트 매매 실거래 상세 자료를 제공하는 서비스",
     "authType": "SERVICE_KEY_QUERY_PARAM",
+    "auth": {
+      "kind": "SERVICE_KEY_QUERY",
+      "name": "serviceKey"
+    },
     "responseFormat": "XML",
+    "responseRootless": false,
     "requestParameters": [
       {
         "name": "serviceKey",
