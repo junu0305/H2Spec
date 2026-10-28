@@ -109,7 +109,7 @@ public final class JavaNameRules {
 
     /**
      * 패키지 이름을 본다. 점으로 이은 식별자이고 마디가 예약어가 아니어야 한다({@link SourceVersion#isName}).
-     * CLI의 --package가 덧붙이는 apiId 소문자 마디도 int·new 같은 예약어가 될 수 있다.
+     * 파서와 CLI의 --package가 덧붙이는 apiId 마디는 예약어를 피해 만들지만, IR의 targetPackage를 직접 고치면 int·new 같은 예약어가 들어올 수 있다.
      */
     public static boolean isValidPackageName(String packageName) {
         if (packageName == null || !SourceVersion.isName(packageName)) {

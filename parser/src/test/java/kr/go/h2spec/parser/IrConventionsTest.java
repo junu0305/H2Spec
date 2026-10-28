@@ -2,6 +2,7 @@ package kr.go.h2spec.parser;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.go.h2spec.generator.emit.ClientEmitter;
+import kr.go.h2spec.generator.emit.JavaNameRules;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -77,6 +78,16 @@ class IrConventionsTest {
         } finally {
             Locale.setDefault(previous);
         }
+    }
+
+    @Test
+    void 예약어가_되는_패키지_마디는_뒤에_밑줄을_붙인다() {
+        // 제주 채용공고의 엔드포인트 /public, /short가 apiId가 되면 소문자 마디가 예약어라 generator가 생성을 거부했다
+        assertEquals("kr.go.h2spec.client.public_", IrConventions.generatorHints("Public").get("targetPackage").asText());
+        assertEquals("kr.go.h2spec.client.short_", IrConventions.generatorHints("Short").get("targetPackage").asText());
+        assertEquals("kr.go.h2spec.client.null_", IrConventions.generatorHints("Null").get("targetPackage").asText());
+        assertEquals("kr.go.h2spec.client.temp", IrConventions.generatorHints("Temp").get("targetPackage").asText());
+        assertTrue(JavaNameRules.isValidPackageName(IrConventions.generatorHints("New").get("targetPackage").asText()));
     }
 
     @Test

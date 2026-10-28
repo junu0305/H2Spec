@@ -11,6 +11,7 @@ import kr.go.h2spec.generator.ir.GeneratorHints;
 import kr.go.h2spec.generator.ir.IrLoader;
 import kr.go.h2spec.generator.ir.IrSpec;
 import kr.go.h2spec.parser.DocumentReaders;
+import kr.go.h2spec.parser.IrConventions;
 import kr.go.h2spec.parser.ParsedApi;
 import kr.go.h2spec.parser.RuleSpecParser;
 import kr.go.h2spec.parser.SpecParseException;
@@ -676,11 +677,11 @@ public class ConvertCommand implements Callable<Integer> {
     }
 
     /**
-     * 오퍼레이션마다 apiId를 소문자화한 하위 패키지를 붙인다.
+     * 오퍼레이션마다 apiId를 소문자화한 하위 패키지를 붙인다. 예약어가 되는 마디는 파서와 같은 규칙으로 고친다.
      * 문서에서 쓰는 IR과 IR JSON 입력의 생성 코드가 같은 값을 쓰도록 한 곳에서 만든다.
      */
     private String operationPackage(String basePackage, String apiId) {
-        return basePackage + "." + apiId.toLowerCase(Locale.ROOT);
+        return basePackage + "." + IrConventions.packageSegment(apiId);
     }
 
     private void err(String message) {
