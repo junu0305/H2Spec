@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import javax.lang.model.SourceVersion;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -708,12 +709,24 @@ public final class IrConventions {
     public static ObjectNode generatorHints(String apiId) {
         ObjectNode hints = JsonNodeFactory.instance.objectNode();
         hints.put("targetClientType", "RestTemplate");
-        // 기본 로캘을 따르면 같은 문서도 PC에 따라 패키지가 달라진다(터키어 로캘의 "Info" → "ınfo")
-        hints.put("targetPackage", "kr.go.h2spec.client." + apiId.toLowerCase(Locale.ROOT));
+        hints.put("targetPackage", "kr.go.h2spec.client." + packageSegment(apiId));
         hints.put("generateInterceptor", true);
         hints.put("generateDto", true);
         hints.put("dtoNamingStrategy", "PascalCase");
         return hints;
+    }
+
+    /**
+     * apiId로 만드는 하위 패키지 마디. CLI의 --package도 이 마디를 붙인다.
+     * 엔드포인트 /public, /new의 apiId는 소문자로 바꾸면 예약어라, generator의 이름 규칙(JavaNames)처럼 뒤에 _를 붙인다.
+     *
+     * @param apiId {@link #splitUrl}이 만든 apiId
+     * @return 패키지 마디
+     */
+    public static String packageSegment(String apiId) {
+        // 기본 로캘을 따르면 같은 문서도 PC에 따라 패키지가 달라진다(터키어 로캘의 "Info" → "ınfo")
+        String segment = apiId.toLowerCase(Locale.ROOT);
+        return SourceVersion.isKeyword(segment) ? segment + "_" : segment;
     }
 
     /**

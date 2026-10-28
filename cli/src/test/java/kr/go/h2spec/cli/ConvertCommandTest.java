@@ -153,6 +153,25 @@ class ConvertCommandTest {
     }
 
     @Test
+    void package_옵션이_붙이는_하위_패키지가_예약어면_뒤에_밑줄을_붙여_생성한다() throws Exception {
+        // 엔드포인트 /public의 apiId Public을 그대로 소문자화하면 com.example.publicdata.public이 되어 생성을 거부했다
+        ObjectNode tree = readIr(irPath());
+        tree.withObject("/api").put("apiId", "Public");
+        Path ir = Files.createDirectories(tempDir.resolve("input")).resolve("public.json");
+        Files.writeString(ir, tree.toPrettyString());
+        Path output = tempDir.resolve("output");
+
+        int exit = new CommandLine(new H2SpecCli()).execute(
+                "convert", "--input", ir.toString(), "--output", output.toString(),
+                "--package", "com.example.publicdata");
+
+        assertEquals(0, exit);
+        String client = Files.readString(output.resolve("com/example/publicdata/public_/PublicClient.java"));
+        assertTrue(client.startsWith("package com.example.publicdata.public_;"), client);
+        assertTrue(Files.exists(output.resolve("com/example/publicdata/public_/dto/PublicResponse.java")));
+    }
+
+    @Test
     void package_옵션이_DOCX_변환에도_적용되고_오퍼레이션별로_하위_패키지가_나뉜다() throws Exception {
         Path docx = Path.of(getClass().getResource("/docs/msrstn-info.docx").toURI());
 
