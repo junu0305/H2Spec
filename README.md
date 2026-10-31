@@ -363,6 +363,8 @@ main              ← 최종 병합 (PR 필수)
 3. PR은 `.github/pull_request_template.md` 양식을 따릅니다 (PR 생성 시 자동 적용)
 4. IR 스키마를 변경하는 PR은 parser/generator 양쪽 담당자 승인이 필요합니다
 
+자세한 절차는 [CONTRIBUTING.md](CONTRIBUTING.md), 향후 계획과 알려진 한계는 [ROADMAP.md](ROADMAP.md)를 참고하세요.
+
 ## 라이선스
 
 [MIT License](./LICENSE)
