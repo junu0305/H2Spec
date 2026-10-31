@@ -4,6 +4,7 @@ ext.PROJECT_URL = 'https://github.com/junu0305/H2Spec'
 subprojects {
     apply plugin: 'java'
     apply plugin: 'maven-publish'
+    apply plugin: 'jacoco'
 
     group = 'kr.go.h2spec'
     // JitPack은 태그 이름을 -Pversion 으로 넘긴다. 넘어온 값이 있으면 그것을 쓴다.
@@ -28,8 +29,22 @@ subprojects {
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 
+    jacoco {
+        toolVersion = '0.8.12'
+    }
+
     tasks.named('test') {
         useJUnitPlatform()
+        // 테스트가 끝나면 커버리지 리포트를 함께 만든다
+        finalizedBy tasks.named('jacocoTestReport')
+    }
+
+    tasks.named('jacocoTestReport') {
+        dependsOn tasks.named('test')
+        reports {
+            xml.required = true
+            html.required = true
+        }
     }
 
     publishing {
